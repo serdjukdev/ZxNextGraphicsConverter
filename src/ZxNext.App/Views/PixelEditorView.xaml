@@ -1,0 +1,24 @@
+<UserControl x:Class="ZxNext.App.Views.PixelEditorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
+             d:DataContext="{d:DesignInstance Type=vm:PixelEditorViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008/design"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <Border BorderBrush="#333" BorderThickness="1" Margin="4">
+        <DockPanel>
+            <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}" FontSize="11" TextWrapping="Wrap" Margin="4" />
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <Grid x:Name="CanvasHost" Background="#DDD"
+                      MouseLeftButtonDown="CanvasHost_OnMouseLeftButtonDown"
+                      MouseMove="CanvasHost_OnMouseMove"
+                      MouseLeftButtonUp="CanvasHost_OnMouseLeftButtonUp"
+                      LostMouseCapture="CanvasHost_OnLostMouseCapture">
+                    <Image x:Name="PixelImage" Source="{Binding Bitmap}" Stretch="None"
+                           RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                </Grid>
+            </ScrollViewer>
+        </DockPanel>
+    </Border>
+</UserControl>

@@ -1,0 +1,40 @@
+<Window x:Class="ZxNext.App.Views.ExportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
+        d:DataContext="{d:DesignInstance Type=vm:ExportViewModel}"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008/design"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Export for Next" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <StackPanel Margin="14" Width="460">
+        <TextBlock Text="Each folder below is packed into its own 8KB-chunked .bin file(s) plus a matching .asm address map."
+                   TextWrapping="Wrap" Margin="0,0,0,10" />
+
+        <DataGrid ItemsSource="{Binding Folders}" AutoGenerateColumns="False" IsReadOnly="True"
+                  HeadersVisibility="Column" MaxHeight="220" CanUserAddRows="False" GridLinesVisibility="Horizontal">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Folder" Binding="{Binding FolderPath}" Width="2*" />
+                <DataGridTextColumn Header="Assets" Binding="{Binding AssetCount}" Width="*" />
+                <DataGridTextColumn Header="Chunks" Binding="{Binding ChunkCount}" Width="*" />
+                <DataGridTextColumn Header="Bytes" Binding="{Binding TotalBytes}" Width="*" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <TextBlock Text="Output folder" FontSize="11" Margin="0,10,0,2" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0" Text="{Binding OutputDirectory, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="True" />
+            <Button Grid.Column="1" Content="Browse..." Click="Browse_OnClick" Margin="6,0,0,0" Padding="8,2" />
+        </Grid>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="Cancel" Width="80" Margin="0,0,8,0" IsCancel="True" Click="Cancel_OnClick" />
+            <Button Content="Export" Width="90" IsDefault="True" IsEnabled="{Binding CanExport}" Click="Export_OnClick" />
+        </StackPanel>
+    </StackPanel>
+</Window>

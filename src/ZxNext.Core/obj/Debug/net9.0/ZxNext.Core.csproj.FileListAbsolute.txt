@@ -1,0 +1,11 @@
+C:\ZX\projects next\ZxNextGraphicsConverter\src\ZxNext.Core\bin\Debug\net9.0\ZxNext.Core.deps.json
+C:\ZX\projects next\ZxNextGraphicsConverter\src\ZxNext.Core\bin\Debug\net9.0\ZxNext.Core.dll
+C:\ZX\projects next\ZxNextGraphicsConverter\src\ZxNext.Core\bin\Debug\net9.0\ZxNext.Core.pdb
+C:\ZX\projects next\ZxNextGraphicsConverter\src\ZxNext.Core\obj\Debug\net9.0\ZxNext.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\ZX\projects next\ZxNextGraphicsConverter\src\ZxNext.Core\obj\Debug\net9.0\ZxNext.Core.AssemblyInfoInputs.cache
+C:\ZX\projects next\ZxNextGraphicsConverter\src\ZxNext.Core\obj\Debug\net9.0\ZxNext.Core.AssemblyInfo.cs
+C:\ZX\projects next\ZxNextGraphicsConverter\src\ZxNext.Core\obj\Debug\net9.0\ZxNext.Core.csproj.CoreCompileInputs.cache
+C:\ZX\projects next\ZxNextGraphicsConverter\src\ZxNext.Core\obj\Debug\net9.0\ZxNext.Core.dll
+C:\ZX\projects next\ZxNextGraphicsConverter\src\ZxNext.Core\obj\Debug\net9.0\refint\ZxNext.Core.dll
+C:\ZX\projects next\ZxNextGraphicsConverter\src\ZxNext.Core\obj\Debug\net9.0\ZxNext.Core.pdb
+C:\ZX\projects next\ZxNextGraphicsConverter\src\ZxNext.Core\obj\Debug\net9.0\ref\ZxNext.Core.dll

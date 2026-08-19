@@ -1,0 +1,89 @@
+﻿<Window x:Class="ZxNext.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:ZxNext.App"
+        xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
+        xmlns:views="clr-namespace:ZxNext.App.Views"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
+        mc:Ignorable="d"
+        Title="{Binding WindowTitle}" Height="600" Width="1000"
+        Closing="MainWindow_OnClosing">
+    <Window.InputBindings>
+        <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveProjectCommand}" />
+        <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
+    </Window.InputBindings>
+    <DockPanel LastChildFill="True">
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem Header="_New Project..." Click="NewProject_OnClick" />
+                <MenuItem Header="_Open Project..." Click="OpenProject_OnClick" />
+                <MenuItem Header="Recent Projects" ItemsSource="{Binding RecentProjects}">
+                    <MenuItem.ItemContainerStyle>
+                        <Style TargetType="MenuItem">
+                            <Setter Property="Header" Value="{Binding}" />
+                            <Setter Property="Command" Value="{Binding DataContext.OpenRecentProjectCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                            <Setter Property="CommandParameter" Value="{Binding}" />
+                        </Style>
+                    </MenuItem.ItemContainerStyle>
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="_Save Project" Command="{Binding SaveProjectCommand}" InputGestureText="Ctrl+S" />
+                <MenuItem Header="Save Project _As..." Click="SaveProjectAs_OnClick" />
+                <Separator />
+                <MenuItem Header="_Import Images..." Command="{Binding SourceImages.ImportFilesCommand}" />
+                <Separator />
+                <MenuItem Header="_Export for Next..." Click="Export_OnClick" />
+            </MenuItem>
+        </Menu>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260" MinWidth="150" />
+                <ColumnDefinition Width="5" />
+                <ColumnDefinition Width="*" MinWidth="300" />
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="1*" MinHeight="100" />
+                    <RowDefinition Height="5" />
+                    <RowDefinition Height="2*" MinHeight="150" />
+                </Grid.RowDefinitions>
+
+                <views:SourceImagesPanelView x:Name="SourceImagesPanelViewControl" Grid.Row="0" DataContext="{Binding SourceImages}" />
+
+                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                              Background="#CCC" ShowsPreview="True" />
+
+                <views:ProjectTreeView x:Name="ProjectTreeViewControl" Grid.Row="2" DataContext="{Binding Tree}" />
+            </Grid>
+
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch"
+                          Background="#CCC" ShowsPreview="True" />
+
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="2*" MinHeight="150" />
+                    <RowDefinition Height="5" />
+                    <RowDefinition Height="1*" MinHeight="120" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="1*" MinWidth="140" />
+                    </Grid.ColumnDefinitions>
+                    <views:ImageViewerView x:Name="ImageViewerViewControl" Grid.Column="0" DataContext="{Binding ImageViewer}" />
+                    <views:PaletteStripView Grid.Column="1" DataContext="{Binding PaletteStrip}" />
+                </Grid>
+
+                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                              Background="#CCC" ShowsPreview="True" />
+
+                <views:PixelEditorView x:Name="PixelEditorViewControl" Grid.Row="2" DataContext="{Binding PixelEditor}" />
+            </Grid>
+        </Grid>
+    </DockPanel>
+</Window>

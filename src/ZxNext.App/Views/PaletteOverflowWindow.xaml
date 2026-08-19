@@ -1,0 +1,26 @@
+<Window x:Class="ZxNext.App.Views.PaletteOverflowWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
+        d:DataContext="{d:DesignInstance Type=vm:PaletteOverflowViewModel}"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008/design"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Palette Overflow" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <StackPanel Margin="14" Width="380">
+        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+        <TextBlock Text="Reduce to at most this many colours (1-15):" FontSize="11" Margin="0,0,0,2" />
+        <TextBox Text="{Binding MaxColors, UpdateSourceTrigger=PropertyChanged}" Width="60" HorizontalAlignment="Left" />
+
+        <TextBlock TextWrapping="Wrap" Margin="0,10,0,0" FontSize="11" Foreground="Gray"
+                   Text="'Re-quantize whole category' rebuilds every palette slot in this category from scratch using the reduced colour count. Afterwards, re-import the image that triggered this if it still isn't placed." />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="Cancel" Width="80" Margin="0,0,8,0" IsCancel="True" Click="Cancel_OnClick" />
+            <Button Content="Re-quantize category" Width="150" Margin="0,0,8,0" Click="ReQuantizeCategory_OnClick" />
+            <Button Content="Reduce this tile" Width="120" IsDefault="True" Click="ReduceThisTile_OnClick" />
+        </StackPanel>
+    </StackPanel>
+</Window>

@@ -12,10 +12,16 @@ public partial class PaletteStripView : UserControl
         InitializeComponent();
     }
 
+    private void OptimizeBank_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is PaletteStripViewModel vm) vm.RequestOptimizeBank();
+    }
+
     private void Swatch_OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (DataContext is not PaletteStripViewModel vm) return;
         if (sender is not FrameworkElement { DataContext: PaletteSwatchViewModel swatch }) return;
+        if (!swatch.IsInteractive) return;
 
         if (e.ClickCount >= 2)
         {

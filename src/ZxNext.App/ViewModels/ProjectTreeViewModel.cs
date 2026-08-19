@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using ZxNext.Core.Model;
 
 namespace ZxNext.App.ViewModels;
@@ -36,6 +37,21 @@ public partial class ProjectTreeViewModel : ObservableObject
     }
 
     public TreeNodeViewModel GetCategoryFolder(AssetCategory category) => _categoryFolders[category];
+
+    [RelayCommand]
+    private void ExpandAll() => SetAllExpanded(true);
+
+    [RelayCommand]
+    private void CollapseAll() => SetAllExpanded(false);
+
+    private void SetAllExpanded(bool expanded)
+    {
+        foreach (var root in Roots)
+        {
+            root.IsExpanded = expanded;
+            foreach (var child in root.Children) child.IsExpanded = expanded;
+        }
+    }
 
     /// <summary>Clears every category folder's children — sub-folders and all — (used when opening a different project or starting a new one).</summary>
     public void Reset()

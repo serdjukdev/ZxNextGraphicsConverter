@@ -35,6 +35,10 @@ public partial class TreeNodeViewModel : ObservableObject
     [ObservableProperty]
     private bool isMultiSelected;
 
+    /// <summary>Bound two-way to the TreeViewItem's own IsExpanded, so "Expand all"/"Collapse all" can drive it programmatically instead of only reacting to the user's own clicks.</summary>
+    [ObservableProperty]
+    private bool isExpanded = true;
+
     public TreeNodeViewModel(string name, bool isFolder)
     {
         this.name = name;

@@ -40,4 +40,66 @@ public class ProjectStateTests
         var project = new ProjectState();
         Assert.False(project.RemoveAsset(Guid.NewGuid()));
     }
+
+    /// <summary>Bit-replicated expansion of a 3-bit channel to 8-bit — same formula as <see cref="NextColor.ToDisplayRgb24"/> — so each generated pixel is an EXACT (zero-distance) match to one specific Next-512 colour, with no risk of two different (r3,g3,b3) combos accidentally landing in the same nearest-colour bucket.</summary>
+    private static byte Expand3To8(int v) => (byte)((v << 5) | (v << 2) | (v >> 1));
+
+    /// <summary>Cycles through <paramref name="distinctColors"/> exact, guaranteed-distinct Next colours (offset by <paramref name="blueOffset"/> on the blue channel, so a caller can generate a second batch guaranteed disjoint from a first one).</summary>
+    private static byte[] DistinctColorsImage(int width, int height, int distinctColors, int blueOffset = 0)
+    {
+        var rgba = new byte[width * height * 4];
+        for (var i = 0; i < width * height; i++)
+        {
+            var colorIndex = i % distinctColors;
+            var r3 = colorIndex % 8;
+            var g3 = (colorIndex / 8) % 8;
+            var b3 = (colorIndex / 64 + blueOffset) % 8;
+            var o = i * 4;
+            rgba[o] = Expand3To8(r3);
+            rgba[o + 1] = Expand3To8(g3);
+            rgba[o + 2] = Expand3To8(b3);
+            rgba[o + 3] = 255;
+        }
+        return rgba;
+    }
+
+    [Fact]
+    public void CompactPaletteBank_DropsAnOrphanedSlot_LeftBehindByRemovingItsOnlyAsset()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "src", FilePath = "C:\\fake\\src.png", Width = 8, Height = 8 };
+        project.SourceImages.Add(source);
+
+        // Fills slot 0 completely (15/15) so the next tile can't merge into it.
+        var full = AssetImporter.Import(project, source, DistinctColorsImage(8, 8, 15), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
+        // Disjoint colour -> forced into a brand-new slot 1.
+        var lonely = AssetImporter.Import(project, source, DistinctColorsImage(8, 8, 1, blueOffset: 7), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
+
+        Assert.Equal(2, project.Tile4BppBank.Slots.Count);
+        Assert.Equal(1, lonely.PaletteSlotIndex);
+
+        // Simulate what a single-tile re-quantize leaves behind: the asset that used slot 0 is gone.
+        project.RemoveAsset(full.Id);
+        project.CompactPaletteBank(AssetCategory.Tile4Bpp);
+
+        Assert.Single(project.Tile4BppBank.Slots); // the now-unreferenced slot 0 was dropped
+        Assert.Equal(0, lonely.PaletteSlotIndex); // remapped from 1 down to 0
+    }
+
+    [Fact]
+    public void CompactPaletteBank_NoOrphans_LeavesBankUntouched()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "src", FilePath = "C:\\fake\\src.png", Width = 8, Height = 8 };
+        project.SourceImages.Add(source);
+
+        var full = AssetImporter.Import(project, source, DistinctColorsImage(8, 8, 15), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
+        var lonely = AssetImporter.Import(project, source, DistinctColorsImage(8, 8, 1, blueOffset: 7), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
+
+        project.CompactPaletteBank(AssetCategory.Tile4Bpp);
+
+        Assert.Equal(2, project.Tile4BppBank.Slots.Count);
+        Assert.Equal(0, full.PaletteSlotIndex);
+        Assert.Equal(1, lonely.PaletteSlotIndex);
+    }
 }

@@ -6,37 +6,82 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008/design"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <DataTemplate x:Key="SwatchTemplate" DataType="{x:Type vm:PaletteSwatchViewModel}">
+            <Border Width="16" Height="16" Margin="1" Background="{Binding Brush}"
+                    MouseLeftButtonDown="Swatch_OnMouseLeftButtonDown">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="BorderThickness" Value="0.5" />
+                        <Setter Property="BorderBrush" Value="#666" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter Property="BorderThickness" Value="2.5" />
+                                <Setter Property="BorderBrush" Value="#2AA1FF" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
     <Border BorderBrush="#333" BorderThickness="1" Margin="4" Padding="4">
         <DockPanel>
             <TextBlock DockPanel.Dock="Top" Text="{Binding PaletteSummary}" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,4" />
-            <TextBlock DockPanel.Dock="Top" Text="Click: pick paint colour. Double-click: edit colour." FontSize="9" Foreground="Gray" Margin="0,0,0,4" />
+            <TextBlock DockPanel.Dock="Top" Text="Click: pick paint colour. Double-click: edit colour. Highlighted row = this tile/sprite's own palette." FontSize="9" Foreground="Gray" Margin="0,0,0,4" />
+            <TextBlock DockPanel.Dock="Top" Text="{Binding UsageInfo}" FontSize="10" FontWeight="Bold" Margin="0,0,0,4"
+                       Visibility="{Binding HasUsageInfo, Converter={StaticResource BoolToVis}}" />
+            <Button DockPanel.Dock="Top" Content="Optimize bank..." HorizontalAlignment="Left" FontSize="10" Padding="6,2" Margin="0,0,0,4"
+                    ToolTip="Re-pack every tile/sprite in this bank into as few palette slots as possible. Colours stay exactly the same; only which slot each one uses can change."
+                    Visibility="{Binding ShowBankView, Converter={StaticResource BoolToVis}}"
+                    Click="OptimizeBank_OnClick" />
             <TextBlock DockPanel.Dock="Bottom" Text="{Binding SelectedColorInfo}" TextWrapping="Wrap" FontFamily="Consolas"
                        FontSize="10" Margin="0,4,0,0" MinHeight="14" />
-            <ItemsControl ItemsSource="{Binding Swatches}">
+
+            <!-- 4bpp: all 16 bank slots, one row each, the tile/sprite's own slot highlighted. Rows are never
+                 cut off vertically — if the panel is too narrow for 16 swatches, only a horizontal scrollbar
+                 appears, per-row, rather than shrinking swatches or scrolling the whole list vertically. -->
+            <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding BankRows}"
+                          Visibility="{Binding ShowBankView, Converter={StaticResource BoolToVis}}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:PaletteRowViewModel}">
+                        <Border Margin="0,0.5" Padding="2,1">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="Transparent" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                            <Setter Property="Background" Value="#FFF6D98A" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding SlotIndex}" Width="16" FontSize="9" VerticalAlignment="Center" />
+                                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                    <ItemsControl ItemsSource="{Binding Swatches}" ItemTemplate="{StaticResource SwatchTemplate}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- 8bpp (or nothing 4bpp-specific to show): the one relevant palette, wrapped -->
+            <ItemsControl ItemsSource="{Binding Swatches}" ItemTemplate="{StaticResource SwatchTemplate}"
+                          Visibility="{Binding ShowSingleStrip, Converter={StaticResource BoolToVis}}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <WrapPanel />
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="{x:Type vm:PaletteSwatchViewModel}">
-                        <Border Width="16" Height="16" Margin="1" Background="{Binding Brush}"
-                                MouseLeftButtonDown="Swatch_OnMouseLeftButtonDown">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Setter Property="BorderThickness" Value="0.5" />
-                                    <Setter Property="BorderBrush" Value="#666" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                            <Setter Property="BorderThickness" Value="2.5" />
-                                            <Setter Property="BorderBrush" Value="#2AA1FF" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
             </ItemsControl>
         </DockPanel>
     </Border>

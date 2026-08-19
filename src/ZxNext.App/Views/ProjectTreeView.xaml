@@ -6,7 +6,14 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008/design"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
-    <TreeView x:Name="Tree" ItemsSource="{Binding Roots}"
+    <DockPanel LastChildFill="True">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,4,4,2">
+            <Button Content="Expand all" FontSize="10" Padding="6,2" Margin="0,0,4,0"
+                    Command="{Binding ExpandAllCommand}" />
+            <Button Content="Collapse all" FontSize="10" Padding="6,2"
+                    Command="{Binding CollapseAllCommand}" />
+        </StackPanel>
+        <TreeView x:Name="Tree" ItemsSource="{Binding Roots}"
               SelectedItemChanged="Tree_OnSelectedItemChanged"
               AllowDrop="True" DragOver="Tree_OnDragOver" Drop="Tree_OnDrop"
               BorderThickness="0">
@@ -16,7 +23,7 @@
         </TreeView.InputBindings>
         <TreeView.ItemContainerStyle>
             <Style TargetType="TreeViewItem">
-                <Setter Property="IsExpanded" Value="True" />
+                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
             </Style>
         </TreeView.ItemContainerStyle>
         <TreeView.ItemTemplate>
@@ -61,5 +68,6 @@
                 </StackPanel>
             </HierarchicalDataTemplate>
         </TreeView.ItemTemplate>
-    </TreeView>
+        </TreeView>
+    </DockPanel>
 </UserControl>

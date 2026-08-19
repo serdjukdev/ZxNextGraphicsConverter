@@ -11,6 +11,7 @@ using ZxNext.Core.Editing;
 using ZxNext.Core.Export;
 using ZxNext.Core.Imaging;
 using ZxNext.Core.Model;
+using ZxNext.Core.PaletteAllocation;
 using ZxNext.Core.Project;
 using ZxNext.Core.Quantization;
 
@@ -82,6 +83,7 @@ public partial class MainViewModel : ObservableObject
 
         SourceImages.SourceImageAdded += source => _project.SourceImages.Add(source);
         SourceImages.DitherModeChangedByUser += async (sourceImageId, mode) => await ReQuantizeBySourceImageAsync(sourceImageId, mode);
+        PaletteStrip.OptimizeBankRequested += async () => await OptimizeCurrentBankAsync();
 
         RefreshRecentProjects();
     }
@@ -237,6 +239,11 @@ public partial class MainViewModel : ObservableObject
         result.Asset!.Name = originalName;
         Tree.ReplaceAssetNode(asset.Id, result.Asset); // keeps its position in the list instead of jumping to the bottom
 
+        // The re-quantized asset may have landed in a different (or brand-new) slot, leaving its
+        // OLD slot with nothing left using it — drop any such now-orphaned slot so the bank never
+        // silently accumulates dead palettes nobody references.
+        if (asset.Category.IsFourBpp()) _project.CompactPaletteBank(asset.Category);
+
         HasUnsavedChanges = true;
         PixelEditor.StatusText = $"Re-quantized {originalName} (dither: {newDitherMode}).";
         return new ImportOutcome(true, ImportFailureReason.None, asset.Category, null);
@@ -311,6 +318,43 @@ public partial class MainViewModel : ObservableObject
             PixelEditor.StatusText = failed.Count == 0
                 ? $"Re-quantized {succeeded} tile(s) in {category} to ≤{maxColorsPerTile} colours each."
                 : $"Re-quantized {succeeded} tile(s); {failed.Count} still didn't fit and were REMOVED — re-import from Source Images: {string.Join(", ", failed)}.";
+        });
+    }
+
+    /// <summary>
+    /// Called from the palette strip's "Optimize bank" button (only visible while a 4bpp bank is
+    /// shown). Re-packs every tile/sprite in the bank into as few slots as possible via
+    /// <see cref="PaletteBankOptimizer"/> — colours never change, no asset can be removed (it's
+    /// all-or-nothing: if any tile's colours somehow can't be placed, nothing is changed at all),
+    /// only slot assignments shift. Not undoable (clears the undo stack), same reasoning as the
+    /// other bulk palette operations.
+    /// </summary>
+    private async Task OptimizeCurrentBankAsync()
+    {
+        if (PaletteStrip.CurrentBank?.Category is not { } category) return;
+
+        var confirm = MessageBox.Show(
+            $"Re-optimize the {category} palette bank? This may move some tiles/sprites to a different (or new) palette slot to reduce how many slots are used overall — the colours themselves never change. Not undoable.",
+            "Optimize palette bank", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        await RunBusyAsync($"Optimizing {category} palette bank...", async _ =>
+        {
+            var result = await Task.Run(() => PaletteBankOptimizer.Optimize(_project, category));
+
+            if (!result.Success)
+            {
+                PixelEditor.StatusText = $"Couldn't optimize {category}: {result.Error}";
+                return;
+            }
+
+            _undoStack.Clear();
+            HasUnsavedChanges = true;
+
+            OnSelectionChanged(); // re-derive whatever's shown (palette strip / bitmap) first — slot assignments and indices may have moved
+            PixelEditor.StatusText = result.SlotsBefore == result.SlotsAfter
+                ? $"Optimized {category}: already using the fewest slots possible ({result.SlotsAfter}/{PaletteBank.MaxSlots})."
+                : $"Optimized {category}: {result.SlotsBefore} → {result.SlotsAfter} palette(s) used.";
         });
     }
 
@@ -413,6 +457,12 @@ public partial class MainViewModel : ObservableObject
                     {
                         overflowed.Add(asset.Name);
                     }
+                }
+
+                // Every re-quantized asset may have moved to a different slot, orphaning its old one.
+                foreach (var fourBppCategory in replaced.Select(r => r.New.Category).Where(c => c.IsFourBpp()).Distinct())
+                {
+                    _project.CompactPaletteBank(fourBppCategory);
                 }
             });
 
@@ -876,16 +926,36 @@ public partial class MainViewModel : ObservableObject
             PixelEditor.AssetWidth = asset.Width;
             PixelEditor.AssetHeight = asset.Height;
 
-            var palette = asset.Category.IsFourBpp()
+            var isFourBpp = asset.Category.IsFourBpp();
+            var palette = isFourBpp
                 ? _project.BankFor(asset.Category).Slots[asset.PaletteSlotIndex]
                 : _project.GetOrCreateFolderPalette(asset.Category, asset.FolderPath);
+            var bank = isFourBpp ? _project.BankFor(asset.Category) : null;
+            var usedColors = isFourBpp ? CountDistinctColorsUsed(asset, palette.TransparentIndex) : (int?)null;
+
             PaletteStrip.ShowPalette(
                 palette,
                 $"{asset.Category}, slot {asset.PaletteSlotIndex}, dither: {asset.DitherMode}",
-                asset.Category.IsFourBpp(),
-                asset.PaletteSlotIndex);
+                isFourBpp,
+                asset.PaletteSlotIndex,
+                bank,
+                usedColors);
 
             PixelEditor.StatusText = $"Editing {asset.Name} — pick a palette colour above, then click/drag on the pixels to paint.";
+        }
+        else if (node is { IsFolder: true, Category: AssetCategory.Sprite4Bpp or AssetCategory.Tile4Bpp })
+        {
+            ImageViewer.Bitmap = null;
+            ImageViewer.SelectedAssetName = "(no selection)";
+            PixelEditor.Bitmap = null;
+            PixelEditor.AssetWidth = 0;
+            PixelEditor.AssetHeight = 0;
+
+            var bank = _project.BankFor(node.Category!.Value);
+            var usedPalettes = bank.Slots.Count;
+            var totalColors = bank.Slots.Sum(slot => slot.Slots.Count(c => c is not null));
+            PaletteStrip.ShowBank(bank, $"{node.Category} — palette bank overview");
+            PixelEditor.StatusText = $"{node.Category}: {usedPalettes}/{PaletteBank.MaxSlots} palette(s) used, {totalColors} colour(s) total.";
         }
         else
         {
@@ -897,5 +967,20 @@ public partial class MainViewModel : ObservableObject
             PaletteStrip.Clear();
             PixelEditor.StatusText = "Select a tile or sprite to edit its pixels.";
         }
+    }
+
+    /// <summary>How many distinct non-transparent palette indices a 4bpp asset's own pixels actually reference — its shared palette slot itself may hold more colours, added there by other tiles/sprites.</summary>
+    private static int CountDistinctColorsUsed(GraphicsAsset asset, int transparentIndex)
+    {
+        var seen = new HashSet<int>();
+        for (var y = 0; y < asset.Height; y++)
+        {
+            for (var x = 0; x < asset.Width; x++)
+            {
+                var index = AssetPixelEditor.GetPixelIndex(asset, x, y);
+                if (index != transparentIndex) seen.Add(index);
+            }
+        }
+        return seen.Count;
     }
 }

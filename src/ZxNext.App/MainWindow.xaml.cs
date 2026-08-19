@@ -105,6 +105,23 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (category.IsLayer2())
+        {
+            var layer2Preview = RawBitmapRenderer.FromRgba32(decoded.Width, decoded.Height, decoded.Rgba32);
+            var placementVm = new Layer2PlacementViewModel(layer2Preview, decoded.Width, decoded.Height, cellWidth, cellHeight);
+            var placementDialog = new Layer2PlacementWindow { DataContext = placementVm, Owner = this };
+            if (placementDialog.ShowDialog() == true)
+            {
+                var placedRgba = placementVm.BuildPlacedRgba(decoded.Rgba32);
+                // Layer2 uses a flat per-folder palette (not the 4bpp bank), so a full palette
+                // fails as FlatPaletteFull, not PaletteOverflow — there's no "reduce and retry"
+                // remediation dialog for that today (same as 8bpp sprite/tile folders); the
+                // failure just surfaces as a status message.
+                _viewModel.ImportLayer2Placement(source, category, folderPath, placedRgba, placementVm.ResultWidth, placementVm.ResultHeight);
+            }
+            return;
+        }
+
         var preview = RawBitmapRenderer.FromRgba32(decoded.Width, decoded.Height, decoded.Rgba32);
         var slicerVm = new AtlasSlicerViewModel(preview, decoded.Width, decoded.Height, cellWidth, cellHeight);
         var dialog = new AtlasSlicerWindow { DataContext = slicerVm, Owner = this };

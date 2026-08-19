@@ -68,4 +68,39 @@ public class ProjectServiceTests : IDisposable
     }
 
     private static int NextPalette_Capacity(NextPalette p) => p.Capacity;
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsALayer2AssetAndItsFlatFolderPalette()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "screen", FilePath = _tempSourceFile, Width = 256, Height = 192 };
+        project.SourceImages.Add(source);
+
+        var rgba = new byte[256 * 192 * 4];
+        for (var i = 0; i < 256 * 192; i++)
+        {
+            var o = i * 4;
+            rgba[o] = 10; rgba[o + 1] = 150; rgba[o + 2] = 80; rgba[o + 3] = 255;
+        }
+
+        var importResult = AssetImporter.Import(project, source, rgba, AssetCategory.Layer2_256x192, "layer2/256x192/images", DitherMode.None);
+        Assert.True(importResult.Success, importResult.Error);
+
+        ProjectService.Save(project, _tempProjectFile);
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        var loadedAsset = Assert.Single(loaded.Assets);
+        Assert.Equal(AssetCategory.Layer2_256x192, loadedAsset.Category);
+        Assert.Equal(256, loadedAsset.Width);
+        Assert.Equal(192, loadedAsset.Height);
+        Assert.Equal(importResult.Asset!.PackedPixelData, loadedAsset.PackedPixelData);
+
+        Assert.True(loaded.Layer2_256x192FolderPalettes.ContainsKey("layer2/256x192/images"));
+        var originalPalette = project.Layer2_256x192FolderPalettes["layer2/256x192/images"];
+        var loadedPalette = loaded.Layer2_256x192FolderPalettes["layer2/256x192/images"];
+        for (var i = 0; i < originalPalette.Capacity; i++)
+        {
+            Assert.Equal(originalPalette.Slots[i], loadedPalette.Slots[i]);
+        }
+    }
 }

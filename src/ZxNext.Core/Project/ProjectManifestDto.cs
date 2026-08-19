@@ -12,6 +12,9 @@ public class ProjectManifestDto
     public PaletteBankDto Tile4BppBank { get; set; } = new();
     public Dictionary<string, FlatPaletteDto> Sprite8BppFolderPalettes { get; set; } = [];
     public Dictionary<string, FlatPaletteDto> Tile8BppFolderPalettes { get; set; } = [];
+    public Dictionary<string, FlatPaletteDto> Layer2_256x192FolderPalettes { get; set; } = [];
+    public Dictionary<string, FlatPaletteDto> Layer2_320x256FolderPalettes { get; set; } = [];
+    public Dictionary<string, FlatPaletteDto> Layer2_640x256x4FolderPalettes { get; set; } = [];
     public List<AssetDto> Assets { get; set; } = [];
 }
 

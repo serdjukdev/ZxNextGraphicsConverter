@@ -60,10 +60,10 @@ public partial class ProjectTreeViewModel : ObservableObject
         SelectedNode = null;
     }
 
-    /// <summary>Creates a new sub-folder under an 8bpp category root (each gets its own flat palette). No-op (returns null) for anything else.</summary>
+    /// <summary>Creates a new sub-folder under a flat-palette category root (each sub-folder gets its own independent palette). No-op (returns null) for anything else, including the two palette-bank categories.</summary>
     public TreeNodeViewModel? CreateSubfolder(TreeNodeViewModel parentFolder, string name)
     {
-        if (parentFolder.Category is not { } category || category is not (AssetCategory.Sprite8Bpp or AssetCategory.Tile8Bpp))
+        if (parentFolder.Category is not { } category || category.UsesPaletteBank())
         {
             return null;
         }

@@ -8,7 +8,7 @@ public static class AssetPixelEditor
     public static int GetPixelIndex(GraphicsAsset asset, int x, int y)
     {
         var i = y * asset.Width + x;
-        if (asset.Category.IsFourBpp())
+        if (asset.Category.Is4BitPerPixel())
         {
             var b = asset.PackedPixelData[i / 2];
             return i % 2 == 0 ? (b >> 4) & 0xF : b & 0xF;
@@ -19,7 +19,7 @@ public static class AssetPixelEditor
     public static void SetPixelIndex(GraphicsAsset asset, int x, int y, int newIndex)
     {
         var i = y * asset.Width + x;
-        if (asset.Category.IsFourBpp())
+        if (asset.Category.Is4BitPerPixel())
         {
             var byteIndex = i / 2;
             var current = asset.PackedPixelData[byteIndex];

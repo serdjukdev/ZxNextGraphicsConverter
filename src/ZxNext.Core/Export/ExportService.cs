@@ -19,18 +19,29 @@ public static class ExportService
 {
     public static List<FolderExportResult> ExportAll(ProjectState project)
     {
-        return project.Assets
+        var results = project.Assets
+            .Where(a => !a.Category.IsLayer2())
             .GroupBy(a => a.FolderPath)
             .OrderBy(g => g.Key, StringComparer.Ordinal)
             .Select(g => ExportFolder(g.Key, g.OrderBy(a => a.Name, StringComparer.Ordinal).ToList()))
             .ToList();
+
+        // Layer2 images are exported one-at-a-time, not grouped by folder — see Layer2Exporter's
+        // remarks for why they can't share BinaryChunker's per-folder packing model.
+        var layer2Results = project.Assets
+            .Where(a => a.Category.IsLayer2())
+            .OrderBy(a => a.Name, StringComparer.Ordinal)
+            .Select(a => Layer2Exporter.Export(a, project.GetOrCreateFolderPalette(a.Category, a.FolderPath)));
+        results.AddRange(layer2Results);
+
+        return results;
     }
 
     public static FolderExportResult ExportFolder(string folderPath, IReadOnlyList<GraphicsAsset> assets)
     {
         var baseFileName = SanitizeFileName(folderPath);
         var exportables = assets
-            .Select(a => new ExportableAsset(a.Name, a.PackedPixelData, a.Category.IsFourBpp(), a.PaletteSlotIndex))
+            .Select(a => new ExportableAsset(a.Name, a.PackedPixelData, a.Category.UsesPaletteBank(), a.PaletteSlotIndex))
             .ToList();
         var (chunks, placements) = BinaryChunker.Pack(exportables, baseFileName);
         var asmText = AsmMapGenerator.Generate(placements, chunks.Count);

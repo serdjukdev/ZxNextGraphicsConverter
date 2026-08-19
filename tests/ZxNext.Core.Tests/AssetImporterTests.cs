@@ -148,6 +148,64 @@ public class AssetImporterTests
     }
 
     [Fact]
+    public void Layer2_256x192_ExactSize_ImportsWithAFlatFolderPalette()
+    {
+        var project = new ProjectState();
+        var source = MakeSource("bg", 256, 192);
+        var rgba = SolidColorWithTransparentCorner(256, 192, (10, 20, 30));
+
+        var result = AssetImporter.Import(project, source, rgba, AssetCategory.Layer2_256x192, "layer2/256x192/images", DitherMode.None);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(256 * 192, result.Asset!.PackedPixelData.Length); // 1 byte/pixel
+        Assert.True(project.Layer2_256x192FolderPalettes.ContainsKey("layer2/256x192/images"));
+    }
+
+    [Fact]
+    public void Layer2_640x256x4_ExactSize_PacksTwoPixelsPerByte_UsesA16ColourFlatPalette()
+    {
+        var project = new ProjectState();
+        var source = MakeSource("bg4", 640, 256);
+        var rgba = SolidColorWithTransparentCorner(640, 256, (200, 0, 0));
+
+        var result = AssetImporter.Import(project, source, rgba, AssetCategory.Layer2_640x256x4, "layer2/640x256x4/images", DitherMode.None);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(640 * 256 / 2, result.Asset!.PackedPixelData.Length); // 2 pixels/byte
+        var palette = project.Layer2_640x256x4FolderPalettes["layer2/640x256x4/images"];
+        Assert.Equal(16, palette.Capacity);
+    }
+
+    [Fact]
+    public void Layer2_SmallerThanCanvas_IsAcceptedAsIs_ForTheDontPadChoice()
+    {
+        var project = new ProjectState();
+        var source = MakeSource("small_bg", 100, 80);
+        var rgba = SolidColorWithTransparentCorner(100, 80, (5, 5, 5));
+
+        // Import doesn't pad itself — the caller (Layer2 placement dialog) decides whether to pad
+        // before calling in; Import just needs to accept anything up to the full canvas.
+        var result = AssetImporter.Import(project, source, rgba, AssetCategory.Layer2_320x256, "layer2/320x256/images", DitherMode.None);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(100, result.Asset!.Width);
+        Assert.Equal(80, result.Asset.Height);
+    }
+
+    [Fact]
+    public void Layer2_LargerThanCanvas_IsRejected_MustBeCroppedByTheCallerFirst()
+    {
+        var project = new ProjectState();
+        var source = MakeSource("too_big_bg", 400, 300);
+        var rgba = SolidColorWithTransparentCorner(400, 300, (5, 5, 5));
+
+        var result = AssetImporter.Import(project, source, rgba, AssetCategory.Layer2_320x256, "layer2/320x256/images", DitherMode.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(ImportFailureReason.SizeMismatch, result.Reason);
+    }
+
+    [Fact]
     public void SourceOffset_IsStoredOnTheAsset_ForLaterReQuantize()
     {
         var project = new ProjectState();

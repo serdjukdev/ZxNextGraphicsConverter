@@ -1,0 +1,56 @@
+<Window x:Class="ZxNext.App.Views.Layer2PlacementWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
+        d:DataContext="{d:DesignInstance Type=vm:Layer2PlacementViewModel}"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008/design"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Place Layer2 Image" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+    <StackPanel Margin="14">
+        <TextBlock TextWrapping="Wrap" MaxWidth="420" Margin="0,0,0,10"
+                   Text="This image doesn't exactly match the Layer2 canvas size. The red box below shows which part of it will be used — set an offset if it's larger than the canvas." />
+
+        <Border BorderBrush="#666" BorderThickness="1" HorizontalAlignment="Left">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" MaxWidth="520" MaxHeight="420">
+                <Grid x:Name="PreviewHost">
+                    <Image x:Name="PreviewImage" Source="{Binding SourcePreview}" Stretch="None"
+                           RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                    <Canvas x:Name="RectOverlay" IsHitTestVisible="False" />
+                </Grid>
+            </ScrollViewer>
+        </Border>
+
+        <Grid Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                <TextBlock Text="Offset left" FontSize="11" />
+                <TextBox Text="{Binding OffsetLeft, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1">
+                <TextBlock Text="Offset top" FontSize="11" />
+                <TextBox Text="{Binding OffsetTop, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+        </Grid>
+
+        <CheckBox Content="Pad to full canvas with transparent" IsChecked="{Binding PadToFullCanvas}" Margin="0,10,0,0"
+                   Visibility="{Binding CanChoosePadding, Converter={StaticResource BoolToVis}}"
+                   ToolTip="Unchecked: keep the smaller axis at its actual size instead of stretching the canvas around it — for composing several partial Layer2 pieces yourself." />
+
+        <TextBlock Margin="0,10,0,0" FontWeight="Bold">
+            <Run Text="Result size: " /><Run Text="{Binding ResultWidth, Mode=OneWay}" /><Run Text="x" /><Run Text="{Binding ResultHeight, Mode=OneWay}" />
+        </TextBlock>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="Cancel" Width="80" Margin="0,0,8,0" IsCancel="True" Click="Cancel_OnClick" />
+            <Button Content="Place &amp; Import" Width="120" IsDefault="True" Click="Confirm_OnClick" />
+        </StackPanel>
+    </StackPanel>
+</Window>

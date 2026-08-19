@@ -35,7 +35,7 @@ public static class NextBitmapRenderer
             bgra[o + 3] = 255;
         }
 
-        if (asset.Category.IsFourBpp())
+        if (asset.Category.Is4BitPerPixel())
         {
             for (var i = 0; i < width * height; i++)
             {
@@ -58,7 +58,7 @@ public static class NextBitmapRenderer
     }
 
     private static NextPalette ResolvePalette(GraphicsAsset asset, ProjectState project) =>
-        asset.Category.IsFourBpp()
+        asset.Category.UsesPaletteBank()
             ? project.BankFor(asset.Category).Slots[asset.PaletteSlotIndex]
             : project.GetOrCreateFolderPalette(asset.Category, asset.FolderPath);
 }

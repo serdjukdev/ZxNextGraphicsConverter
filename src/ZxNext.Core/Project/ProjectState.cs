@@ -14,9 +14,12 @@ public class ProjectState
     public PaletteBank Sprite4BppBank { get; } = new(AssetCategory.Sprite4Bpp);
     public PaletteBank Tile4BppBank { get; } = new(AssetCategory.Tile4Bpp);
 
-    /// <summary>Keyed by folder path (e.g. "sprite/8bpp/images"): one flat ≤256-colour palette per folder.</summary>
+    /// <summary>Keyed by folder path (e.g. "sprite/8bpp/images"): one flat palette per folder, shared by every asset in it. Used by every category that isn't <see cref="AssetCategoryExtensions.UsesPaletteBank"/> — 8bpp sprite/tile folders (256 colours) and all three Layer2 categories (256 colours for the two 8bpp modes, 16 for 640x256x4).</summary>
     public Dictionary<string, NextPalette> Sprite8BppFolderPalettes { get; } = [];
     public Dictionary<string, NextPalette> Tile8BppFolderPalettes { get; } = [];
+    public Dictionary<string, NextPalette> Layer2_256x192FolderPalettes { get; } = [];
+    public Dictionary<string, NextPalette> Layer2_320x256FolderPalettes { get; } = [];
+    public Dictionary<string, NextPalette> Layer2_640x256x4FolderPalettes { get; } = [];
 
     public List<GraphicsAsset> Assets { get; } = [];
 
@@ -24,14 +27,17 @@ public class ProjectState
     {
         AssetCategory.Sprite4Bpp => Sprite4BppBank,
         AssetCategory.Tile4Bpp => Tile4BppBank,
-        _ => throw new ArgumentOutOfRangeException(nameof(category), "Not a 4bpp category")
+        _ => throw new ArgumentOutOfRangeException(nameof(category), "Not a 4bpp-bank category")
     };
 
     public Dictionary<string, NextPalette> FolderPalettesFor(AssetCategory category) => category switch
     {
         AssetCategory.Sprite8Bpp => Sprite8BppFolderPalettes,
         AssetCategory.Tile8Bpp => Tile8BppFolderPalettes,
-        _ => throw new ArgumentOutOfRangeException(nameof(category), "Not an 8bpp category")
+        AssetCategory.Layer2_256x192 => Layer2_256x192FolderPalettes,
+        AssetCategory.Layer2_320x256 => Layer2_320x256FolderPalettes,
+        AssetCategory.Layer2_640x256x4 => Layer2_640x256x4FolderPalettes,
+        _ => throw new ArgumentOutOfRangeException(nameof(category), "Not a flat-folder-palette category")
     };
 
     public NextPalette GetOrCreateFolderPalette(AssetCategory category, string folderPath)
@@ -39,7 +45,7 @@ public class ProjectState
         var palettes = FolderPalettesFor(category);
         if (!palettes.TryGetValue(folderPath, out var palette))
         {
-            palette = new NextPalette(256, transparentIndex: 0);
+            palette = new NextPalette(category.FlatPaletteCapacity(), transparentIndex: 0);
             palettes[folderPath] = palette;
         }
         return palette;

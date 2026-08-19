@@ -146,7 +146,34 @@ public partial class MainViewModel : ObservableObject
         return new ImportOutcome(result.Success, result.Reason, category, result.Error);
     }
 
-    /// <summary>Called after the user confirms the atlas slicer dialog for an oversized dropped image — can be thousands of cells (e.g. a full Layer2 screen sliced to 8x8), so it runs off the UI thread behind a busy indicator.</summary>
+    /// <summary>Called after the user confirms the Layer2 placement dialog — <paramref name="placedRgba32"/> is already cropped/padded to its final <paramref name="width"/>x<paramref name="height"/> by <see cref="Layer2PlacementViewModel.BuildPlacedRgba"/>.</summary>
+    public ImportOutcome ImportLayer2Placement(SourceImageViewModel source, AssetCategory category, string folderPath, byte[] placedRgba32, int width, int height)
+    {
+        var placedSource = new SourceImage
+        {
+            Id = source.Model.Id,
+            FileName = source.Model.FileName,
+            FilePath = source.Model.FilePath,
+            Width = width,
+            Height = height
+        };
+        var result = AssetImporter.Import(_project, placedSource, placedRgba32, category, folderPath, source.DitherMode);
+
+        if (result.Success)
+        {
+            Tree.AddAssetNode(result.Asset!);
+            HasUnsavedChanges = true;
+            PixelEditor.StatusText = $"Imported {result.Asset!.Name} into {folderPath} ({category}), {width}x{height}.";
+        }
+        else
+        {
+            PixelEditor.StatusText = $"Import failed: {result.Error}";
+        }
+
+        return new ImportOutcome(result.Success, result.Reason, category, result.Error);
+    }
+
+    /// <summary>Called after the user confirms the atlas slicer dialog for an oversized dropped sprite-sheet/tile-sheet image — can be thousands of cells, so it runs off the UI thread behind a busy indicator. Not used for Layer2 categories, which go through <see cref="ImportLayer2Placement"/> instead (exactly one output image, never a repeating grid).</summary>
     public async Task ImportSlicedAsync(SourceImageViewModel source, AssetCategory category, string folderPath, AtlasSliceParameters parameters, bool skipDuplicateCells)
     {
         var decoded = DecodeSource(source);
@@ -242,7 +269,7 @@ public partial class MainViewModel : ObservableObject
         // The re-quantized asset may have landed in a different (or brand-new) slot, leaving its
         // OLD slot with nothing left using it — drop any such now-orphaned slot so the bank never
         // silently accumulates dead palettes nobody references.
-        if (asset.Category.IsFourBpp()) _project.CompactPaletteBank(asset.Category);
+        if (asset.Category.UsesPaletteBank()) _project.CompactPaletteBank(asset.Category);
 
         HasUnsavedChanges = true;
         PixelEditor.StatusText = $"Re-quantized {originalName} (dither: {newDitherMode}).";
@@ -259,7 +286,7 @@ public partial class MainViewModel : ObservableObject
     /// </summary>
     public async Task ReQuantizeCategoryAsync(AssetCategory category, int maxColorsPerTile)
     {
-        if (!category.IsFourBpp()) return;
+        if (!category.UsesPaletteBank()) return;
 
         await RunBusyAsync($"Re-quantizing {category}...", async progress =>
         {
@@ -460,7 +487,7 @@ public partial class MainViewModel : ObservableObject
                 }
 
                 // Every re-quantized asset may have moved to a different slot, orphaning its old one.
-                foreach (var fourBppCategory in replaced.Select(r => r.New.Category).Where(c => c.IsFourBpp()).Distinct())
+                foreach (var fourBppCategory in replaced.Select(r => r.New.Category).Where(c => c.UsesPaletteBank()).Distinct())
                 {
                     _project.CompactPaletteBank(fourBppCategory);
                 }
@@ -847,6 +874,9 @@ public partial class MainViewModel : ObservableObject
         var folderPaths = new HashSet<string>();
         foreach (var path in _project.Sprite8BppFolderPalettes.Keys) folderPaths.Add(path);
         foreach (var path in _project.Tile8BppFolderPalettes.Keys) folderPaths.Add(path);
+        foreach (var path in _project.Layer2_256x192FolderPalettes.Keys) folderPaths.Add(path);
+        foreach (var path in _project.Layer2_320x256FolderPalettes.Keys) folderPaths.Add(path);
+        foreach (var path in _project.Layer2_640x256x4FolderPalettes.Keys) folderPaths.Add(path);
         foreach (var asset in _project.Assets) folderPaths.Add(asset.FolderPath);
         foreach (var path in folderPaths.OrderBy(p => p, StringComparer.Ordinal)) Tree.EnsureFolderPath(path);
 
@@ -926,17 +956,17 @@ public partial class MainViewModel : ObservableObject
             PixelEditor.AssetWidth = asset.Width;
             PixelEditor.AssetHeight = asset.Height;
 
-            var isFourBpp = asset.Category.IsFourBpp();
-            var palette = isFourBpp
+            var usesBank = asset.Category.UsesPaletteBank();
+            var palette = usesBank
                 ? _project.BankFor(asset.Category).Slots[asset.PaletteSlotIndex]
                 : _project.GetOrCreateFolderPalette(asset.Category, asset.FolderPath);
-            var bank = isFourBpp ? _project.BankFor(asset.Category) : null;
-            var usedColors = isFourBpp ? CountDistinctColorsUsed(asset, palette.TransparentIndex) : (int?)null;
+            var bank = usesBank ? _project.BankFor(asset.Category) : null;
+            var usedColors = usesBank ? CountDistinctColorsUsed(asset, palette.TransparentIndex) : (int?)null;
 
             PaletteStrip.ShowPalette(
                 palette,
                 $"{asset.Category}, slot {asset.PaletteSlotIndex}, dither: {asset.DitherMode}",
-                isFourBpp,
+                usesBank,
                 asset.PaletteSlotIndex,
                 bank,
                 usedColors);

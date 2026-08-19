@@ -18,7 +18,7 @@ public static class PaletteBankOptimizer
 {
     public static PaletteBankOptimizationResult Optimize(ProjectState project, AssetCategory category)
     {
-        if (!category.IsFourBpp())
+        if (!category.UsesPaletteBank())
         {
             return new PaletteBankOptimizationResult(false, 0, 0, "Not a 4bpp category.");
         }

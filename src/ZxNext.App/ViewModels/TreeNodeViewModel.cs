@@ -17,7 +17,7 @@ public partial class TreeNodeViewModel : ObservableObject
     public bool IsFolder { get; }
     public ObservableCollection<TreeNodeViewModel> Children { get; } = [];
 
-    /// <summary>Set on the four root category folders and on any 8bpp sub-folder under them.</summary>
+    /// <summary>Set on every root category folder and on any user-created sub-folder under them.</summary>
     public AssetCategory? Category { get; init; }
 
     public string? FolderPath { get; init; }
@@ -25,8 +25,8 @@ public partial class TreeNodeViewModel : ObservableObject
     /// <summary>True only for the four fixed root category folders (not for user-created sub-folders) — used to decide where the "add sub-folder" button appears.</summary>
     public bool IsCategoryRoot { get; init; }
 
-    /// <summary>Only the 8bpp category roots support user-created sub-folders (each is its own flat palette).</summary>
-    public bool CanHaveSubfolders => IsCategoryRoot && Category is AssetCategory.Sprite8Bpp or AssetCategory.Tile8Bpp;
+    /// <summary>Every category root with its own flat (not palette-bank) palette supports user-created sub-folders — 8bpp sprite/tile and all three Layer2 categories — since each sub-folder gets its own independent palette.</summary>
+    public bool CanHaveSubfolders => IsCategoryRoot && Category is not null && !Category.Value.UsesPaletteBank();
 
     /// <summary>Set only on leaf (asset) nodes.</summary>
     public Guid? AssetId { get; init; }

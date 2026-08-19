@@ -58,6 +58,12 @@ public static class ProjectService
                 dto.Sprite8BppFolderPalettes[folder] = ToFlatDto(palette);
             foreach (var (folder, palette) in project.Tile8BppFolderPalettes)
                 dto.Tile8BppFolderPalettes[folder] = ToFlatDto(palette);
+            foreach (var (folder, palette) in project.Layer2_256x192FolderPalettes)
+                dto.Layer2_256x192FolderPalettes[folder] = ToFlatDto(palette);
+            foreach (var (folder, palette) in project.Layer2_320x256FolderPalettes)
+                dto.Layer2_320x256FolderPalettes[folder] = ToFlatDto(palette);
+            foreach (var (folder, palette) in project.Layer2_640x256x4FolderPalettes)
+                dto.Layer2_640x256x4FolderPalettes[folder] = ToFlatDto(palette);
 
             foreach (var asset in project.Assets)
             {
@@ -130,6 +136,12 @@ public static class ProjectService
             project.Sprite8BppFolderPalettes[folder] = FromFlatDto(flatDto);
         foreach (var (folder, flatDto) in dto.Tile8BppFolderPalettes)
             project.Tile8BppFolderPalettes[folder] = FromFlatDto(flatDto);
+        foreach (var (folder, flatDto) in dto.Layer2_256x192FolderPalettes)
+            project.Layer2_256x192FolderPalettes[folder] = FromFlatDto(flatDto);
+        foreach (var (folder, flatDto) in dto.Layer2_320x256FolderPalettes)
+            project.Layer2_320x256FolderPalettes[folder] = FromFlatDto(flatDto);
+        foreach (var (folder, flatDto) in dto.Layer2_640x256x4FolderPalettes)
+            project.Layer2_640x256x4FolderPalettes[folder] = FromFlatDto(flatDto);
 
         foreach (var a in dto.Assets)
         {

@@ -36,6 +36,10 @@ public partial class ExportFolderRowViewModel : ObservableObject
     [ObservableProperty]
     private int dataBytes;
 
+    /// <summary>Whether this row actually gets written when "Export" is clicked — checked by default. <see cref="ExportViewModel.CanExport"/> requires at least one row to still be checked.</summary>
+    [ObservableProperty]
+    private bool isIncluded = true;
+
     public ExportFolderRowViewModel(string rowKey, string folderPath, int assetCount, int chunkCount, int dataBytes,
         Func<string, ExportChunkSize, (int ChunkCount, int DataBytes)> recompute)
     {
@@ -73,23 +77,32 @@ public partial class ExportViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanExport))]
     private string outputDirectory = AppSettingsStore.Load().LastExportDirectory ?? "";
 
-    public bool CanExport => !string.IsNullOrWhiteSpace(OutputDirectory) && Folders.Count > 0;
+    /// <summary>Requires at least one row still checked (<see cref="ExportFolderRowViewModel.IsIncluded"/>) in addition to the existing output-directory requirement — unchecking every row leaves nothing to write.</summary>
+    public bool CanExport => !string.IsNullOrWhiteSpace(OutputDirectory) && Folders.Any(f => f.IsIncluded);
 
     public ExportViewModel(IReadOnlyList<FolderExportResult> results, Func<string, ExportChunkSize, (int ChunkCount, int DataBytes)> recompute)
     {
         foreach (var r in results)
         {
-            Folders.Add(new ExportFolderRowViewModel(
+            var row = new ExportFolderRowViewModel(
                 r.RowKey,
                 r.FolderPath,
                 r.Placements.Count,
                 r.Chunks.Count,
                 r.Chunks.Sum(c => c.Data.Length),
-                recompute));
+                recompute);
+            row.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ExportFolderRowViewModel.IsIncluded)) OnPropertyChanged(nameof(CanExport));
+            };
+            Folders.Add(row);
         }
     }
 
     /// <summary>The chunk size the user picked for a given row — falls back to 8KB (the default) for any row not found, which should never actually happen since every row's key comes from the same results this view model was built from.</summary>
     public ExportChunkSize ChunkSizeForRow(string rowKey) =>
         Folders.FirstOrDefault(f => f.RowKey == rowKey)?.SelectedChunkSize ?? ExportChunkSize.EightKb;
+
+    /// <summary>Only the rows the user left checked — what actually gets written when "Export" is clicked.</summary>
+    public IReadOnlyList<string> IncludedRowKeys => Folders.Where(f => f.IsIncluded).Select(f => f.RowKey).ToList();
 }

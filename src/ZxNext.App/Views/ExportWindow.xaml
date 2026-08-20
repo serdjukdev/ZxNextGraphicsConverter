@@ -8,13 +8,20 @@
         mc:Ignorable="d"
         Title="Export for Next" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
-    <StackPanel Margin="14" Width="580">
+    <StackPanel Margin="14" Width="620">
         <TextBlock Text="Each folder below is packed into its own 8KB-chunked .bin file(s) plus a matching .asm address map. Every folder also gets its own .pal palette file (always 512 bytes, regardless of category)."
                    TextWrapping="Wrap" Margin="0,0,0,10" />
 
-        <DataGrid ItemsSource="{Binding Folders}" AutoGenerateColumns="False"
+        <!-- Clicking anywhere in a row (except the Chunk size dropdown, which needs its own clicks
+             for opening/picking) toggles that row's Export? checkbox in one click — see
+             Grid_OnPreviewMouseLeftButtonDown. Without this, DataGrid's normal behavior needs a
+             precise hit on the small checkbox glyph, AND a first click just to select the cell
+             before a second click can actually toggle it. -->
+        <DataGrid x:Name="Grid" ItemsSource="{Binding Folders}" AutoGenerateColumns="False"
+                  PreviewMouseLeftButtonDown="Grid_OnPreviewMouseLeftButtonDown"
                   HeadersVisibility="Column" MaxHeight="220" CanUserAddRows="False" GridLinesVisibility="Horizontal">
             <DataGrid.Columns>
+                <DataGridCheckBoxColumn Header="Export?" Binding="{Binding IsIncluded, Mode=TwoWay}" Width="Auto" />
                 <DataGridTextColumn Header="Folder" Binding="{Binding FolderPath}" IsReadOnly="True" Width="2*" />
                 <DataGridTextColumn Header="Assets" Binding="{Binding AssetCount}" IsReadOnly="True" Width="*" />
                 <DataGridTextColumn Header="Chunks" Binding="{Binding ChunkCount}" IsReadOnly="True" Width="*" />

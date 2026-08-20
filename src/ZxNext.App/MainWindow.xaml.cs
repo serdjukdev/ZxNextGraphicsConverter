@@ -293,8 +293,12 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true) return;
 
         // Regenerate the FINAL plan using whatever chunk size the user ended up choosing per row —
-        // the dialog only ever showed a live preview per-row, never mutated initialResults itself.
-        var results = _viewModel.PreviewExport(vm.ChunkSizeForRow);
+        // the dialog only ever showed a live preview per-row, never mutated initialResults itself —
+        // then drop whichever rows the user unchecked (CanExport already guarantees at least one stays).
+        var includedRowKeys = new HashSet<string>(vm.IncludedRowKeys);
+        var results = _viewModel.PreviewExport(vm.ChunkSizeForRow)
+            .Where(r => includedRowKeys.Contains(r.RowKey))
+            .ToList();
 
         var existing = ExportService.ListOutputFileNames(results)
             .Where(name => File.Exists(Path.Combine(vm.OutputDirectory, name)))

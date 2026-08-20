@@ -22,11 +22,74 @@
             <KeyBinding Key="R" Modifiers="Control" Command="{Binding DataContext.RequestReQuantizeCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
         </TreeView.InputBindings>
         <TreeView.ItemContainerStyle>
+            <!-- Full custom template: the built-in TreeViewItem template's header column is only
+                 Auto-sized (fits the content, not the row), so clicks past the name/icons fell
+                 through to nothing. Here the header Border sits in an explicit "*" column, so it
+                 always spans the row's full available width and is clickable/double-clickable
+                 everywhere, not just on the text itself. -->
             <Style TargetType="TreeViewItem">
                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                 <Setter Property="Padding" Value="2,3" />
                 <EventSetter Event="MouseDoubleClick" Handler="TreeViewItem_OnMouseDoubleClick" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="TreeViewItem">
+                            <StackPanel>
+                                <Border x:Name="RowBorder" Background="{TemplateBinding Background}"
+                                        Padding="{TemplateBinding Padding}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="16" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <ToggleButton x:Name="Expander" Grid.Column="0"
+                                                      Focusable="False" ClickMode="Press"
+                                                      VerticalAlignment="Center"
+                                                      IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                            <ToggleButton.Template>
+                                                <ControlTemplate TargetType="ToggleButton">
+                                                    <Border Width="16" Height="16" Background="Transparent">
+                                                        <Path x:Name="Arrow" Data="M 2 2 L 8 6 L 2 10 Z"
+                                                              Fill="#FF666666" Stretch="Uniform" Width="7" Height="8"
+                                                              RenderTransformOrigin="0.5,0.5">
+                                                            <Path.RenderTransform>
+                                                                <RotateTransform Angle="0" />
+                                                            </Path.RenderTransform>
+                                                        </Path>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsChecked" Value="True">
+                                                            <Setter TargetName="Arrow" Property="RenderTransform">
+                                                                <Setter.Value>
+                                                                    <RotateTransform Angle="90" />
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </ToggleButton.Template>
+                                        </ToggleButton>
+                                        <ContentPresenter x:Name="PART_Header" Grid.Column="1"
+                                                          ContentSource="Header" HorizontalAlignment="Stretch" />
+                                    </Grid>
+                                </Border>
+                                <ItemsPresenter x:Name="ItemsHost" Margin="16,0,0,0" Visibility="Collapsed" />
+                            </StackPanel>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsExpanded" Value="True">
+                                    <Setter TargetName="ItemsHost" Property="Visibility" Value="Visible" />
+                                </Trigger>
+                                <Trigger Property="HasItems" Value="False">
+                                    <Setter TargetName="Expander" Property="Visibility" Value="Hidden" />
+                                </Trigger>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
+                                    <Setter TargetName="PART_Header" Property="TextElement.Foreground" Value="White" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
                 <Style.Triggers>
                     <DataTrigger Binding="{Binding IsFolder}" Value="True">
                         <Setter Property="Background" Value="#FFE7EEF9" />
@@ -39,7 +102,7 @@
         </TreeView.ItemContainerStyle>
         <TreeView.ItemTemplate>
             <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                <StackPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" Background="Transparent">
                     <CheckBox IsChecked="{Binding IsMultiSelected}" VerticalAlignment="Center" Margin="0,0,4,0"
                               ToolTip="Mark for group delete" Focusable="False" KeyboardNavigation.IsTabStop="False">
                         <CheckBox.Style>
@@ -58,6 +121,8 @@
                             <ContextMenu>
                                 <MenuItem Header="Rename..." Click="RenameMenuItem_OnClick" />
                                 <MenuItem Header="Re-quantize... (Ctrl+R)" Click="ReQuantizeMenuItem_OnClick" />
+                                <MenuItem Header="Re-quantize folder..." Click="ReQuantizeFolderMenuItem_OnClick"
+                                          ToolTip="Re-quantize every tile/sprite in THIS folder only, with a chosen dithering mode" />
                                 <MenuItem Header="Delete folder..." Click="DeleteFolderMenuItem_OnClick" />
                             </ContextMenu>
                         </TextBlock.ContextMenu>

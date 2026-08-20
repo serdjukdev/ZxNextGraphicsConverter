@@ -40,10 +40,6 @@
                                     <TextBlock FontSize="10" Foreground="Gray">
                                         <Run Text="{Binding Width, Mode=OneWay}" /><Run Text="x" /><Run Text="{Binding Height, Mode=OneWay}" />
                                     </TextBlock>
-                                    <ComboBox ItemsSource="{Binding AvailableDitherModes}"
-                                              SelectedItem="{Binding DitherMode}"
-                                              ToolTip="Changing this re-quantizes every tile/sprite already placed from this image"
-                                              FontSize="10" Padding="2" Width="88" Margin="0,2,0,0" />
                                 </StackPanel>
                             </StackPanel>
                             <Button Grid.Column="1" Content="✕" Width="20" Height="20" Padding="0"

@@ -21,6 +21,9 @@ public partial class ProjectTreeView : UserControl
     /// <summary>Raised from a user-created folder's right-click "Delete folder..." menu item.</summary>
     public event Action<TreeNodeViewModel>? DeleteFolderRequested;
 
+    /// <summary>Raised from a folder's (root or sub-folder) right-click "Re-quantize folder..." menu item.</summary>
+    public event Action<TreeNodeViewModel>? ReQuantizeFolderRequested;
+
     public ProjectTreeView()
     {
         InitializeComponent();
@@ -76,8 +79,9 @@ public partial class ProjectTreeView : UserControl
 
     /// <summary>
     /// Shows only the menu items that make sense for the right-clicked node: Rename/Re-quantize
-    /// for a leaf, Delete folder for a user-created sub-folder, nothing at all (menu suppressed)
-    /// for one of the four fixed category roots.
+    /// for a leaf; Re-quantize folder for any folder (root or sub-folder — a category root can
+    /// hold assets directly when no sub-folder was ever created); Delete folder only for a
+    /// user-created sub-folder (the four fixed category roots can't be deleted).
     /// </summary>
     private void NodeText_OnContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
@@ -86,16 +90,11 @@ public partial class ProjectTreeView : UserControl
             return;
         }
 
-        if (node.IsFolder && node.IsCategoryRoot)
-        {
-            e.Handled = true;
-            return;
-        }
-
         var isLeaf = !node.IsFolder;
         if (menu.Items[0] is MenuItem rename) rename.Visibility = isLeaf ? Visibility.Visible : Visibility.Collapsed;
         if (menu.Items[1] is MenuItem reQuantize) reQuantize.Visibility = isLeaf ? Visibility.Visible : Visibility.Collapsed;
-        if (menu.Items[2] is MenuItem deleteFolder) deleteFolder.Visibility = isLeaf ? Visibility.Collapsed : Visibility.Visible;
+        if (menu.Items[2] is MenuItem reQuantizeFolder) reQuantizeFolder.Visibility = node.IsFolder ? Visibility.Visible : Visibility.Collapsed;
+        if (menu.Items[3] is MenuItem deleteFolder) deleteFolder.Visibility = node.IsFolder && !node.IsCategoryRoot ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void RenameMenuItem_OnClick(object sender, RoutedEventArgs e)
@@ -118,6 +117,12 @@ public partial class ProjectTreeView : UserControl
     {
         if (sender is not MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement { DataContext: TreeNodeViewModel { IsFolder: true, IsCategoryRoot: false } node } } }) return;
         DeleteFolderRequested?.Invoke(node);
+    }
+
+    private void ReQuantizeFolderMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement { DataContext: TreeNodeViewModel { IsFolder: true } node } } }) return;
+        ReQuantizeFolderRequested?.Invoke(node);
     }
 
     private static bool TryGetContextNode(object sender, out TreeNodeViewModel node)

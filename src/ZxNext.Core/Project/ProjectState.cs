@@ -1,3 +1,4 @@
+using ZxNext.Core.Conversion;
 using ZxNext.Core.Editing;
 using ZxNext.Core.Model;
 
@@ -170,5 +171,57 @@ public class ProjectState
         }
 
         palettes[folderPath] = newPalette;
+    }
+
+    /// <summary>
+    /// Replaces one asset already in a flat-palette folder (8bpp sprite/tile, or any Layer2
+    /// category) with a freshly re-imported version — used by re-quantize (same asset, new
+    /// dithering/colour settings). Frees the OLD asset's own colours FIRST (removes it, then
+    /// compacts the folder's palette) before <paramref name="importReplacement"/> runs, so an
+    /// asset that already uses most/all of a tight palette (Layer2_640x256x4's 16 colours
+    /// especially) is never spuriously blocked by its own about-to-be-discarded colours — without
+    /// this, the capacity check inside <c>AssetImporter.Import</c> would count the old asset's
+    /// soon-to-be-replaced colours as "still in use" and refuse room that's actually about to be
+    /// freed. All-or-nothing: if the new version still doesn't fit even after freeing the old
+    /// one's colours (a genuine overflow, not a self-blocking artifact), everything — the old
+    /// asset AND every sibling asset's palette indices, remapped by the compaction — is restored
+    /// exactly as it was, so a failed re-quantize never silently loses or corrupts anything.
+    /// </summary>
+    public ImportResult ReplaceFlatPaletteAsset(GraphicsAsset oldAsset, Func<ImportResult> importReplacement)
+    {
+        var category = oldAsset.Category;
+
+        if (category.UsesPaletteBank())
+        {
+            // Bank slots don't share this failure mode the same way — a bank slot's overflow check
+            // is about the asset's own colour count against one slot's 15-colour capacity, not
+            // against remaining bank-wide space, so there's nothing to free up front here.
+            var directResult = importReplacement();
+            if (directResult.Success) Assets.Remove(oldAsset);
+            return directResult;
+        }
+
+        var folderPath = oldAsset.FolderPath;
+        var palettes = FolderPalettesFor(category);
+        palettes.TryGetValue(folderPath, out var originalPalette);
+
+        var siblingSnapshots = Assets
+            .Where(a => a.Category == category && a.FolderPath == folderPath && a.Id != oldAsset.Id)
+            .Select(a => (Asset: a, OriginalPixelData: (byte[])a.PackedPixelData.Clone()))
+            .ToList();
+
+        Assets.Remove(oldAsset);
+        CompactFlatPalette(category, folderPath);
+
+        var result = importReplacement();
+        if (result.Success) return result;
+
+        // Roll back: restore the palette, every sibling's remapped pixel data, and the old asset.
+        if (originalPalette is not null) palettes[folderPath] = originalPalette;
+        else palettes.Remove(folderPath);
+        foreach (var (asset, originalPixelData) in siblingSnapshots) asset.PackedPixelData = originalPixelData;
+        Assets.Add(oldAsset);
+
+        return result;
     }
 }

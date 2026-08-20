@@ -6,7 +6,6 @@ using Microsoft.Win32;
 using ZxNext.App.Rendering;
 using ZxNext.Core.Imaging;
 using ZxNext.Core.Model;
-using ZxNext.Core.Quantization;
 using ZxNext.Core.Settings;
 
 namespace ZxNext.App.ViewModels;
@@ -27,9 +26,6 @@ public partial class SourceImagesPanelViewModel : ObservableObject
 
     /// <summary>Raised whenever a new file is imported, so the owning project state can register it (and persist it on save).</summary>
     public event Action<SourceImage>? SourceImageAdded;
-
-    /// <summary>Raised whenever the user changes a source image's dithering mode — every tile/sprite already placed from that image should auto-re-quantize to match, no separate button/confirmation needed.</summary>
-    public event Action<Guid, DitherMode>? DitherModeChangedByUser;
 
     /// <summary>Raised to request deleting one source image — from its row's "✕" button, or from <see cref="DeleteSelectedImage"/> (the Delete key).</summary>
     public event Action<Guid>? DeleteImageRequested;
@@ -84,7 +80,6 @@ public partial class SourceImagesPanelViewModel : ObservableObject
         {
             Thumbnail = RawBitmapRenderer.FromRgba32(decoded.Width, decoded.Height, decoded.Rgba32)
         };
-        WireDitherModeChange(vm);
         Images.Add(vm);
         SourceImageAdded?.Invoke(model);
     }
@@ -96,7 +91,6 @@ public partial class SourceImagesPanelViewModel : ObservableObject
         {
             Thumbnail = RawBitmapRenderer.FromRgba32(model.Width, model.Height, rgba32)
         };
-        WireDitherModeChange(vm);
         Images.Add(vm);
     }
 
@@ -106,7 +100,4 @@ public partial class SourceImagesPanelViewModel : ObservableObject
         var vm = Images.FirstOrDefault(i => i.Model.Id == id);
         if (vm is not null) Images.Remove(vm);
     }
-
-    private void WireDitherModeChange(SourceImageViewModel vm) =>
-        vm.DitherModeChangedByUser += mode => DitherModeChangedByUser?.Invoke(vm.Model.Id, mode);
 }

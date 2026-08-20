@@ -82,7 +82,6 @@ public partial class MainViewModel : ObservableObject
         };
 
         SourceImages.SourceImageAdded += source => _project.SourceImages.Add(source);
-        SourceImages.DitherModeChangedByUser += async (sourceImageId, mode) => await ReQuantizeBySourceImageAsync(sourceImageId, mode);
         SourceImages.DeleteImageRequested += DeleteSourceImage;
         PaletteStrip.OptimizeBankRequested += async () => await OptimizeCurrentBankAsync();
 
@@ -131,7 +130,7 @@ public partial class MainViewModel : ObservableObject
     public ImportOutcome ImportIntoCategory(SourceImageViewModel source, AssetCategory category, string folderPath, int? maxColors = null)
     {
         var decoded = DecodeSource(source);
-        var result = AssetImporter.Import(_project, source.Model, decoded.Rgba32, category, folderPath, source.DitherMode, maxColors);
+        var result = AssetImporter.Import(_project, source.Model, decoded.Rgba32, category, folderPath, DitherMode.None, maxColors);
 
         if (result.Success)
         {
@@ -169,7 +168,7 @@ public partial class MainViewModel : ObservableObject
             Width = width,
             Height = height
         };
-        var result = AssetImporter.Import(_project, placedSource, placedRgba32, category, folderPath, source.DitherMode, maxColors,
+        var result = AssetImporter.Import(_project, placedSource, placedRgba32, category, folderPath, DitherMode.None, maxColors,
             sourceOffsetX: offsetX, sourceOffsetY: offsetY, sourceCropWidth: cropWidth, sourceCropHeight: cropHeight);
 
         if (result.Success)
@@ -231,7 +230,7 @@ public partial class MainViewModel : ObservableObject
                         Height = rect.Height
                     };
 
-                    var result = AssetImporter.Import(_project, cellSource, cellRgba, category, folderPath, source.DitherMode, null, rect.X, rect.Y);
+                    var result = AssetImporter.Import(_project, cellSource, cellRgba, category, folderPath, DitherMode.None, null, rect.X, rect.Y);
                     if (result.Success) imported.Add(result.Asset!);
                     else failed++;
                 }
@@ -286,22 +285,33 @@ public partial class MainViewModel : ObservableObject
 
         var originalName = asset.Name;
 
-        var result = AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, maxFourBppColors, asset.SourceOffsetX, asset.SourceOffsetY, excludeAssetIdFromNameCheck: asset.Id,
-            sourceCropWidth: asset.SourceCropWidth, sourceCropHeight: asset.SourceCropHeight);
+        var result = _project.ReplaceFlatPaletteAsset(asset, () =>
+            AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, maxFourBppColors, asset.SourceOffsetX, asset.SourceOffsetY, excludeAssetIdFromNameCheck: asset.Id,
+                sourceCropWidth: asset.SourceCropWidth, sourceCropHeight: asset.SourceCropHeight));
         if (!result.Success)
         {
             PixelEditor.StatusText = $"Re-quantize failed: {result.Error}";
             return new ImportOutcome(false, result.Reason, asset.Category, result.Error);
         }
 
-        _project.Assets.Remove(asset);
         result.Asset!.Name = originalName;
         Tree.ReplaceAssetNode(asset.Id, result.Asset); // keeps its position in the list instead of jumping to the bottom
 
-        // The re-quantized asset may have landed in a different (or brand-new) slot, leaving its
-        // OLD slot with nothing left using it — drop any such now-orphaned slot so the bank never
-        // silently accumulates dead palettes nobody references.
-        if (asset.Category.UsesPaletteBank()) _project.CompactPaletteBank(asset.Category);
+        if (asset.Category.UsesPaletteBank())
+        {
+            // The re-quantized asset may have landed in a different (or brand-new) slot, leaving its
+            // OLD slot with nothing left using it — drop any such now-orphaned slot so the bank never
+            // silently accumulates dead palettes nobody references.
+            _project.CompactPaletteBank(asset.Category);
+        }
+        else
+        {
+            // ReplaceFlatPaletteAsset may have remapped every OTHER asset sharing this folder's flat
+            // palette too (not just this one) — refresh whatever's currently shown, and drop any
+            // pending undo entry, since it could reference now-stale pixel indices.
+            _undoStack.Clear();
+            OnSelectionChanged();
+        }
 
         HasUnsavedChanges = true;
         PixelEditor.StatusText = $"Re-quantized {originalName} (dither: {newDitherMode}).";
@@ -463,51 +473,68 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Re-quantizes every tile/sprite that was placed from a given source image (drag once, sliced
-    /// into many tiles, or dropped several times) using the given dithering. Overflows are reported
-    /// but NOT individually dialog-prompted (that would be a dialog per tile) — use the per-tile
-    /// Ctrl+R / Re-quantize... flow (which does prompt) for any that fail here. Can touch many assets
-    /// at once, so it runs off the UI thread behind a busy indicator.
+    /// Re-quantizes every tile/sprite/Layer2 image currently placed in ONE specific folder, using
+    /// the given dithering — scoped to that folder alone. Deliberately NOT scoped by source image:
+    /// the same source image can legitimately be dropped into several folders (each with its own
+    /// palette) and each needs to be free to use different dithering, so a folder-level trigger is
+    /// the only grain that makes sense — re-quantizing here must never touch assets sitting in a
+    /// different folder just because they happen to share a source image. Triggered from the tree's
+    /// folder right-click menu. Overflows are reported but NOT individually dialog-prompted (that
+    /// would be a dialog per tile) — use the per-tile Ctrl+R / Re-quantize... flow (which does
+    /// prompt) for any that fail here. Can touch many assets at once, so it runs off the UI thread
+    /// behind a busy indicator.
     /// </summary>
-    public async Task ReQuantizeBySourceImageAsync(Guid sourceImageId, DitherMode newDitherMode)
+    public async Task ReQuantizeFolderAsync(AssetCategory category, string folderPath, DitherMode newDitherMode)
     {
-        var affected = _project.Assets.Where(a => a.SourceImageId == sourceImageId).ToList();
+        var affected = _project.Assets.Where(a => a.Category == category && a.FolderPath == folderPath).ToList();
         if (affected.Count == 0)
         {
-            PixelEditor.StatusText = "No tiles/sprites have been placed from this image yet.";
+            PixelEditor.StatusText = "This folder has no tiles/sprites to re-quantize yet.";
             return;
         }
 
-        var source = _project.SourceImages.FirstOrDefault(s => s.Id == sourceImageId);
-        if (source is null)
-        {
-            PixelEditor.StatusText = "Can't re-quantize: source image is no longer in the project.";
-            return;
-        }
-
-        await RunBusyAsync("Re-quantizing placements...", async progress =>
+        await RunBusyAsync("Re-quantizing folder...", async progress =>
         {
             var succeeded = 0;
             var overflowed = new List<string>();
+            var missingSource = new List<string>();
             var replaced = new List<(Guid OldId, GraphicsAsset New)>();
 
             await Task.Run(() =>
             {
-                var decoded = _decoder.Decode(source.FilePath);
+                var decodedBySourceId = new Dictionary<Guid, DecodedImage>();
 
                 for (var i = 0; i < affected.Count; i++)
                 {
                     var asset = affected[i];
                     progress.Report(new BusyProgress($"Re-quantizing {asset.Name} ({i + 1}/{affected.Count})...", i + 1, affected.Count));
 
+                    if (asset.SourceImageId is not { } sourceId ||
+                        _project.SourceImages.FirstOrDefault(s => s.Id == sourceId) is not { } source)
+                    {
+                        missingSource.Add(asset.Name);
+                        continue;
+                    }
+
+                    if (!decodedBySourceId.TryGetValue(sourceId, out var decoded))
+                    {
+                        decoded = _decoder.Decode(source.FilePath);
+                        decodedBySourceId[sourceId] = decoded;
+                    }
+
                     var cellRgba = BuildCellRgba(decoded, asset);
                     var cellSource = new SourceImage { Id = source.Id, FileName = asset.Name, FilePath = source.FilePath, Width = asset.Width, Height = asset.Height };
 
-                    var result = AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, null, asset.SourceOffsetX, asset.SourceOffsetY, excludeAssetIdFromNameCheck: asset.Id,
-                        sourceCropWidth: asset.SourceCropWidth, sourceCropHeight: asset.SourceCropHeight);
+                    // Frees this asset's OWN colours before attempting the replacement — otherwise an
+                    // asset that already uses most/all of a tight flat palette (Layer2_640x256x4's 16
+                    // colours especially) would be spuriously blocked by its own about-to-be-discarded
+                    // colours. All-or-nothing per asset: a failed replacement restores everything for
+                    // THIS asset (and any sibling the compaction touched) exactly as it was.
+                    var result = _project.ReplaceFlatPaletteAsset(asset, () =>
+                        AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, null, asset.SourceOffsetX, asset.SourceOffsetY, excludeAssetIdFromNameCheck: asset.Id,
+                            sourceCropWidth: asset.SourceCropWidth, sourceCropHeight: asset.SourceCropHeight));
                     if (result.Success)
                     {
-                        _project.Assets.Remove(asset);
                         result.Asset!.Name = asset.Name;
                         replaced.Add((asset.Id, result.Asset));
                         succeeded++;
@@ -518,19 +545,33 @@ public partial class MainViewModel : ObservableObject
                     }
                 }
 
-                // Every re-quantized asset may have moved to a different slot, orphaning its old one.
-                foreach (var fourBppCategory in replaced.Select(r => r.New.Category).Where(c => c.UsesPaletteBank()).Distinct())
+                // Bank categories aren't compacted by ReplaceFlatPaletteAsset (only flat folder
+                // palettes are) — a re-quantized asset may have landed in a different/new slot,
+                // leaving its old one orphaned, so compact the bank once after the whole batch.
+                if (replaced.Count > 0 && category.UsesPaletteBank())
                 {
-                    _project.CompactPaletteBank(fourBppCategory);
+                    _project.CompactPaletteBank(category);
                 }
             });
 
             foreach (var (oldId, newAsset) in replaced) Tree.ReplaceAssetNode(oldId, newAsset);
 
-            if (succeeded > 0) HasUnsavedChanges = true;
-            PixelEditor.StatusText = overflowed.Count == 0
-                ? $"Re-quantized {succeeded} tile(s)/sprite(s) placed from this image."
-                : $"Re-quantized {succeeded}; {overflowed.Count} hit palette overflow and were left unchanged: {string.Join(", ", overflowed)}.";
+            if (succeeded > 0)
+            {
+                HasUnsavedChanges = true;
+                // Palette compaction above can remap every surviving asset's pixel indices — any
+                // pending undo entry (e.g. a delete-with-restore) could point at now-stale indices.
+                _undoStack.Clear();
+                OnSelectionChanged(); // re-derive whatever's shown — palette contents/positions may have moved
+            }
+
+            var problems = new List<string>();
+            if (overflowed.Count > 0) problems.Add($"{overflowed.Count} hit palette overflow and were left unchanged: {string.Join(", ", overflowed)}");
+            if (missingSource.Count > 0) problems.Add($"{missingSource.Count} have no source image left and were skipped: {string.Join(", ", missingSource)}");
+
+            PixelEditor.StatusText = problems.Count == 0
+                ? $"Re-quantized {succeeded} tile(s)/sprite(s) in this folder (dither: {newDitherMode})."
+                : $"Re-quantized {succeeded}; {string.Join("; ", problems)}.";
         });
     }
 
@@ -1044,7 +1085,7 @@ public partial class MainViewModel : ObservableObject
 
             PixelEditor.StatusText = $"Editing {asset.Name} — pick a palette colour above, then click/drag on the pixels to paint.";
         }
-        else if (node is { IsFolder: true, Category: AssetCategory.Sprite4Bpp or AssetCategory.Tile4Bpp })
+        else if (node is { IsFolder: true, Category: { } category })
         {
             ImageViewer.Bitmap = null;
             ImageViewer.SelectedAssetName = "(no selection)";
@@ -1052,11 +1093,26 @@ public partial class MainViewModel : ObservableObject
             PixelEditor.AssetWidth = 0;
             PixelEditor.AssetHeight = 0;
 
-            var bank = _project.BankFor(node.Category!.Value);
-            var usedPalettes = bank.Slots.Count;
-            var totalColors = bank.Slots.Sum(slot => slot.Slots.Count(c => c is not null));
-            PaletteStrip.ShowBank(bank, $"{node.Category} — palette bank overview");
-            PixelEditor.StatusText = $"{node.Category}: {usedPalettes}/{PaletteBank.MaxSlots} palette(s) used, {totalColors} colour(s) total.";
+            if (category.UsesPaletteBank())
+            {
+                var bank = _project.BankFor(category);
+                var usedPalettes = bank.Slots.Count;
+                var totalColors = bank.Slots.Sum(slot => slot.Slots.Count(c => c is not null));
+                PaletteStrip.ShowBank(bank, $"{category} — palette bank overview");
+                PixelEditor.StatusText = $"{category}: {usedPalettes}/{PaletteBank.MaxSlots} palette(s) used, {totalColors} colour(s) total.";
+            }
+            else if (node.FolderPath is { } folderPath && _project.FolderPalettesFor(category).TryGetValue(folderPath, out var palette))
+            {
+                var capacity = category.FlatPaletteCapacity();
+                var usedColors = palette.Slots.Count(c => c is not null);
+                PaletteStrip.ShowPalette(palette, $"{node.Name} ({category}) — folder palette, {usedColors}/{capacity} colour(s) used", isFourBpp: false, paletteSlotIndex: 0);
+                PixelEditor.StatusText = $"{node.Name}: {usedColors}/{capacity} colour(s) used in this folder's palette.";
+            }
+            else
+            {
+                PaletteStrip.Clear();
+                PixelEditor.StatusText = $"{node.Name}: no images placed yet — palette is empty.";
+            }
         }
         else
         {

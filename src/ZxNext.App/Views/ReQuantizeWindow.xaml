@@ -9,7 +9,7 @@
         Title="Re-quantize" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
     <StackPanel Margin="14" Width="300">
-        <TextBlock Text="Re-converts this tile/sprite from its original source region, replacing its current pixels."
+        <TextBlock Text="{Binding Description}"
                    TextWrapping="Wrap" Margin="0,0,0,10" />
         <TextBlock Text="Dithering" FontSize="11" Margin="0,0,0,2" />
         <ComboBox ItemsSource="{Binding AvailableDitherModes}" SelectedItem="{Binding SelectedDitherMode}" />

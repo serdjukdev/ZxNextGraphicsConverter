@@ -11,8 +11,11 @@ public partial class ReQuantizeViewModel : ObservableObject
     [ObservableProperty]
     private DitherMode selectedDitherMode;
 
-    public ReQuantizeViewModel(DitherMode currentMode)
+    public string Description { get; }
+
+    public ReQuantizeViewModel(DitherMode currentMode, string description = "Re-converts this tile/sprite from its original source region, replacing its current pixels.")
     {
         SelectedDitherMode = currentMode;
+        Description = description;
     }
 }

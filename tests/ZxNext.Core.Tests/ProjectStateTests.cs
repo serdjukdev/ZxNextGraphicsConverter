@@ -139,4 +139,71 @@ public class ProjectStateTests
         var palette = project.GetOrCreateFolderPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images");
         Assert.Equal(256, palette.FreeSlotCount);
     }
+
+    /// <summary>
+    /// Regression for a reported bug: re-quantizing (e.g. changing dithering on) an asset that
+    /// already uses most/all of its folder's tight flat palette (Layer2_640x256x4's 16 colours
+    /// especially) used to fail spuriously, because the capacity check ran BEFORE the old asset was
+    /// removed — so its own about-to-be-replaced colours still counted as "in use" and blocked room
+    /// that was genuinely about to be freed.
+    /// </summary>
+    [Fact]
+    public void ReplaceFlatPaletteAsset_AssetAlreadyFillsItsOwnTightPalette_FreesItsColoursFirstInsteadOfSpuriouslyFailing()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "src", FilePath = "C:\\fake\\src.png", Width = 4, Height = 4 };
+        project.SourceImages.Add(source);
+        const string folderPath = "layer2/640x256x4/images";
+
+        var original = AssetImporter.Import(project, source, DistinctColorsImage(4, 4, 16), AssetCategory.Layer2_640x256x4, folderPath, DitherMode.None).Asset!;
+        Assert.Equal(0, project.GetOrCreateFolderPalette(AssetCategory.Layer2_640x256x4, folderPath).FreeSlotCount);
+
+        // A completely disjoint set of 16 colours (stands in for "re-quantized with different
+        // dithering") — every one of them is "new" relative to the palette as it stands right now.
+        var replacementRgba = DistinctColorsImage(4, 4, 16, blueOffset: 1);
+        var cellSource = new SourceImage { Id = source.Id, FileName = original.Name, FilePath = source.FilePath, Width = 4, Height = 4 };
+
+        var result = project.ReplaceFlatPaletteAsset(original, () =>
+            AssetImporter.Import(project, cellSource, replacementRgba, AssetCategory.Layer2_640x256x4, folderPath, DitherMode.None, null,
+                original.SourceOffsetX, original.SourceOffsetY, excludeAssetIdFromNameCheck: original.Id,
+                sourceCropWidth: original.SourceCropWidth, sourceCropHeight: original.SourceCropHeight));
+
+        Assert.True(result.Success, result.Error);
+        Assert.DoesNotContain(project.Assets, a => a.Id == original.Id);
+        Assert.Contains(project.Assets, a => a.Id == result.Asset!.Id);
+        Assert.Equal(0, project.GetOrCreateFolderPalette(AssetCategory.Layer2_640x256x4, folderPath).FreeSlotCount);
+    }
+
+    [Fact]
+    public void ReplaceFlatPaletteAsset_GenuineOverflowEvenAfterFreeingTheOldAsset_RollsBackEverythingUnchanged()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "src", FilePath = "C:\\fake\\src.png", Width = 4, Height = 4 };
+        project.SourceImages.Add(source);
+        const string folderPath = "layer2/640x256x4/images";
+
+        // Two assets sharing the 16-colour folder palette: 8 + 8 = 16, no free slots.
+        var sibling = AssetImporter.Import(project, source, DistinctColorsImage(4, 4, 8, blueOffset: 0), AssetCategory.Layer2_640x256x4, folderPath, DitherMode.None).Asset!;
+        var target = AssetImporter.Import(project, source, DistinctColorsImage(4, 4, 8, blueOffset: 1), AssetCategory.Layer2_640x256x4, folderPath, DitherMode.None).Asset!;
+        Assert.Equal(0, project.GetOrCreateFolderPalette(AssetCategory.Layer2_640x256x4, folderPath).FreeSlotCount);
+
+        var siblingPixelsBefore = (byte[])sibling.PackedPixelData.Clone();
+        var targetPixelsBefore = (byte[])target.PackedPixelData.Clone();
+
+        // Even after freeing target's own 8 colours, this needs 16 brand-new ones (disjoint from
+        // both the sibling's 8 and target's original 8) — genuinely can't fit in the remaining 8.
+        var replacementRgba = DistinctColorsImage(4, 4, 16, blueOffset: 2);
+        var cellSource = new SourceImage { Id = source.Id, FileName = target.Name, FilePath = source.FilePath, Width = 4, Height = 4 };
+
+        var result = project.ReplaceFlatPaletteAsset(target, () =>
+            AssetImporter.Import(project, cellSource, replacementRgba, AssetCategory.Layer2_640x256x4, folderPath, DitherMode.None, null,
+                target.SourceOffsetX, target.SourceOffsetY, excludeAssetIdFromNameCheck: target.Id,
+                sourceCropWidth: target.SourceCropWidth, sourceCropHeight: target.SourceCropHeight));
+
+        Assert.False(result.Success);
+        Assert.Contains(project.Assets, a => a.Id == target.Id); // old asset restored, not lost
+        Assert.Equal(targetPixelsBefore, target.PackedPixelData);
+        Assert.Equal(siblingPixelsBefore, sibling.PackedPixelData); // untouched by the failed attempt's compaction/rollback
+        Assert.Equal(0, project.GetOrCreateFolderPalette(AssetCategory.Layer2_640x256x4, folderPath).FreeSlotCount);
+    }
 }

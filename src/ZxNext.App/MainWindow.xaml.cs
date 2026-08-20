@@ -30,6 +30,7 @@ public partial class MainWindow : Window
         ProjectTreeViewControl.RenameAssetRequested += OnRenameAssetRequested;
         ProjectTreeViewControl.ReQuantizeContextRequested += _viewModel.RequestReQuantizeById;
         ProjectTreeViewControl.DeleteFolderRequested += _viewModel.DeleteFolder;
+        ProjectTreeViewControl.ReQuantizeFolderRequested += OnReQuantizeFolderRequested;
         PixelEditorViewControl.PaintStrokeStarted += _viewModel.BeginPaintStroke;
         PixelEditorViewControl.PixelPainted += _viewModel.PaintPixel;
         PixelEditorViewControl.PaintStrokeEnded += _viewModel.EndPaintStroke;
@@ -162,6 +163,23 @@ public partial class MainWindow : Window
             await HandlePaletteOverflowAsync(outcome.Error ?? "Palette overflow.", outcome.Category,
                 maxColors => _viewModel.ReQuantizeAsset(assetId, vm.SelectedDitherMode, maxColors));
         }
+    }
+
+    /// <summary>
+    /// Bulk-re-quantizes every tile/sprite in ONE folder with a freshly chosen dithering mode —
+    /// scoped to that folder alone, unlike the old per-source-image dithering combo (removed) which
+    /// used to cascade to every folder the same image happened to be dropped into.
+    /// </summary>
+    private async void OnReQuantizeFolderRequested(TreeNodeViewModel node)
+    {
+        if (node.Category is not { } category || node.FolderPath is not { } folderPath) return;
+
+        var vm = new ReQuantizeViewModel(DitherMode.None,
+            $"Re-converts every tile/sprite currently in \"{node.Name}\" from its original source region — other folders (even ones sharing the same source image) are left untouched.");
+        var dialog = new ReQuantizeWindow { DataContext = vm, Owner = this, Title = $"Re-quantize folder: {node.Name}" };
+        if (dialog.ShowDialog() != true) return;
+
+        await _viewModel.ReQuantizeFolderAsync(category, folderPath, vm.SelectedDitherMode);
     }
 
     /// <summary>True for either "the 4bpp bank slot is full" or "the flat folder palette is full" — both get the same reduce-and-retry remediation dialog.</summary>

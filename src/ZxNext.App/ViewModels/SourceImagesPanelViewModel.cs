@@ -21,11 +21,26 @@ public partial class SourceImagesPanelViewModel : ObservableObject
 
     public ObservableCollection<SourceImageViewModel> Images { get; } = [];
 
+    /// <summary>Bound to the ListBox's SelectedItem, so the Delete key can act on whichever row is highlighted — independent of the per-row "✕" button, which always targets its own row regardless of selection.</summary>
+    [ObservableProperty]
+    private SourceImageViewModel? selectedImage;
+
     /// <summary>Raised whenever a new file is imported, so the owning project state can register it (and persist it on save).</summary>
     public event Action<SourceImage>? SourceImageAdded;
 
     /// <summary>Raised whenever the user changes a source image's dithering mode — every tile/sprite already placed from that image should auto-re-quantize to match, no separate button/confirmation needed.</summary>
     public event Action<Guid, DitherMode>? DitherModeChangedByUser;
+
+    /// <summary>Raised to request deleting one source image — from its row's "✕" button, or from <see cref="DeleteSelectedImage"/> (the Delete key).</summary>
+    public event Action<Guid>? DeleteImageRequested;
+
+    public void RequestDeleteImage(Guid sourceImageId) => DeleteImageRequested?.Invoke(sourceImageId);
+
+    [RelayCommand]
+    private void DeleteSelectedImage()
+    {
+        if (SelectedImage is { } image) RequestDeleteImage(image.Model.Id);
+    }
 
     public SourceImagesPanelViewModel(IImageDecoder decoder)
     {

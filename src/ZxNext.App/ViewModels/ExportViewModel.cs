@@ -26,7 +26,7 @@ public partial class ExportViewModel : ObservableObject
                 r.FolderPath,
                 r.Placements.Count,
                 r.Chunks.Count,
-                r.Chunks.Sum(c => c.Data.Length)));
+                r.Chunks.Sum(c => c.Data.Length) + r.PaletteFile.Data.Length));
         }
     }
 }

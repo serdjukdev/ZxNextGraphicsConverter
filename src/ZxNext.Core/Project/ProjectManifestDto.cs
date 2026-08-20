@@ -59,4 +59,6 @@ public class AssetDto
     public string PackedDataFile { get; set; } = "";
     public int SourceOffsetX { get; set; }
     public int SourceOffsetY { get; set; }
+    public int SourceCropWidth { get; set; }
+    public int SourceCropHeight { get; set; }
 }

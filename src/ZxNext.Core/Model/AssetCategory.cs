@@ -58,6 +58,15 @@ public static class AssetCategoryExtensions
         _ => throw new System.ArgumentOutOfRangeException(nameof(category), "Not a flat-palette category")
     };
 
+    /// <summary>File extension for this category's exported binary data — distinct per asset kind so the same output folder never collides across categories (previously everything shared a generic ".bin").</summary>
+    public static string BinaryFileExtension(this AssetCategory category) => category switch
+    {
+        AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp => "spr",
+        AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp => "til",
+        AssetCategory.Layer2_256x192 or AssetCategory.Layer2_320x256 or AssetCategory.Layer2_640x256x4 => "l2",
+        _ => throw new System.ArgumentOutOfRangeException(nameof(category))
+    };
+
     /// <summary>Fixed asset cell size: 16x16 for sprites, 8x8 for tiles, the full canvas for Layer2 categories.</summary>
     public static (int Width, int Height) CellSize(this AssetCategory category) => category switch
     {

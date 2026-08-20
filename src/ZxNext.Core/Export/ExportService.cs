@@ -8,12 +8,13 @@ public record FolderExportResult(
     IReadOnlyList<ChunkFile> Chunks,
     IReadOnlyList<AssetPlacement> Placements,
     string AsmText,
-    string AsmFileName);
+    string AsmFileName,
+    ChunkFile PaletteFile);
 
 /// <summary>
 /// Orchestrates export: groups the project's assets by tree folder (so each folder gets its
-/// own independent 8KB-chunk numbering, per spec), chunks each group, generates its ASM map,
-/// and can write everything to disk.
+/// own independent 8KB-chunk numbering, per spec), chunks each group, generates its ASM map and
+/// palette file, and can write everything to disk.
 /// </summary>
 public static class ExportService
 {
@@ -23,7 +24,7 @@ public static class ExportService
             .Where(a => !a.Category.IsLayer2())
             .GroupBy(a => a.FolderPath)
             .OrderBy(g => g.Key, StringComparer.Ordinal)
-            .Select(g => ExportFolder(g.Key, g.OrderBy(a => a.Name, StringComparer.Ordinal).ToList()))
+            .Select(g => ExportFolder(project, g.Key, g.OrderBy(a => a.Name, StringComparer.Ordinal).ToList()))
             .ToList();
 
         // Layer2 images are exported one-at-a-time, not grouped by folder — see Layer2Exporter's
@@ -37,15 +38,23 @@ public static class ExportService
         return results;
     }
 
-    public static FolderExportResult ExportFolder(string folderPath, IReadOnlyList<GraphicsAsset> assets)
+    public static FolderExportResult ExportFolder(ProjectState project, string folderPath, IReadOnlyList<GraphicsAsset> assets)
     {
+        var category = assets[0].Category;
         var baseFileName = SanitizeFileName(folderPath);
+
         var exportables = assets
             .Select(a => new ExportableAsset(a.Name, a.PackedPixelData, a.Category.UsesPaletteBank(), a.PaletteSlotIndex))
             .ToList();
-        var (chunks, placements) = BinaryChunker.Pack(exportables, baseFileName);
+        var (chunks, placements) = BinaryChunker.Pack(exportables, baseFileName, category.BinaryFileExtension());
         var asmText = AsmMapGenerator.Generate(placements, chunks.Count);
-        return new FolderExportResult(folderPath, chunks, placements, asmText, $"{baseFileName}.asm");
+
+        var paletteBytes = category.UsesPaletteBank()
+            ? PaletteFileWriter.WriteBank(project.BankFor(category))
+            : PaletteFileWriter.Write(project.GetOrCreateFolderPalette(category, folderPath).Slots);
+        var paletteFile = new ChunkFile($"{baseFileName}.pal", paletteBytes);
+
+        return new FolderExportResult(folderPath, chunks, placements, asmText, $"{baseFileName}.asm", paletteFile);
     }
 
     public static void WriteToDisk(IEnumerable<FolderExportResult> results, string outputDirectory)
@@ -57,9 +66,14 @@ public static class ExportService
             {
                 File.WriteAllBytes(Path.Combine(outputDirectory, chunk.FileName), chunk.Data);
             }
+            File.WriteAllBytes(Path.Combine(outputDirectory, result.PaletteFile.FileName), result.PaletteFile.Data);
             File.WriteAllText(Path.Combine(outputDirectory, result.AsmFileName), result.AsmText);
         }
     }
+
+    /// <summary>Every filename this export would write, for an overwrite check before actually writing anything.</summary>
+    public static List<string> ListOutputFileNames(IEnumerable<FolderExportResult> results) =>
+        results.SelectMany(r => r.Chunks.Select(c => c.FileName).Append(r.PaletteFile.FileName).Append(r.AsmFileName)).ToList();
 
     private static string SanitizeFileName(string folderPath) =>
         folderPath.Replace('/', '_').Replace('\\', '_').Replace(':', '_');

@@ -32,9 +32,12 @@ public static class AssetImporter
         AssetCategory category,
         string folderPath,
         DitherMode ditherMode,
-        int? maxFourBppColors = null,
+        int? maxColors = null,
         int sourceOffsetX = 0,
-        int sourceOffsetY = 0)
+        int sourceOffsetY = 0,
+        Guid? excludeAssetIdFromNameCheck = null,
+        int? sourceCropWidth = null,
+        int? sourceCropHeight = null)
     {
         var (cellWidth, cellHeight) = category.CellSize();
 
@@ -66,15 +69,34 @@ public static class AssetImporter
         }
 
         return category.UsesPaletteBank()
-            ? ImportFourBpp(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxFourBppColors, sourceOffsetX, sourceOffsetY)
-            : ImportFlatPalette(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, sourceOffsetX, sourceOffsetY);
+            ? ImportFourBpp(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, excludeAssetIdFromNameCheck)
+            : ImportFlatPalette(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, excludeAssetIdFromNameCheck, sourceCropWidth ?? width, sourceCropHeight ?? height);
+    }
+
+    /// <summary>Asset names double as ASM export labels, so they must be unique project-wide. A brand-new import that collides gets an auto "_2", "_3", ... suffix; a re-quantize (which re-imports under the SAME name as the asset it's about to replace) passes that asset's own id via <paramref name="excludeAssetId"/> so it doesn't collide with itself.</summary>
+    private static string EnsureUniqueName(ProjectState project, string desiredName, Guid? excludeAssetId)
+    {
+        bool IsTaken(string candidate) => project.Assets.Any(a =>
+            a.Id != excludeAssetId && string.Equals(a.Name, candidate, StringComparison.OrdinalIgnoreCase));
+
+        if (!IsTaken(desiredName)) return desiredName;
+
+        var suffix = 2;
+        string candidateName;
+        do
+        {
+            candidateName = $"{desiredName}_{suffix}";
+            suffix++;
+        } while (IsTaken(candidateName));
+
+        return candidateName;
     }
 
     private static ImportResult ImportFourBpp(
         ProjectState project, SourceImage source, AssetCategory category, string folderPath, DitherMode ditherMode,
-        NextColor[] matched, bool[] isTransparent, int width, int height, int? maxFourBppColors, int sourceOffsetX, int sourceOffsetY)
+        NextColor[] matched, bool[] isTransparent, int width, int height, int? maxColors, int sourceOffsetX, int sourceOffsetY, Guid? excludeAssetIdFromNameCheck)
     {
-        if (maxFourBppColors is { } cap)
+        if (maxColors is { } cap)
         {
             matched = ColorReducer.Reduce(matched, cap);
         }
@@ -99,7 +121,7 @@ public static class AssetImporter
 
         var asset = new GraphicsAsset
         {
-            Name = source.FileName,
+            Name = EnsureUniqueName(project, source.FileName, excludeAssetIdFromNameCheck),
             Category = category,
             Width = width,
             Height = height,
@@ -109,42 +131,62 @@ public static class AssetImporter
             DitherMode = ditherMode,
             SourceImageId = source.Id,
             SourceOffsetX = sourceOffsetX,
-            SourceOffsetY = sourceOffsetY
+            SourceOffsetY = sourceOffsetY,
+            SourceCropWidth = width, // bank categories (sprites/tiles) never pad — the crop is always exactly the cell size
+            SourceCropHeight = height
         };
         project.Assets.Add(asset);
         return new ImportResult(true, asset, null);
     }
 
-    /// <summary>Shared by every category with one flat per-folder palette: 8bpp sprite/tile (256 colours, 1 byte/pixel) and all three Layer2 categories (256 or 16 colours, 1 byte or 2-per-byte).</summary>
+    /// <summary>Shared by every category with one flat per-folder palette: 8bpp sprite/tile (256 colours, 1 byte/pixel) and all three Layer2 categories (256 or 16 colours, 1 byte or 2-per-byte). <paramref name="maxColors"/> matters most for Layer2_640x256x4 — real art almost always has more than its 15 usable colours, unlike the 256-colour modes.</summary>
     private static ImportResult ImportFlatPalette(
         ProjectState project, SourceImage source, AssetCategory category, string folderPath, DitherMode ditherMode,
-        NextColor[] matched, bool[] isTransparent, int width, int height, int sourceOffsetX, int sourceOffsetY)
+        NextColor[] matched, bool[] isTransparent, int width, int height, int? maxColors, int sourceOffsetX, int sourceOffsetY, Guid? excludeAssetIdFromNameCheck,
+        int sourceCropWidth, int sourceCropHeight)
     {
+        if (maxColors is { } cap)
+        {
+            matched = ColorReducer.Reduce(matched, cap);
+        }
+
         var palette = project.GetOrCreateFolderPalette(category, folderPath);
+
+        // Check BEFORE touching the palette at all: TryAdd mutates as it goes, so looping pixel by
+        // pixel and bailing out partway through a failure would permanently leave however many
+        // colours it got through before hitting the wall — a failed import corrupting the shared
+        // palette for every future attempt (including a "reduce colours and retry"). Pre-computing
+        // exactly which colours are genuinely new and checking they fit in the remaining free space
+        // keeps this all-or-nothing, matching how the 4bpp bank path (PaletteAllocator) already
+        // works safely.
+        var distinctColors = matched.Where((_, i) => !isTransparent[i]).Distinct().ToList();
+        var newColors = distinctColors.Where(c => !palette.Contains(c)).ToList();
+
+        // A palette only spends a slot on transparency once something actually needs it — a fully
+        // opaque image never forces the reservation, so a fresh 640x256x4 folder genuinely has all
+        // 16 colours available until the first transparent pixel shows up anywhere in it.
+        var needsNewTransparentSlot = isTransparent.Any(t => t) && palette.TransparentIndex < 0;
+        var slotsNeeded = newColors.Count + (needsNewTransparentSlot ? 1 : 0);
+
+        if (slotsNeeded > palette.FreeSlotCount)
+        {
+            return new ImportResult(false, null,
+                $"The palette for '{folderPath}' has {palette.FreeSlotCount} free colour(s) but this image needs {slotsNeeded} more (capacity {category.FlatPaletteCapacity()}). " +
+                "Put it in a different sub-folder (its own palette) or reduce colours.",
+                ImportFailureReason.FlatPaletteFull);
+        }
+
+        if (needsNewTransparentSlot) palette.EnsureTransparentIndexReserved(); // guaranteed to succeed — already confirmed there's room
 
         var indices = new int[width * height];
         for (var i = 0; i < indices.Length; i++)
         {
-            if (isTransparent[i])
-            {
-                indices[i] = palette.TransparentIndex;
-                continue;
-            }
-
-            var index = palette.TryAdd(matched[i]);
-            if (index < 0)
-            {
-                return new ImportResult(false, null,
-                    $"The palette for '{folderPath}' is full ({category.FlatPaletteCapacity()} colours) and this image needs more. " +
-                    "Put it in a different sub-folder (its own palette) or reduce colours.",
-                    ImportFailureReason.FlatPaletteFull);
-            }
-            indices[i] = index;
+            indices[i] = isTransparent[i] ? palette.TransparentIndex : palette.TryAdd(matched[i]);
         }
 
         var asset = new GraphicsAsset
         {
-            Name = source.FileName,
+            Name = EnsureUniqueName(project, source.FileName, excludeAssetIdFromNameCheck),
             Category = category,
             Width = width,
             Height = height,
@@ -154,7 +196,9 @@ public static class AssetImporter
             DitherMode = ditherMode,
             SourceImageId = source.Id,
             SourceOffsetX = sourceOffsetX,
-            SourceOffsetY = sourceOffsetY
+            SourceOffsetY = sourceOffsetY,
+            SourceCropWidth = sourceCropWidth,
+            SourceCropHeight = sourceCropHeight
         };
         project.Assets.Add(asset);
         return new ImportResult(true, asset, null);

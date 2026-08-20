@@ -10,9 +10,6 @@ public partial class SourceImagesPanelView : UserControl
 {
     public const string DragFormat = "ZxNext.SourceImage";
 
-    /// <summary>Raised from the "✕" button on a source image row.</summary>
-    public event Action<Guid>? DeleteSourceImageRequested;
-
     private Point _dragStart;
     private bool _dragArmed;
 
@@ -59,8 +56,8 @@ public partial class SourceImagesPanelView : UserControl
 
     private void DeleteSourceImage_OnClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: SourceImageViewModel vm }) return;
-        DeleteSourceImageRequested?.Invoke(vm.Model.Id);
+        if (sender is not FrameworkElement { DataContext: SourceImageViewModel svm }) return;
+        if (DataContext is SourceImagesPanelViewModel vm) vm.RequestDeleteImage(svm.Model.Id);
     }
 
     private static T? FindAncestorDataContext<T>(DependencyObject? source) where T : class

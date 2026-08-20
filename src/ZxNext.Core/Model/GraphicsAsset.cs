@@ -25,4 +25,15 @@ public class GraphicsAsset
     /// <summary>Pixel offset within the source image this asset was cropped from (0,0 for a direct non-sliced import) — needed to re-crop the same region when re-quantizing.</summary>
     public int SourceOffsetX { get; init; }
     public int SourceOffsetY { get; init; }
+
+    /// <summary>
+    /// How many real source pixels were actually read for this asset, starting at
+    /// (<see cref="SourceOffsetX"/>, <see cref="SourceOffsetY"/>) — equals <see cref="Width"/>/
+    /// <see cref="Height"/> for every asset except a padded Layer2 placement, where the source
+    /// region can be SMALLER than the full canvas (the rest is transparent padding). Re-quantize
+    /// needs this to correctly re-read only the real region instead of over-reading past the
+    /// source's actual bounds.
+    /// </summary>
+    public int SourceCropWidth { get; init; }
+    public int SourceCropHeight { get; init; }
 }

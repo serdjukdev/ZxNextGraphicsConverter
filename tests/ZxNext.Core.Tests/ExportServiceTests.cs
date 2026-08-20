@@ -49,17 +49,43 @@ public class ExportServiceTests : IDisposable
 
         ExportService.WriteToDisk(results, _outputDir);
 
-        var binFiles = Directory.GetFiles(_outputDir, "*.bin");
+        var binFiles = Directory.GetFiles(_outputDir, "*.til"); // Tile4Bpp/Tile8Bpp -> .til (category-specific, not a generic .bin)
         var asmFiles = Directory.GetFiles(_outputDir, "*.asm");
+        var palFiles = Directory.GetFiles(_outputDir, "*.pal");
         Assert.Single(binFiles);
         Assert.Single(asmFiles);
+        Assert.Single(palFiles);
         Assert.Contains("tile_4bpp_images", Path.GetFileName(binFiles[0]));
         Assert.True(new FileInfo(binFiles[0]).Length <= BinaryChunker.ChunkSizeBytes);
+        Assert.Equal(PaletteFileWriter.FileSizeBytes, new FileInfo(palFiles[0]).Length);
 
         var asmText = File.ReadAllText(asmFiles[0]);
         Assert.Contains("slot_000: equ 0", asmText);
         Assert.Contains("db slot_000", asmText);
         Assert.Contains("4bpp palette index", asmText); // end-to-end: Tile4Bpp assets must carry the palette byte
+    }
+
+    [Fact]
+    public void ExportAll_SameImageImportedIntoTwoCategories_GetsAutoDisambiguatedNames_NoFileCollision()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "hero", FilePath = _tempSourceFile, Width = 8, Height = 8 };
+        project.SourceImages.Add(source);
+
+        var rgba = new byte[8 * 8 * 4];
+        for (var i = 0; i < 8 * 8; i++)
+        {
+            var o = i * 4;
+            rgba[o] = 10; rgba[o + 1] = 20; rgba[o + 2] = 30; rgba[o + 3] = 255;
+        }
+
+        var first = AssetImporter.Import(project, source, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None);
+        var second = AssetImporter.Import(project, source, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None);
+
+        Assert.True(first.Success, first.Error);
+        Assert.True(second.Success, second.Error);
+        Assert.Equal("hero", first.Asset!.Name);
+        Assert.Equal("hero_2", second.Asset!.Name); // same source dropped twice into the same folder -> auto-disambiguated, not a silent name clash
     }
 
     [Fact]

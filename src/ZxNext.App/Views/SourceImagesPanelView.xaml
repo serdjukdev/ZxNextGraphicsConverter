@@ -10,13 +10,23 @@
     <DockPanel LastChildFill="True">
         <TextBlock DockPanel.Dock="Top" Text="Source Images" FontWeight="Bold" Margin="4,4,4,0" />
         <TextBlock DockPanel.Dock="Top" Text="File → Import Images..., or drop files here" FontSize="10" Foreground="Gray" Margin="4,0,4,4" />
-        <ListBox ItemsSource="{Binding Images}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+        <ListBox ItemsSource="{Binding Images}" SelectedItem="{Binding SelectedImage}"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                  BorderThickness="0"
                  PreviewMouseLeftButtonDown="Item_OnPreviewMouseLeftButtonDown"
                  PreviewMouseMove="Item_OnPreviewMouseMove">
+            <ListBox.InputBindings>
+                <KeyBinding Key="Delete" Command="{Binding DeleteSelectedImageCommand}" />
+            </ListBox.InputBindings>
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="0" />
+                </Style>
+            </ListBox.ItemContainerStyle>
             <ListBox.ItemTemplate>
                 <DataTemplate DataType="{x:Type vm:SourceImageViewModel}">
-                    <Border BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="4">
+                    <Border BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="4" Background="Transparent">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />

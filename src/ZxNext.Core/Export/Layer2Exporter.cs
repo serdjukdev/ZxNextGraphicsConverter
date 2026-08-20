@@ -28,6 +28,7 @@ public static class Layer2Exporter
         var data = ReorderForHardware(asset, palette);
         var baseFileName = SanitizeFileName(asset.Name);
 
+        var extension = asset.Category.BinaryFileExtension();
         var chunkCount = (data.Length + BinaryChunker.ChunkSizeBytes - 1) / BinaryChunker.ChunkSizeBytes;
         var chunks = new List<ChunkFile>(chunkCount);
         for (var i = 0; i < chunkCount; i++)
@@ -35,15 +36,16 @@ public static class Layer2Exporter
             var buffer = new byte[BinaryChunker.ChunkSizeBytes];
             var take = Math.Min(BinaryChunker.ChunkSizeBytes, data.Length - i * BinaryChunker.ChunkSizeBytes);
             Array.Copy(data, i * BinaryChunker.ChunkSizeBytes, buffer, 0, take);
-            chunks.Add(new ChunkFile(chunkCount == 1 ? $"{baseFileName}.bin" : $"{baseFileName}_{i:D3}.bin", buffer));
+            chunks.Add(new ChunkFile(chunkCount == 1 ? $"{baseFileName}.{extension}" : $"{baseFileName}_{i:D3}.{extension}", buffer));
         }
 
         // No per-asset palette/offset table like AsmMapGenerator's — there's exactly one image
         // here, occupying every chunk in sequence, so a placement table would be pointless.
         var placements = new List<AssetPlacement> { new(asset.Name, 0, 0, false, 0) };
         var asmText = GenerateAsm(asset.Name, chunkCount);
+        var paletteFile = new ChunkFile($"{baseFileName}.pal", PaletteFileWriter.Write(palette.Slots));
 
-        return new FolderExportResult(asset.FolderPath, chunks, placements, asmText, $"{baseFileName}.asm");
+        return new FolderExportResult(asset.FolderPath, chunks, placements, asmText, $"{baseFileName}.asm", paletteFile);
     }
 
     private static byte[] ReorderForHardware(GraphicsAsset asset, NextPalette palette)

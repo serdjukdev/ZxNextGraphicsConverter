@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using ZxNext.App.ViewModels;
 using ZxNext.Core.Model;
@@ -49,6 +50,16 @@ public partial class ProjectTreeView : UserControl
         {
             AssetDropRequested?.Invoke(sourceVm, category, folderPath);
         }
+    }
+
+    /// <summary>Double-clicking anywhere on a folder row's full-width background toggles expand/collapse (leaf rows: no-op). Always marks the event handled so a double-click inside a deeply nested folder doesn't also bubble up and toggle its ancestors.</summary>
+    private void TreeViewItem_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is TreeViewItem { DataContext: TreeNodeViewModel { IsFolder: true } node })
+        {
+            node.IsExpanded = !node.IsExpanded;
+        }
+        e.Handled = true;
     }
 
     private void AddSubfolder_OnClick(object sender, RoutedEventArgs e)

@@ -1,3 +1,4 @@
+using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Win32;
@@ -5,6 +6,7 @@ using ZxNext.App.Rendering;
 using ZxNext.App.ViewModels;
 using ZxNext.App.Views;
 using ZxNext.Core.Conversion;
+using ZxNext.Core.Export;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
 using ZxNext.Core.Quantization;
@@ -28,7 +30,6 @@ public partial class MainWindow : Window
         ProjectTreeViewControl.RenameAssetRequested += OnRenameAssetRequested;
         ProjectTreeViewControl.ReQuantizeContextRequested += _viewModel.RequestReQuantizeById;
         ProjectTreeViewControl.DeleteFolderRequested += _viewModel.DeleteFolder;
-        SourceImagesPanelViewControl.DeleteSourceImageRequested += _viewModel.DeleteSourceImage;
         PixelEditorViewControl.PaintStrokeStarted += _viewModel.BeginPaintStroke;
         PixelEditorViewControl.PixelPainted += _viewModel.PaintPixel;
         PixelEditorViewControl.PaintStrokeEnded += _viewModel.EndPaintStroke;
@@ -97,7 +98,7 @@ public partial class MainWindow : Window
         if (decoded.Width == cellWidth && decoded.Height == cellHeight)
         {
             var outcome = _viewModel.ImportIntoCategory(source, category, folderPath);
-            if (!outcome.Success && outcome.Reason == ImportFailureReason.PaletteOverflow)
+            if (!outcome.Success && IsPaletteFullReason(outcome.Reason))
             {
                 await HandlePaletteOverflowAsync(outcome.Error ?? "Palette overflow.", category,
                     maxColors => _viewModel.ImportIntoCategory(source, category, folderPath, maxColors));
@@ -113,11 +114,16 @@ public partial class MainWindow : Window
             if (placementDialog.ShowDialog() == true)
             {
                 var placedRgba = placementVm.BuildPlacedRgba(decoded.Rgba32);
-                // Layer2 uses a flat per-folder palette (not the 4bpp bank), so a full palette
-                // fails as FlatPaletteFull, not PaletteOverflow — there's no "reduce and retry"
-                // remediation dialog for that today (same as 8bpp sprite/tile folders); the
-                // failure just surfaces as a status message.
-                _viewModel.ImportLayer2Placement(source, category, folderPath, placedRgba, placementVm.ResultWidth, placementVm.ResultHeight);
+                var outcome = _viewModel.ImportLayer2Placement(source, category, folderPath, placedRgba, placementVm.ResultWidth, placementVm.ResultHeight,
+                    placementVm.OffsetLeft, placementVm.OffsetTop, placementVm.CopyWidth, placementVm.CopyHeight);
+                if (!outcome.Success && IsPaletteFullReason(outcome.Reason))
+                {
+                    // Layer2_640x256x4 only has 15 usable colours — real art almost always needs
+                    // reducing to fit, unlike the 256-colour 8bpp modes where this is rare.
+                    await HandlePaletteOverflowAsync(outcome.Error ?? "Palette full.", category,
+                        maxColors => _viewModel.ImportLayer2Placement(source, category, folderPath, placedRgba, placementVm.ResultWidth, placementVm.ResultHeight,
+                            placementVm.OffsetLeft, placementVm.OffsetTop, placementVm.CopyWidth, placementVm.CopyHeight, maxColors));
+                }
             }
             return;
         }
@@ -151,17 +157,22 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true) return;
 
         var outcome = _viewModel.ReQuantizeAsset(assetId, vm.SelectedDitherMode, null);
-        if (!outcome.Success && outcome.Reason == ImportFailureReason.PaletteOverflow)
+        if (!outcome.Success && IsPaletteFullReason(outcome.Reason))
         {
             await HandlePaletteOverflowAsync(outcome.Error ?? "Palette overflow.", outcome.Category,
                 maxColors => _viewModel.ReQuantizeAsset(assetId, vm.SelectedDitherMode, maxColors));
         }
     }
 
-    /// <summary>Shown whenever a 4bpp import/re-quantize can't fit into any of the 16 palette slots — lets the user reduce just this tile's colours, or rebuild the whole category's palette bank from scratch at a lower colour cap.</summary>
+    /// <summary>True for either "the 4bpp bank slot is full" or "the flat folder palette is full" — both get the same reduce-and-retry remediation dialog.</summary>
+    private static bool IsPaletteFullReason(ImportFailureReason reason) =>
+        reason is ImportFailureReason.PaletteOverflow or ImportFailureReason.FlatPaletteFull;
+
+    /// <summary>Shown whenever an import/re-quantize can't fit into its palette — lets the user reduce just this tile's colours, or (4bpp bank categories only) rebuild the whole category's palette bank from scratch at a lower colour cap.</summary>
     private async Task HandlePaletteOverflowAsync(string message, AssetCategory category, Func<int, ImportOutcome> retryWithMaxColors)
     {
-        var vm = new PaletteOverflowViewModel(message);
+        var maxUsableColors = category.UsesPaletteBank() ? PaletteBank.SlotUsableColors : category.FlatPaletteCapacity() - 1;
+        var vm = new PaletteOverflowViewModel(message, maxUsableColors, showReQuantizeCategoryOption: category.UsesPaletteBank());
         var dialog = new PaletteOverflowWindow { DataContext = vm, Owner = this };
         if (dialog.ShowDialog() != true) return;
 
@@ -244,6 +255,19 @@ public partial class MainWindow : Window
         var vm = new ExportViewModel(results);
         var dialog = new ExportWindow { DataContext = vm, Owner = this };
         if (dialog.ShowDialog() != true) return;
+
+        var existing = ExportService.ListOutputFileNames(results)
+            .Where(name => File.Exists(Path.Combine(vm.OutputDirectory, name)))
+            .ToList();
+        if (existing.Count > 0)
+        {
+            var preview = string.Join("\n", existing.Take(10));
+            if (existing.Count > 10) preview += $"\n...and {existing.Count - 10} more.";
+            var overwrite = MessageBox.Show(
+                $"{existing.Count} file(s) already exist in this folder and will be overwritten:\n\n{preview}\n\nContinue?",
+                "Overwrite existing files?", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (overwrite != MessageBoxResult.Yes) return;
+        }
 
         try
         {

@@ -85,7 +85,9 @@ public static class ProjectService
                     SourceImageId = asset.SourceImageId,
                     PackedDataFile = entryName,
                     SourceOffsetX = asset.SourceOffsetX,
-                    SourceOffsetY = asset.SourceOffsetY
+                    SourceOffsetY = asset.SourceOffsetY,
+                    SourceCropWidth = asset.SourceCropWidth,
+                    SourceCropHeight = asset.SourceCropHeight
                 });
             }
 
@@ -163,7 +165,9 @@ public static class ProjectService
                 DitherMode = a.DitherMode,
                 SourceImageId = a.SourceImageId,
                 SourceOffsetX = a.SourceOffsetX,
-                SourceOffsetY = a.SourceOffsetY
+                SourceOffsetY = a.SourceOffsetY,
+                SourceCropWidth = a.SourceCropWidth > 0 ? a.SourceCropWidth : a.Width, // projects saved before this field existed default to "no padding" (crop == full size)
+                SourceCropHeight = a.SourceCropHeight > 0 ? a.SourceCropHeight : a.Height
             });
         }
 

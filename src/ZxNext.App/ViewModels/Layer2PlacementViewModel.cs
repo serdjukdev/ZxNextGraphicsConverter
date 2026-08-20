@@ -1,5 +1,6 @@
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using ZxNext.Core.AtlasSlicer;
 
 namespace ZxNext.App.ViewModels;
 
@@ -35,6 +36,10 @@ public partial class Layer2PlacementViewModel : ObservableObject
     public int ResultWidth => SourceWidth > TargetWidth ? TargetWidth : (PadToFullCanvas ? TargetWidth : SourceWidth);
     public int ResultHeight => SourceHeight > TargetHeight ? TargetHeight : (PadToFullCanvas ? TargetHeight : SourceHeight);
 
+    /// <summary>How many real source pixels actually get copied (as opposed to <see cref="ResultWidth"/>/<see cref="ResultHeight"/>, the full — possibly padded — canvas size) — stored on the asset so a later re-quantize can reproduce this exact composition instead of over-reading past the source.</summary>
+    public int CopyWidth => Math.Max(0, Math.Min(SourceWidth - OffsetLeft, ResultWidth));
+    public int CopyHeight => Math.Max(0, Math.Min(SourceHeight - OffsetTop, ResultHeight));
+
     public Layer2PlacementViewModel(WriteableBitmap preview, int sourceWidth, int sourceHeight, int targetWidth, int targetHeight)
     {
         SourcePreview = preview;
@@ -62,27 +67,7 @@ public partial class Layer2PlacementViewModel : ObservableObject
         OnPropertyChanged(nameof(ResultHeight));
     }
 
-    /// <summary>
-    /// Crops/pads <paramref name="sourceRgba32"/> against the chosen offset and padding choice.
-    /// The result is always zero-initialized first (fully transparent), so any padded area needs
-    /// no separate fill step — only the real source pixels that fit get copied in.
-    /// </summary>
-    public byte[] BuildPlacedRgba(byte[] sourceRgba32)
-    {
-        var width = ResultWidth;
-        var height = ResultHeight;
-        var result = new byte[width * height * 4];
-
-        var copyWidth = Math.Min(SourceWidth - OffsetLeft, width);
-        var copyHeight = Math.Min(SourceHeight - OffsetTop, height);
-
-        for (var y = 0; y < copyHeight; y++)
-        {
-            var srcRowStart = ((OffsetTop + y) * SourceWidth + OffsetLeft) * 4;
-            var dstRowStart = y * width * 4;
-            Array.Copy(sourceRgba32, srcRowStart, result, dstRowStart, copyWidth * 4);
-        }
-
-        return result;
-    }
+    /// <summary>Crops/pads <paramref name="sourceRgba32"/> against the chosen offset and padding choice — see <see cref="Layer2Composer"/> for the shared logic (also reused by re-quantize).</summary>
+    public byte[] BuildPlacedRgba(byte[] sourceRgba32) =>
+        Layer2Composer.Compose(sourceRgba32, SourceWidth, SourceHeight, OffsetLeft, OffsetTop, CopyWidth, CopyHeight, ResultWidth, ResultHeight);
 }

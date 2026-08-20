@@ -102,4 +102,41 @@ public class ProjectStateTests
         Assert.Equal(0, full.PaletteSlotIndex);
         Assert.Equal(1, lonely.PaletteSlotIndex);
     }
+
+    [Fact]
+    public void CompactFlatPalette_AfterDeletingAnAssetWhoseColoursNoOneElseUses_FreesThoseSlots()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "src", FilePath = "C:\\fake\\src.png", Width = 8, Height = 8 };
+        project.SourceImages.Add(source);
+
+        // Two disjoint 8-colour images sharing one flat folder palette (16/256 used total).
+        var first = AssetImporter.Import(project, source, DistinctColorsImage(8, 8, 8), AssetCategory.Tile8Bpp, "tile/8bpp/images", DitherMode.None).Asset!;
+        AssetImporter.Import(project, source, DistinctColorsImage(8, 8, 8, blueOffset: 4), AssetCategory.Tile8Bpp, "tile/8bpp/images", DitherMode.None);
+
+        Assert.Equal(256 - 16, project.GetOrCreateFolderPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images").FreeSlotCount);
+
+        project.RemoveAsset(first.Id);
+        project.CompactFlatPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images");
+
+        // CompactFlatPalette rebuilds the palette as a brand-new object, so it must be re-fetched.
+        // Only the surviving asset's 8 colours should still be reserved.
+        Assert.Equal(256 - 8, project.GetOrCreateFolderPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images").FreeSlotCount);
+    }
+
+    [Fact]
+    public void CompactFlatPalette_LastAssetInFolderRemoved_ResetsToAFullyEmptyPalette()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "src", FilePath = "C:\\fake\\src.png", Width = 8, Height = 8 };
+        project.SourceImages.Add(source);
+
+        var only = AssetImporter.Import(project, source, DistinctColorsImage(8, 8, 8), AssetCategory.Tile8Bpp, "tile/8bpp/images", DitherMode.None).Asset!;
+
+        project.RemoveAsset(only.Id);
+        project.CompactFlatPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images");
+
+        var palette = project.GetOrCreateFolderPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images");
+        Assert.Equal(256, palette.FreeSlotCount);
+    }
 }

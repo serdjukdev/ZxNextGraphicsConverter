@@ -24,6 +24,17 @@
         <TreeView.ItemContainerStyle>
             <Style TargetType="TreeViewItem">
                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Padding" Value="2,3" />
+                <EventSetter Event="MouseDoubleClick" Handler="TreeViewItem_OnMouseDoubleClick" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                        <Setter Property="Background" Value="#FFE7EEF9" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding IsFolder}" Value="False">
+                        <Setter Property="Background" Value="#FFF6F6F6" />
+                    </DataTrigger>
+                </Style.Triggers>
             </Style>
         </TreeView.ItemContainerStyle>
         <TreeView.ItemTemplate>

@@ -1,3 +1,4 @@
+using ZxNext.Core.Editing;
 using ZxNext.Core.Model;
 
 namespace ZxNext.Core.Project;
@@ -40,12 +41,13 @@ public class ProjectState
         _ => throw new ArgumentOutOfRangeException(nameof(category), "Not a flat-folder-palette category")
     };
 
+    /// <summary>A brand-new flat folder palette starts with NO transparent index reserved (-1) — it's claimed lazily, only once some asset in the folder actually turns out to need transparency, so a fully-opaque image can use every one of the folder's colours instead of always losing one up front.</summary>
     public NextPalette GetOrCreateFolderPalette(AssetCategory category, string folderPath)
     {
         var palettes = FolderPalettesFor(category);
         if (!palettes.TryGetValue(folderPath, out var palette))
         {
-            palette = new NextPalette(category.FlatPaletteCapacity(), transparentIndex: 0);
+            palette = new NextPalette(category.FlatPaletteCapacity(), transparentIndex: -1);
             palettes[folderPath] = palette;
         }
         return palette;
@@ -95,5 +97,78 @@ public class ProjectState
         {
             asset.PaletteSlotIndex = remap[asset.PaletteSlotIndex];
         }
+    }
+
+    /// <summary>
+    /// Rebuilds a flat folder palette (8bpp sprite/tile, or any Layer2 category) from scratch,
+    /// keeping only the colours still actually referenced by whatever assets remain in that
+    /// folder, and remapping every one of those assets' pixel data to the compacted palette.
+    /// Unlike <see cref="CompactPaletteBank"/> (which only drops whole unreferenced slots and
+    /// never touches a still-valid asset's data), a flat palette has no per-asset slot to drop —
+    /// deleting one asset can leave individual COLOURS orphaned inside a palette still shared by
+    /// other assets, so freeing that space means actually re-deriving the palette from what's
+    /// left and re-pointing every surviving asset's indices at the new positions. Safe to call
+    /// after deleting an asset/assets from a folder; NOT safe to combine with restoring a deleted
+    /// asset via undo afterward (its old pixel indices would point at the wrong colours in the
+    /// now-different palette) — callers that support undo must clear the undo stack instead.
+    /// </summary>
+    public void CompactFlatPalette(AssetCategory category, string folderPath)
+    {
+        var palettes = FolderPalettesFor(category);
+        if (!palettes.TryGetValue(folderPath, out var oldPalette)) return;
+
+        var assetsInFolder = Assets.Where(a => a.Category == category && a.FolderPath == folderPath).ToList();
+        if (assetsInFolder.Count == 0)
+        {
+            palettes[folderPath] = new NextPalette(category.FlatPaletteCapacity(), transparentIndex: -1);
+            return;
+        }
+
+        var usedColors = new List<NextColor>();
+        var seenColors = new HashSet<NextColor>();
+        var needsTransparency = false;
+
+        foreach (var asset in assetsInFolder)
+        {
+            for (var y = 0; y < asset.Height; y++)
+            {
+                for (var x = 0; x < asset.Width; x++)
+                {
+                    var index = AssetPixelEditor.GetPixelIndex(asset, x, y);
+                    if (oldPalette.TransparentIndex >= 0 && index == oldPalette.TransparentIndex)
+                    {
+                        needsTransparency = true;
+                        continue;
+                    }
+                    if (oldPalette.Slots[index] is { } color && seenColors.Add(color))
+                    {
+                        usedColors.Add(color);
+                    }
+                }
+            }
+        }
+
+        var newPalette = new NextPalette(category.FlatPaletteCapacity(), transparentIndex: -1);
+        if (needsTransparency) newPalette.EnsureTransparentIndexReserved();
+
+        var newIndexOf = new Dictionary<NextColor, int>();
+        foreach (var color in usedColors) newIndexOf[color] = newPalette.TryAdd(color);
+
+        foreach (var asset in assetsInFolder)
+        {
+            for (var y = 0; y < asset.Height; y++)
+            {
+                for (var x = 0; x < asset.Width; x++)
+                {
+                    var oldIndex = AssetPixelEditor.GetPixelIndex(asset, x, y);
+                    var newIndex = oldPalette.TransparentIndex >= 0 && oldIndex == oldPalette.TransparentIndex
+                        ? newPalette.TransparentIndex
+                        : newIndexOf[oldPalette.Slots[oldIndex]!.Value];
+                    AssetPixelEditor.SetPixelIndex(asset, x, y, newIndex);
+                }
+            }
+        }
+
+        palettes[folderPath] = newPalette;
     }
 }

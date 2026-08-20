@@ -83,6 +83,7 @@ public partial class MainViewModel : ObservableObject
 
         SourceImages.SourceImageAdded += source => _project.SourceImages.Add(source);
         SourceImages.DitherModeChangedByUser += async (sourceImageId, mode) => await ReQuantizeBySourceImageAsync(sourceImageId, mode);
+        SourceImages.DeleteImageRequested += DeleteSourceImage;
         PaletteStrip.OptimizeBankRequested += async () => await OptimizeCurrentBankAsync();
 
         RefreshRecentProjects();
@@ -127,10 +128,10 @@ public partial class MainViewModel : ObservableObject
     public DecodedImage DecodeSource(SourceImageViewModel source) => _decoder.Decode(source.Model.FilePath);
 
     /// <summary>Called by the tree view when a source image dropped onto a category folder (or 8bpp sub-folder) already matches the target cell size exactly.</summary>
-    public ImportOutcome ImportIntoCategory(SourceImageViewModel source, AssetCategory category, string folderPath, int? maxFourBppColors = null)
+    public ImportOutcome ImportIntoCategory(SourceImageViewModel source, AssetCategory category, string folderPath, int? maxColors = null)
     {
         var decoded = DecodeSource(source);
-        var result = AssetImporter.Import(_project, source.Model, decoded.Rgba32, category, folderPath, source.DitherMode, maxFourBppColors);
+        var result = AssetImporter.Import(_project, source.Model, decoded.Rgba32, category, folderPath, source.DitherMode, maxColors);
 
         if (result.Success)
         {
@@ -146,8 +147,19 @@ public partial class MainViewModel : ObservableObject
         return new ImportOutcome(result.Success, result.Reason, category, result.Error);
     }
 
-    /// <summary>Called after the user confirms the Layer2 placement dialog — <paramref name="placedRgba32"/> is already cropped/padded to its final <paramref name="width"/>x<paramref name="height"/> by <see cref="Layer2PlacementViewModel.BuildPlacedRgba"/>.</summary>
-    public ImportOutcome ImportLayer2Placement(SourceImageViewModel source, AssetCategory category, string folderPath, byte[] placedRgba32, int width, int height)
+    /// <summary>
+    /// Called after the user confirms the Layer2 placement dialog — <paramref name="placedRgba32"/>
+    /// is already cropped/padded to its final <paramref name="width"/>x<paramref name="height"/> by
+    /// <see cref="Layer2PlacementViewModel.BuildPlacedRgba"/>. <paramref name="offsetX"/>/
+    /// <paramref name="offsetY"/>/<paramref name="cropWidth"/>/<paramref name="cropHeight"/> record
+    /// EXACTLY what was read from the source (which can be smaller than width/height when padded)
+    /// so a later re-quantize can reproduce this same composition instead of over-reading past the
+    /// source's actual bounds. <paramref name="maxColors"/> matters most for Layer2_640x256x4 (only
+    /// 15 usable colours) — real art almost always needs reducing to fit.
+    /// </summary>
+    public ImportOutcome ImportLayer2Placement(
+        SourceImageViewModel source, AssetCategory category, string folderPath, byte[] placedRgba32, int width, int height,
+        int offsetX, int offsetY, int cropWidth, int cropHeight, int? maxColors = null)
     {
         var placedSource = new SourceImage
         {
@@ -157,7 +169,8 @@ public partial class MainViewModel : ObservableObject
             Width = width,
             Height = height
         };
-        var result = AssetImporter.Import(_project, placedSource, placedRgba32, category, folderPath, source.DitherMode);
+        var result = AssetImporter.Import(_project, placedSource, placedRgba32, category, folderPath, source.DitherMode, maxColors,
+            sourceOffsetX: offsetX, sourceOffsetY: offsetY, sourceCropWidth: cropWidth, sourceCropHeight: cropHeight);
 
         if (result.Success)
         {
@@ -235,6 +248,25 @@ public partial class MainViewModel : ObservableObject
         });
     }
 
+    /// <summary>
+    /// Re-crops an asset's own source region, correctly reproducing a Layer2 placement's padding
+    /// (a padded canvas is bigger than what was actually read from the source — naively re-cropping
+    /// a canvas-sized rectangle would run off the end of the source) as well as an ordinary tile's
+    /// exact-size crop.
+    /// </summary>
+    private static byte[] BuildCellRgba(DecodedImage decoded, GraphicsAsset asset)
+    {
+        if (asset.Category.IsLayer2())
+        {
+            return Layer2Composer.Compose(decoded.Rgba32, decoded.Width, decoded.Height,
+                asset.SourceOffsetX, asset.SourceOffsetY, asset.SourceCropWidth, asset.SourceCropHeight,
+                asset.Width, asset.Height);
+        }
+
+        var rect = new PixelRect(asset.SourceOffsetX, asset.SourceOffsetY, asset.Width, asset.Height);
+        return PixelRectExtractor.Extract(decoded.Rgba32, decoded.Width, rect);
+    }
+
     /// <summary>Re-converts one already-placed tile/sprite from its original source region (tracked via SourceOffsetX/Y), replacing its pixels/palette assignment in place.</summary>
     public ImportOutcome ReQuantizeAsset(Guid assetId, DitherMode newDitherMode, int? maxFourBppColors)
     {
@@ -249,13 +281,13 @@ public partial class MainViewModel : ObservableObject
         }
 
         var decoded = _decoder.Decode(source.FilePath);
-        var rect = new PixelRect(asset.SourceOffsetX, asset.SourceOffsetY, asset.Width, asset.Height);
-        var cellRgba = PixelRectExtractor.Extract(decoded.Rgba32, decoded.Width, rect);
+        var cellRgba = BuildCellRgba(decoded, asset);
         var cellSource = new SourceImage { Id = source.Id, FileName = asset.Name, FilePath = source.FilePath, Width = asset.Width, Height = asset.Height };
 
         var originalName = asset.Name;
 
-        var result = AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, maxFourBppColors, asset.SourceOffsetX, asset.SourceOffsetY);
+        var result = AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, maxFourBppColors, asset.SourceOffsetX, asset.SourceOffsetY, excludeAssetIdFromNameCheck: asset.Id,
+            sourceCropWidth: asset.SourceCropWidth, sourceCropHeight: asset.SourceCropHeight);
         if (!result.Success)
         {
             PixelEditor.StatusText = $"Re-quantize failed: {result.Error}";
@@ -321,7 +353,7 @@ public partial class MainViewModel : ObservableObject
                     var cellRgba = PixelRectExtractor.Extract(decoded.Rgba32, decoded.Width, rect);
                     var cellSource = new SourceImage { Id = source.Id, FileName = asset.Name, FilePath = source.FilePath, Width = asset.Width, Height = asset.Height };
 
-                    var result = AssetImporter.Import(_project, cellSource, cellRgba, category, asset.FolderPath, asset.DitherMode, maxColorsPerTile, asset.SourceOffsetX, asset.SourceOffsetY);
+                    var result = AssetImporter.Import(_project, cellSource, cellRgba, category, asset.FolderPath, asset.DitherMode, maxColorsPerTile, asset.SourceOffsetX, asset.SourceOffsetY, excludeAssetIdFromNameCheck: asset.Id);
                     _project.Assets.Remove(asset);
 
                     if (result.Success)
@@ -468,11 +500,11 @@ public partial class MainViewModel : ObservableObject
                     var asset = affected[i];
                     progress.Report(new BusyProgress($"Re-quantizing {asset.Name} ({i + 1}/{affected.Count})...", i + 1, affected.Count));
 
-                    var rect = new PixelRect(asset.SourceOffsetX, asset.SourceOffsetY, asset.Width, asset.Height);
-                    var cellRgba = PixelRectExtractor.Extract(decoded.Rgba32, decoded.Width, rect);
+                    var cellRgba = BuildCellRgba(decoded, asset);
                     var cellSource = new SourceImage { Id = source.Id, FileName = asset.Name, FilePath = source.FilePath, Width = asset.Width, Height = asset.Height };
 
-                    var result = AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, null, asset.SourceOffsetX, asset.SourceOffsetY);
+                    var result = AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, null, asset.SourceOffsetX, asset.SourceOffsetY, excludeAssetIdFromNameCheck: asset.Id,
+                        sourceCropWidth: asset.SourceCropWidth, sourceCropHeight: asset.SourceCropHeight);
                     if (result.Success)
                     {
                         _project.Assets.Remove(asset);
@@ -480,7 +512,7 @@ public partial class MainViewModel : ObservableObject
                         replaced.Add((asset.Id, result.Asset));
                         succeeded++;
                     }
-                    else if (result.Reason == ImportFailureReason.PaletteOverflow)
+                    else if (result.Reason is ImportFailureReason.PaletteOverflow or ImportFailureReason.FlatPaletteFull)
                     {
                         overflowed.Add(asset.Name);
                     }
@@ -591,7 +623,19 @@ public partial class MainViewModel : ObservableObject
         {
             targetIds = [singleId];
         }
-        if (targetIds.Count == 0) return;
+
+        if (targetIds.Count == 0)
+        {
+            // No leaf asset checked/selected — if the Delete key was pressed while a user-created
+            // folder is selected instead, delegate to DeleteFolder so Delete behaves consistently
+            // everywhere in the tree, not just on leaves (folders were previously only deletable
+            // via their right-click menu).
+            if (Tree.SelectedNode is { IsFolder: true, IsCategoryRoot: false } folderNode)
+            {
+                DeleteFolder(folderNode);
+            }
+            return;
+        }
 
         var confirmMessage = targetIds.Count == 1
             ? "Delete this tile/sprite?"
@@ -600,6 +644,7 @@ public partial class MainViewModel : ObservableObject
         if (confirm != MessageBoxResult.Yes) return;
 
         var removed = new List<GraphicsAsset>();
+        var affectedFlatFolders = new HashSet<(AssetCategory Category, string FolderPath)>();
         foreach (var id in targetIds)
         {
             var asset = _project.Assets.FirstOrDefault(a => a.Id == id);
@@ -608,22 +653,40 @@ public partial class MainViewModel : ObservableObject
             _project.RemoveAsset(id);
             Tree.RemoveAssetNode(id); // clears SelectedNode (and so the edit panels, via OnSelectionChanged) if this was the selected asset
             removed.Add(asset);
+            if (!asset.Category.UsesPaletteBank()) affectedFlatFolders.Add((asset.Category, asset.FolderPath));
         }
 
         Tree.ClearMultiSelection();
         if (removed.Count == 0) return;
 
-        _undoStack.Push(() =>
+        // A flat folder palette can lose colours no other surviving asset still uses — compact it so that
+        // space is usable again. This remaps every surviving asset's pixel indices, so a plain undo that
+        // just re-adds the removed assets back with their OLD indices would point at the wrong colours;
+        // clear undo instead, same as every other operation in this codebase that rebuilds a shared palette.
+        if (affectedFlatFolders.Count > 0)
         {
-            foreach (var asset in removed)
+            foreach (var (category, folderPath) in affectedFlatFolders)
             {
-                _project.Assets.Add(asset);
-                Tree.AddAssetNode(asset);
+                _project.CompactFlatPalette(category, folderPath);
             }
-        });
+            _undoStack.Clear();
+            RefreshSelectedAssetRender();
+            PixelEditor.StatusText = $"Deleted {removed.Count} tile(s)/sprite(s) and freed unused palette colours.";
+        }
+        else
+        {
+            _undoStack.Push(() =>
+            {
+                foreach (var asset in removed)
+                {
+                    _project.Assets.Add(asset);
+                    Tree.AddAssetNode(asset);
+                }
+            });
+            PixelEditor.StatusText = $"Deleted {removed.Count} tile(s)/sprite(s).";
+        }
 
         HasUnsavedChanges = true;
-        PixelEditor.StatusText = $"Deleted {removed.Count} tile(s)/sprite(s).";
     }
 
     /// <summary>
@@ -674,15 +737,23 @@ public partial class MainViewModel : ObservableObject
             : $"Delete source image \"{source.FileName}\"? This will also delete the {affected.Count} tile(s)/sprite(s) placed from it. This cannot be undone.";
         if (MessageBox.Show(message, "Delete source image", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
 
+        var affectedFlatFolders = new HashSet<(AssetCategory Category, string FolderPath)>();
         foreach (var asset in affected)
         {
             _project.RemoveAsset(asset.Id);
             Tree.RemoveAssetNode(asset.Id);
+            if (!asset.Category.UsesPaletteBank()) affectedFlatFolders.Add((asset.Category, asset.FolderPath));
+        }
+
+        foreach (var (category, folderPath) in affectedFlatFolders)
+        {
+            _project.CompactFlatPalette(category, folderPath);
         }
 
         _project.SourceImages.Remove(source);
         SourceImages.RemoveById(sourceImageId);
         _undoStack.Clear();
+        if (affectedFlatFolders.Count > 0) RefreshSelectedAssetRender();
 
         HasUnsavedChanges = true;
         PixelEditor.StatusText = affected.Count == 0

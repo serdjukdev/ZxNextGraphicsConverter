@@ -9,7 +9,7 @@ public static class BinaryChunker
 {
     public const int ChunkSizeBytes = 8192;
 
-    public static (List<ChunkFile> Chunks, List<AssetPlacement> Placements) Pack(IReadOnlyList<ExportableAsset> assets, string baseFileName)
+    public static (List<ChunkFile> Chunks, List<AssetPlacement> Placements) Pack(IReadOnlyList<ExportableAsset> assets, string baseFileName, string extension = "bin")
     {
         if (assets.Count == 0) return ([], []);
 
@@ -37,7 +37,7 @@ public static class BinaryChunker
 
         var chunks = chunkBuffers
             .Select((buffer, i) => new ChunkFile(
-                chunkBuffers.Count == 1 ? $"{baseFileName}.bin" : $"{baseFileName}_{i:D3}.bin",
+                chunkBuffers.Count == 1 ? $"{baseFileName}.{extension}" : $"{baseFileName}_{i:D3}.{extension}",
                 buffer.ToArray()))
             .ToList();
 

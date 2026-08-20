@@ -83,10 +83,6 @@
                                 <Trigger Property="HasItems" Value="False">
                                     <Setter TargetName="Expander" Property="Visibility" Value="Hidden" />
                                 </Trigger>
-                                <Trigger Property="IsSelected" Value="True">
-                                    <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
-                                    <Setter TargetName="PART_Header" Property="TextElement.Foreground" Value="White" />
-                                </Trigger>
                                 <DataTrigger Binding="{Binding IsMultiSelected}" Value="True">
                                     <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
                                     <Setter TargetName="PART_Header" Property="TextElement.Foreground" Value="White" />
@@ -107,26 +103,30 @@
         </TreeView.ItemContainerStyle>
         <TreeView.ItemTemplate>
             <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                <StackPanel Orientation="Horizontal" Background="Transparent">
-                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
-                               ContextMenuOpening="NodeText_OnContextMenuOpening">
-                        <!-- One shared, always-present ContextMenu for every node type (leaf or folder) —
-                             NodeText_OnContextMenuOpening toggles Items[i].Visibility/Header by index
-                             depending on the node and the current multi-selection. Item order:
-                             0 Rename, 1 Re-quantize, 2 Delete, 3 Add sub-folder, 4 Re-quantize folder, 5 Delete folder. -->
-                        <TextBlock.ContextMenu>
-                            <ContextMenu>
-                                <MenuItem Header="Rename..." Click="RenameMenuItem_OnClick" />
-                                <MenuItem Header="Re-quantize... (Ctrl+R)" Click="ReQuantizeMenuItem_OnClick" />
-                                <MenuItem Header="Delete" Click="DeleteMenuItem_OnClick" />
-                                <MenuItem Header="Add sub-folder..." Click="AddSubfolderMenuItem_OnClick"
-                                          ToolTip="Add a sub-folder here (its own 8bpp/Layer2 palette)" />
-                                <MenuItem Header="Re-quantize folder..." Click="ReQuantizeFolderMenuItem_OnClick"
-                                          ToolTip="Re-quantize every tile/sprite in THIS folder only, with a chosen dithering mode" />
-                                <MenuItem Header="Delete folder..." Click="DeleteFolderMenuItem_OnClick" />
-                            </ContextMenu>
-                        </TextBlock.ContextMenu>
-                    </TextBlock>
+                <!-- ContextMenu (and its Opening handler) sits on the row's ROOT StackPanel, not just the
+                     TextBlock — a ContextMenu only opens when you right-click the exact element it's
+                     assigned to (or one of ITS descendants), so attaching it to the text alone meant
+                     right-clicking anywhere else in the row (the same full-width area the left-click
+                     fix already made clickable) silently did nothing. -->
+                <StackPanel Orientation="Horizontal" Background="Transparent"
+                            ContextMenuOpening="NodeText_OnContextMenuOpening">
+                    <!-- One shared, always-present ContextMenu for every node type (leaf or folder) —
+                         NodeText_OnContextMenuOpening toggles Items[i].Visibility/Header by index
+                         depending on the node and the current multi-selection. Item order:
+                         0 Rename, 1 Re-quantize, 2 Delete, 3 Add sub-folder, 4 Re-quantize folder, 5 Delete folder. -->
+                    <StackPanel.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Rename..." Click="RenameMenuItem_OnClick" />
+                            <MenuItem Header="Re-quantize... (Ctrl+R)" Click="ReQuantizeMenuItem_OnClick" />
+                            <MenuItem Header="Delete" Click="DeleteMenuItem_OnClick" />
+                            <MenuItem Header="Add sub-folder..." Click="AddSubfolderMenuItem_OnClick"
+                                      ToolTip="Add a sub-folder here (its own 8bpp/Layer2 palette)" />
+                            <MenuItem Header="Re-quantize folder..." Click="ReQuantizeFolderMenuItem_OnClick"
+                                      ToolTip="Re-quantize every tile/sprite in THIS folder only, with a chosen dithering mode" />
+                            <MenuItem Header="Delete folder..." Click="DeleteFolderMenuItem_OnClick" />
+                        </ContextMenu>
+                    </StackPanel.ContextMenu>
+                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
                 </StackPanel>
             </HierarchicalDataTemplate>
         </TreeView.ItemTemplate>

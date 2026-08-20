@@ -206,4 +206,43 @@ public class ProjectStateTests
         Assert.Equal(siblingPixelsBefore, sibling.PackedPixelData); // untouched by the failed attempt's compaction/rollback
         Assert.Equal(0, project.GetOrCreateFolderPalette(AssetCategory.Layer2_640x256x4, folderPath).FreeSlotCount);
     }
+
+    /// <summary>
+    /// Regression for a reported bug: re-quantizing a 4bpp tile/sprite that SHARES its palette slot
+    /// with a sibling used to only ever remove the old asset RECORD, never its now-unreferenced
+    /// colours from the shared slot — so the slot's reported "colours used" count could only ever
+    /// grow across repeated re-quantizes, never shrink, even though nothing still needed the old
+    /// colours. (An isolated single-asset-per-slot re-quantize could accidentally "self-heal" via the
+    /// existing whole-slot-drop in CompactPaletteBank once the old slot became fully orphaned — this
+    /// only reproduces with a sibling still anchoring that slot in place.)
+    /// </summary>
+    [Fact]
+    public void ReplaceFlatPaletteAsset_BankCategory_SharedSlot_FreesOldColoursInsteadOfAccumulatingThem()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "src", FilePath = "C:\\fake\\src.png", Width = 8, Height = 8 };
+        project.SourceImages.Add(source);
+
+        // Sibling (5 colours) and the asset to re-quantize (5 different colours) end up sharing slot 0 (10/15 used).
+        var sibling = AssetImporter.Import(project, source, DistinctColorsImage(8, 8, 5, blueOffset: 0), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
+        var original = AssetImporter.Import(project, source, DistinctColorsImage(8, 8, 5, blueOffset: 5), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
+        Assert.Equal(sibling.PaletteSlotIndex, original.PaletteSlotIndex);
+        Assert.Equal(15 - 10, project.Tile4BppBank.Slots[original.PaletteSlotIndex].FreeSlotCount);
+
+        // Re-quantize "original" into 5 brand-new, fully disjoint colours (stands in for different dithering).
+        var replacementRgba = DistinctColorsImage(8, 8, 5, blueOffset: 10);
+        var cellSource = new SourceImage { Id = source.Id, FileName = original.Name, FilePath = source.FilePath, Width = 8, Height = 8 };
+
+        var result = project.ReplaceFlatPaletteAsset(original, () =>
+            AssetImporter.Import(project, cellSource, replacementRgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None, null,
+                original.SourceOffsetX, original.SourceOffsetY, excludeAssetIdFromNameCheck: original.Id));
+
+        Assert.True(result.Success, result.Error);
+        var newAsset = result.Asset!;
+
+        // Before the fix: the old 5 colours stayed in the slot forever, so this would report 15/15
+        // used (5 old-orphaned + 5 sibling + 5 new) instead of the correct 10/15 (5 sibling + 5 new).
+        Assert.Equal(15 - 10, project.Tile4BppBank.Slots[newAsset.PaletteSlotIndex].FreeSlotCount);
+        Assert.Equal(sibling.PaletteSlotIndex, newAsset.PaletteSlotIndex); // stayed in the shared slot, didn't need to move
+    }
 }

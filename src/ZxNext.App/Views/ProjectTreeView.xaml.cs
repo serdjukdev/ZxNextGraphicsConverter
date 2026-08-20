@@ -40,6 +40,20 @@ public partial class ProjectTreeView : UserControl
     /// </summary>
     private TreeNodeViewModel? _multiSelectAnchor;
 
+    /// <summary>
+    /// True whenever WE are the ones calling `.Focus()` on a TreeViewItem (from a mouse click, or from
+    /// <see cref="OnTreeViewModelPropertyChanged"/>'s re-focus) — set because focusing a TreeViewItem
+    /// can itself flip that item's NATIVE IsSelected to true (a documented WPF TreeView quirk), which
+    /// bubbles into TreeView.SelectedItemChanged firing SYNCHRONOUSLY, re-entering
+    /// <see cref="Tree_OnSelectedItemChanged"/> mid-click. Without this guard, that echo called
+    /// SelectSingle right on top of whatever Ctrl/Shift-click had just built, collapsing the whole
+    /// multi-selection down to one node on every single click.
+    /// </summary>
+    private bool _suppressNativeSelectionSync;
+
+    /// <summary>Coalesces <see cref="OnTreeViewModelPropertyChanged"/>'s deferred re-focus so a burst of SelectedNode changes (e.g. holding an arrow key) schedules only ONE pending action instead of one per change.</summary>
+    private bool _focusFollowScheduled;
+
     public ProjectTreeView()
     {
         InitializeComponent();
@@ -59,13 +73,38 @@ public partial class ProjectTreeView : UserControl
     /// folder) when the focused element is torn down. Runs at Background priority so the
     /// ObservableCollection change that triggered this has already flowed through to a freshly
     /// generated container by the time <see cref="FindContainer"/> looks for it.
+    /// Deliberately does NOT capture "which node" up front, and coalesces via
+    /// <see cref="_focusFollowScheduled"/> to at most one pending action — a burst of SelectedNode
+    /// changes (holding an arrow key through a folder with hundreds/thousands of items) used to
+    /// schedule one of these PER change, each capturing whatever was selected at that instant; by the
+    /// time they all finally ran (Background priority runs after the whole keystroke burst), they
+    /// replayed the ENTIRE selection history one Focus() call at a time — visually indistinguishable
+    /// from the tree scrolling back through every item the user had just scrolled past. Re-reading
+    /// SelectedNode fresh inside the deferred action instead makes every one of them converge on
+    /// whatever is ACTUALLY selected by the time it runs, so at most one real re-focus ever happens
+    /// per burst, however many change notifications fired during it.
     /// </summary>
     private void OnTreeViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(ProjectTreeViewModel.SelectedNode)) return;
-        if (DataContext is not ProjectTreeViewModel { SelectedNode: { } node }) return;
+        if (_focusFollowScheduled) return;
+        _focusFollowScheduled = true;
 
-        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => FindContainer(node)?.Focus()));
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            _focusFollowScheduled = false;
+            if (DataContext is not ProjectTreeViewModel { SelectedNode: { } current }) return;
+
+            _suppressNativeSelectionSync = true;
+            try
+            {
+                FindContainer(current)?.Focus();
+            }
+            finally
+            {
+                _suppressNativeSelectionSync = false;
+            }
+        }));
     }
 
     /// <summary>Locates the realized TreeViewItem container for a node up to two levels deep (root category folder, or one of its sub-folders' leaves) — matches this tree's actual max nesting.</summary>
@@ -89,12 +128,24 @@ public partial class ProjectTreeView : UserControl
         return null;
     }
 
+    /// <summary>
+    /// Fires only from keyboard arrow-key navigation now — all mouse clicks are fully handled (and
+    /// marked Handled) in <see cref="Tree_OnPreviewMouseLeftButtonDown"/>, which never lets WPF's own
+    /// native TreeViewItem.IsSelected/TreeView.SelectedItem machinery run. Routes through
+    /// <see cref="SelectSingle"/> so keyboard navigation stays consistent with mouse clicks — before
+    /// this, a native IsSelected-based highlight Trigger existed ALONGSIDE the IsMultiSelected one,
+    /// and native IsSelected — once set (e.g. by an earlier click before this rewrite, or just by
+    /// residual TreeView behavior) — stuck on a node forever with nothing to ever clear it, so
+    /// Ctrl-clicking that same already-"selected" node to toggle IsMultiSelected off did nothing
+    /// visible: the IsSelected trigger kept it highlighted regardless. Now IsMultiSelected is the
+    /// SOLE source of truth for the row highlight, for both mouse and keyboard.
+    /// </summary>
     private void Tree_OnSelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
-        if (DataContext is ProjectTreeViewModel vm)
-        {
-            vm.SelectedNode = e.NewValue as TreeNodeViewModel;
-        }
+        if (_suppressNativeSelectionSync) return; // just an echo of our own Focus() call below — we already handled this click ourselves
+        if (DataContext is not ProjectTreeViewModel vm) return;
+        if (e.NewValue is TreeNodeViewModel node) SelectSingle(vm, node);
+        else vm.SelectedNode = null;
     }
 
     /// <summary>
@@ -133,7 +184,15 @@ public partial class ProjectTreeView : UserControl
         }
 
         e.Handled = true;
-        FindAncestor<TreeViewItem>(originalSource)?.Focus();
+        _suppressNativeSelectionSync = true;
+        try
+        {
+            FindAncestor<TreeViewItem>(originalSource)?.Focus();
+        }
+        finally
+        {
+            _suppressNativeSelectionSync = false;
+        }
     }
 
     private void HandleLeafClick(ProjectTreeViewModel vm, TreeNodeViewModel node, ModifierKeys modifiers)

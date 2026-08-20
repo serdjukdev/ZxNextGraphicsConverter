@@ -174,18 +174,78 @@ public class ProjectState
     }
 
     /// <summary>
-    /// Replaces one asset already in a flat-palette folder (8bpp sprite/tile, or any Layer2
-    /// category) with a freshly re-imported version — used by re-quantize (same asset, new
-    /// dithering/colour settings). Frees the OLD asset's own colours FIRST (removes it, then
-    /// compacts the folder's palette) before <paramref name="importReplacement"/> runs, so an
-    /// asset that already uses most/all of a tight palette (Layer2_640x256x4's 16 colours
-    /// especially) is never spuriously blocked by its own about-to-be-discarded colours — without
-    /// this, the capacity check inside <c>AssetImporter.Import</c> would count the old asset's
-    /// soon-to-be-replaced colours as "still in use" and refuse room that's actually about to be
-    /// freed. All-or-nothing: if the new version still doesn't fit even after freeing the old
-    /// one's colours (a genuine overflow, not a self-blocking artifact), everything — the old
-    /// asset AND every sibling asset's palette indices, remapped by the compaction — is restored
-    /// exactly as it was, so a failed re-quantize never silently loses or corrupts anything.
+    /// Rebuilds ONE 4bpp bank slot from scratch, keeping only the colours still actually referenced
+    /// by whichever assets currently point at it (<paramref name="slotIndex"/>), remapping each such
+    /// asset's pixel data to the rebuilt slot. Mirrors <see cref="CompactFlatPalette"/> but scoped to
+    /// a single slot instead of a whole folder's flat palette — a bank slot is shared by several
+    /// assets, so freeing the space one of them (about to be replaced/removed by the caller) leaves
+    /// behind means re-deriving the slot's actual colour set from the OTHERS, not leaving stale
+    /// colours sitting there forever (which is exactly what happened before this existed: re-quantize
+    /// only ever removed the old ASSET record, never its now-unreferenced colours from the shared
+    /// slot, so a slot's colour count could only ever grow across repeated re-quantizes).
+    /// The transparent index is a bank-wide constant (always slot position 0, fixed for the slot's
+    /// whole lifetime — see <see cref="PaletteBank.TransparentIndex"/>), so transparent pixels never
+    /// need remapping here.
+    /// </summary>
+    public void CompactPaletteBankSlot(AssetCategory category, int slotIndex)
+    {
+        var bank = BankFor(category);
+        var oldSlot = bank.Slots[slotIndex];
+        var assetsInSlot = Assets.Where(a => a.Category == category && a.PaletteSlotIndex == slotIndex).ToList();
+
+        var newSlot = new NextPalette(PaletteBank.SlotCapacity, bank.TransparentIndex);
+        var newIndexOf = new Dictionary<NextColor, int>();
+
+        foreach (var asset in assetsInSlot)
+        {
+            for (var y = 0; y < asset.Height; y++)
+            {
+                for (var x = 0; x < asset.Width; x++)
+                {
+                    var index = AssetPixelEditor.GetPixelIndex(asset, x, y);
+                    if (index == oldSlot.TransparentIndex) continue;
+                    if (oldSlot.Slots[index] is { } color && !newIndexOf.ContainsKey(color))
+                    {
+                        newIndexOf[color] = newSlot.TryAdd(color);
+                    }
+                }
+            }
+        }
+
+        foreach (var asset in assetsInSlot)
+        {
+            for (var y = 0; y < asset.Height; y++)
+            {
+                for (var x = 0; x < asset.Width; x++)
+                {
+                    var index = AssetPixelEditor.GetPixelIndex(asset, x, y);
+                    if (index == oldSlot.TransparentIndex) continue;
+                    if (oldSlot.Slots[index] is not { } color) continue;
+                    AssetPixelEditor.SetPixelIndex(asset, x, y, newIndexOf[color]);
+                }
+            }
+        }
+
+        bank.Slots[slotIndex] = newSlot;
+    }
+
+    /// <summary>
+    /// Replaces one asset with a freshly re-imported version — used by re-quantize (same asset, new
+    /// dithering/colour settings). Frees the OLD asset's own colours FIRST (removes it, then compacts
+    /// whatever palette space it occupied) before <paramref name="importReplacement"/> runs, so an
+    /// asset that already uses most/all of a tight palette (Layer2_640x256x4's 16 colours, or a
+    /// near-full 4bpp bank slot, especially) is never spuriously blocked by its own about-to-be-
+    /// discarded colours — without this, the capacity/allocation check inside
+    /// <c>AssetImporter.Import</c> would count the old asset's soon-to-be-replaced colours as "still
+    /// in use" and refuse room that's actually about to be freed (for the flat-palette branch), or —
+    /// worse, for the bank branch — silently ADD the replacement's colours on top of the old one's
+    /// still-present colours in whatever slot the allocator reuses (very likely the asset's own
+    /// current slot, since it already overlaps most), permanently growing that slot's colour count on
+    /// every re-quantize with nothing ever removing the stale ones. All-or-nothing: if the new
+    /// version still doesn't fit even after freeing the old one's colours (a genuine overflow, not a
+    /// self-blocking artifact), everything — the old asset AND every sibling asset's palette indices,
+    /// remapped by the compaction — is restored exactly as it was, so a failed re-quantize never
+    /// silently loses or corrupts anything.
     /// </summary>
     public ImportResult ReplaceFlatPaletteAsset(GraphicsAsset oldAsset, Func<ImportResult> importReplacement)
     {
@@ -193,12 +253,26 @@ public class ProjectState
 
         if (category.UsesPaletteBank())
         {
-            // Bank slots don't share this failure mode the same way — a bank slot's overflow check
-            // is about the asset's own colour count against one slot's 15-colour capacity, not
-            // against remaining bank-wide space, so there's nothing to free up front here.
-            var directResult = importReplacement();
-            if (directResult.Success) Assets.Remove(oldAsset);
-            return directResult;
+            var bank = BankFor(category);
+            var oldSlotIndex = oldAsset.PaletteSlotIndex;
+            var oldSlotSnapshot = bank.Slots[oldSlotIndex]; // CompactPaletteBankSlot below replaces the list entry with a new instance, leaving this one untouched — cheap rollback target
+
+            var siblingSnapshotsInSlot = Assets
+                .Where(a => a.Category == category && a.PaletteSlotIndex == oldSlotIndex && a.Id != oldAsset.Id)
+                .Select(a => (Asset: a, OriginalPixelData: (byte[])a.PackedPixelData.Clone()))
+                .ToList();
+
+            Assets.Remove(oldAsset);
+            CompactPaletteBankSlot(category, oldSlotIndex);
+
+            var bankResult = importReplacement();
+            if (bankResult.Success) return bankResult;
+
+            // Roll back: restore the old slot object and every sibling's remapped pixel data, and re-add the old asset.
+            bank.Slots[oldSlotIndex] = oldSlotSnapshot;
+            foreach (var (asset, originalPixelData) in siblingSnapshotsInSlot) asset.PackedPixelData = originalPixelData;
+            Assets.Add(oldAsset);
+            return bankResult;
         }
 
         var folderPath = oldAsset.FolderPath;

@@ -279,8 +279,8 @@ public partial class MainWindow : Window
 
     private async void Export_OnClick(object sender, RoutedEventArgs e)
     {
-        var results = _viewModel.PreviewExport();
-        if (results.Count == 0)
+        var initialResults = _viewModel.PreviewExport(_ => ExportChunkSize.EightKb);
+        if (initialResults.Count == 0)
         {
             MessageBox.Show(
                 "Nothing to export yet — import and convert some tiles/sprites first.",
@@ -288,9 +288,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        var vm = new ExportViewModel(results);
+        var vm = new ExportViewModel(initialResults, _viewModel.RecomputeExportRow);
         var dialog = new ExportWindow { DataContext = vm, Owner = this };
         if (dialog.ShowDialog() != true) return;
+
+        // Regenerate the FINAL plan using whatever chunk size the user ended up choosing per row —
+        // the dialog only ever showed a live preview per-row, never mutated initialResults itself.
+        var results = _viewModel.PreviewExport(vm.ChunkSizeForRow);
 
         var existing = ExportService.ListOutputFileNames(results)
             .Where(name => File.Exists(Path.Combine(vm.OutputDirectory, name)))

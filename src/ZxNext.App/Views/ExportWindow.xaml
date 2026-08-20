@@ -8,17 +8,32 @@
         mc:Ignorable="d"
         Title="Export for Next" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
-    <StackPanel Margin="14" Width="460">
+    <StackPanel Margin="14" Width="580">
         <TextBlock Text="Each folder below is packed into its own 8KB-chunked .bin file(s) plus a matching .asm address map. Every folder also gets its own .pal palette file (always 512 bytes, regardless of category)."
                    TextWrapping="Wrap" Margin="0,0,0,10" />
 
-        <DataGrid ItemsSource="{Binding Folders}" AutoGenerateColumns="False" IsReadOnly="True"
+        <DataGrid ItemsSource="{Binding Folders}" AutoGenerateColumns="False"
                   HeadersVisibility="Column" MaxHeight="220" CanUserAddRows="False" GridLinesVisibility="Horizontal">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Folder" Binding="{Binding FolderPath}" Width="2*" />
-                <DataGridTextColumn Header="Assets" Binding="{Binding AssetCount}" Width="*" />
-                <DataGridTextColumn Header="Chunks" Binding="{Binding ChunkCount}" Width="*" />
-                <DataGridTextColumn Header="Data bytes" Binding="{Binding DataBytes}" Width="*" />
+                <DataGridTextColumn Header="Folder" Binding="{Binding FolderPath}" IsReadOnly="True" Width="2*" />
+                <DataGridTextColumn Header="Assets" Binding="{Binding AssetCount}" IsReadOnly="True" Width="*" />
+                <DataGridTextColumn Header="Chunks" Binding="{Binding ChunkCount}" IsReadOnly="True" Width="*" />
+                <DataGridTextColumn Header="Data bytes" Binding="{Binding DataBytes}" IsReadOnly="True" Width="*" />
+                <!-- Per-row choice of how this folder's/image's data is split into files at write time —
+                     goes in the same "one number per row" slot the redundant constant palette-size
+                     column used to occupy. A plain ComboBox in a CellTemplate (not a
+                     DataGridComboBoxColumn's cell-editing template) stays interactive regardless of
+                     the grid's other columns being read-only. -->
+                <DataGridTemplateColumn Header="Chunk size" Width="1.2*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{x:Static vm:ExportViewModel.AvailableChunkSizes}"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectedValue="{Binding SelectedChunkSize, UpdateSourceTrigger=PropertyChanged}"
+                                      Margin="2" VerticalAlignment="Center" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
 

@@ -988,8 +988,44 @@ public partial class MainViewModel : ObservableObject
         PixelEditor.StatusText = $"Project saved to {path}.";
     }
 
-    /// <summary>Computes the chunk/ASM plan for every folder that has assets, without writing anything to disk — used to populate the Export dialog's preview.</summary>
-    public List<FolderExportResult> PreviewExport() => ExportService.ExportAll(_project);
+    /// <summary>
+    /// Computes the chunk/ASM plan for every folder (or, for Layer2, every image) that has assets,
+    /// without writing anything to disk — used both to populate the Export dialog's initial preview
+    /// (called with a plain "always 8KB" selector) and to regenerate the FINAL plan right before
+    /// writing, once the user has picked a possibly-different chunk size per row in the dialog.
+    /// </summary>
+    public List<FolderExportResult> PreviewExport(Func<string, ExportChunkSize> chunkSizeForRow) =>
+        ExportService.ExportAll(_project, chunkSizeForRow);
+
+    /// <summary>
+    /// Recomputes just ONE export row (by its RowKey) at a newly-picked chunk size — used for the
+    /// Export dialog's live per-row preview when the user changes a ComboBox. Deliberately does NOT
+    /// go through <see cref="PreviewExport"/>/<see cref="ExportService.ExportAll"/> (which would
+    /// re-pack every OTHER row too just to read one back out) — for a project with many folders or
+    /// a large Layer2 image, that would mean redoing real work (byte packing, or Layer2's
+    /// per-pixel hardware reordering) on every single ComboBox change instead of only for the row
+    /// that actually changed.
+    /// </summary>
+    public (int ChunkCount, int DataBytes) RecomputeExportRow(string rowKey, ExportChunkSize size)
+    {
+        var chunkSizeBytes = size.ToByteBoundary();
+
+        var layer2Asset = _project.Assets.FirstOrDefault(a => a.Category.IsLayer2() && a.Name == rowKey);
+        if (layer2Asset is not null)
+        {
+            var result = Layer2Exporter.Export(layer2Asset, _project.GetOrCreateFolderPalette(layer2Asset.Category, layer2Asset.FolderPath), chunkSizeBytes);
+            return (result.Chunks.Count, result.Chunks.Sum(c => c.Data.Length));
+        }
+
+        var assets = _project.Assets
+            .Where(a => !a.Category.IsLayer2() && a.FolderPath == rowKey)
+            .OrderBy(a => a.Name, StringComparer.Ordinal)
+            .ToList();
+        if (assets.Count == 0) return (0, 0);
+
+        var folderResult = ExportService.ExportFolder(_project, rowKey, assets, chunkSizeBytes);
+        return (folderResult.Chunks.Count, folderResult.Chunks.Sum(c => c.Data.Length));
+    }
 
     /// <summary>Writes the given (already-computed) export plan to disk — can be a lot of files for a big project, so it runs off the UI thread behind a busy indicator.</summary>
     public async Task WriteExportAsync(IReadOnlyList<FolderExportResult> results, string outputDirectory)

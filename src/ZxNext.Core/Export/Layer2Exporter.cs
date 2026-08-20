@@ -23,19 +23,22 @@ namespace ZxNext.Core.Export;
 /// </summary>
 public static class Layer2Exporter
 {
-    public static FolderExportResult Export(GraphicsAsset asset, NextPalette palette)
+    public static FolderExportResult Export(GraphicsAsset asset, NextPalette palette, int chunkSizeBytes)
     {
         var data = ReorderForHardware(asset, palette);
         var baseFileName = SanitizeFileName(asset.Name);
 
         var extension = asset.Category.BinaryFileExtension();
-        var chunkCount = (data.Length + BinaryChunker.ChunkSizeBytes - 1) / BinaryChunker.ChunkSizeBytes;
+        // A chunk size of int.MaxValue (ExportChunkSize.WholeFile) would overflow the "+chunkSizeBytes-1"
+        // rounding-up trick, so clamp the divisor to data.Length first — one whole-file chunk either way.
+        var effectiveChunkSize = Math.Min(chunkSizeBytes, Math.Max(data.Length, 1));
+        var chunkCount = (data.Length + effectiveChunkSize - 1) / effectiveChunkSize;
         var chunks = new List<ChunkFile>(chunkCount);
         for (var i = 0; i < chunkCount; i++)
         {
-            var buffer = new byte[BinaryChunker.ChunkSizeBytes];
-            var take = Math.Min(BinaryChunker.ChunkSizeBytes, data.Length - i * BinaryChunker.ChunkSizeBytes);
-            Array.Copy(data, i * BinaryChunker.ChunkSizeBytes, buffer, 0, take);
+            var buffer = new byte[effectiveChunkSize];
+            var take = Math.Min(effectiveChunkSize, data.Length - i * effectiveChunkSize);
+            Array.Copy(data, i * effectiveChunkSize, buffer, 0, take);
             chunks.Add(new ChunkFile(chunkCount == 1 ? $"{baseFileName}.{extension}" : $"{baseFileName}_{i:D3}.{extension}", buffer));
         }
 
@@ -45,7 +48,7 @@ public static class Layer2Exporter
         var asmText = GenerateAsm(asset.Name, chunkCount);
         var paletteFile = new ChunkFile($"{baseFileName}.pal", PaletteFileWriter.Write(palette.Slots));
 
-        return new FolderExportResult(asset.FolderPath, chunks, placements, asmText, $"{baseFileName}.asm", paletteFile);
+        return new FolderExportResult(asset.Name, asset.FolderPath, chunks, placements, asmText, $"{baseFileName}.asm", paletteFile);
     }
 
     private static byte[] ReorderForHardware(GraphicsAsset asset, NextPalette palette)

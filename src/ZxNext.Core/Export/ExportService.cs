@@ -4,6 +4,7 @@ using ZxNext.Core.Project;
 namespace ZxNext.Core.Export;
 
 public record FolderExportResult(
+    string RowKey,
     string FolderPath,
     IReadOnlyList<ChunkFile> Chunks,
     IReadOnlyList<AssetPlacement> Placements,
@@ -13,18 +14,25 @@ public record FolderExportResult(
 
 /// <summary>
 /// Orchestrates export: groups the project's assets by tree folder (so each folder gets its
-/// own independent 8KB-chunk numbering, per spec), chunks each group, generates its ASM map and
-/// palette file, and can write everything to disk.
+/// own independent chunk numbering, per spec), chunks each group at the caller-chosen size,
+/// generates its ASM map and palette file, and can write everything to disk.
 /// </summary>
 public static class ExportService
 {
-    public static List<FolderExportResult> ExportAll(ProjectState project)
+    /// <summary>
+    /// <paramref name="chunkSizeForRow"/> is keyed by each result's own <see cref="FolderExportResult.RowKey"/>
+    /// (a folder path for grouped/non-Layer2 categories, one Layer2 image's asset name for Layer2 —
+    /// since, unlike every other category, a Layer2 folder can hold several independent full-screen
+    /// images, each needing its own chunk-size choice) so a caller (the Export dialog) can offer a
+    /// per-row 8KB/16KB/whole-file choice without needing to know that distinction itself.
+    /// </summary>
+    public static List<FolderExportResult> ExportAll(ProjectState project, Func<string, ExportChunkSize> chunkSizeForRow)
     {
         var results = project.Assets
             .Where(a => !a.Category.IsLayer2())
             .GroupBy(a => a.FolderPath)
             .OrderBy(g => g.Key, StringComparer.Ordinal)
-            .Select(g => ExportFolder(project, g.Key, g.OrderBy(a => a.Name, StringComparer.Ordinal).ToList()))
+            .Select(g => ExportFolder(project, g.Key, g.OrderBy(a => a.Name, StringComparer.Ordinal).ToList(), chunkSizeForRow(g.Key).ToByteBoundary()))
             .ToList();
 
         // Layer2 images are exported one-at-a-time, not grouped by folder — see Layer2Exporter's
@@ -32,13 +40,13 @@ public static class ExportService
         var layer2Results = project.Assets
             .Where(a => a.Category.IsLayer2())
             .OrderBy(a => a.Name, StringComparer.Ordinal)
-            .Select(a => Layer2Exporter.Export(a, project.GetOrCreateFolderPalette(a.Category, a.FolderPath)));
+            .Select(a => Layer2Exporter.Export(a, project.GetOrCreateFolderPalette(a.Category, a.FolderPath), chunkSizeForRow(a.Name).ToByteBoundary()));
         results.AddRange(layer2Results);
 
         return results;
     }
 
-    public static FolderExportResult ExportFolder(ProjectState project, string folderPath, IReadOnlyList<GraphicsAsset> assets)
+    public static FolderExportResult ExportFolder(ProjectState project, string folderPath, IReadOnlyList<GraphicsAsset> assets, int chunkSizeBytes)
     {
         var category = assets[0].Category;
         var baseFileName = SanitizeFileName(folderPath);
@@ -46,7 +54,7 @@ public static class ExportService
         var exportables = assets
             .Select(a => new ExportableAsset(a.Name, a.PackedPixelData, a.Category.UsesPaletteBank(), a.PaletteSlotIndex))
             .ToList();
-        var (chunks, placements) = BinaryChunker.Pack(exportables, baseFileName, category.BinaryFileExtension());
+        var (chunks, placements) = BinaryChunker.Pack(exportables, baseFileName, category.BinaryFileExtension(), chunkSizeBytes);
         var asmText = AsmMapGenerator.Generate(placements, chunks.Count);
 
         var paletteBytes = category.UsesPaletteBank()
@@ -54,7 +62,7 @@ public static class ExportService
             : PaletteFileWriter.Write(project.GetOrCreateFolderPalette(category, folderPath).Slots);
         var paletteFile = new ChunkFile($"{baseFileName}.pal", paletteBytes);
 
-        return new FolderExportResult(folderPath, chunks, placements, asmText, $"{baseFileName}.asm", paletteFile);
+        return new FolderExportResult(folderPath, folderPath, chunks, placements, asmText, $"{baseFileName}.asm", paletteFile);
     }
 
     public static void WriteToDisk(IEnumerable<FolderExportResult> results, string outputDirectory)

@@ -43,7 +43,7 @@ public class ExportServiceTests : IDisposable
         AssetImporter.Import(project, source, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None);
         AssetImporter.Import(project, source, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None);
 
-        var results = ExportService.ExportAll(project);
+        var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
         Assert.Single(results); // one folder used
         Assert.Equal("tile/4bpp/images", results[0].FolderPath);
 
@@ -91,7 +91,7 @@ public class ExportServiceTests : IDisposable
     [Fact]
     public void ExportAll_EmptyProject_ProducesNoResults()
     {
-        var results = ExportService.ExportAll(new ProjectState());
+        var results = ExportService.ExportAll(new ProjectState(), _ => ExportChunkSize.EightKb);
         Assert.Empty(results);
     }
 
@@ -123,7 +123,7 @@ public class ExportServiceTests : IDisposable
         var imported = AssetImporter.Import(project, source, rgba, AssetCategory.Layer2_256x192, "layer2/256x192/images", DitherMode.None);
         Assert.True(imported.Success, imported.Error);
 
-        var results = ExportService.ExportAll(project);
+        var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
         ExportService.WriteToDisk(results, _outputDir);
 
         var l2Files = Directory.GetFiles(_outputDir, "*.l2");

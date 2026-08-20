@@ -1,15 +1,18 @@
 namespace ZxNext.Core.Export;
 
 /// <summary>
-/// Packs assets sequentially into 8KB (8192-byte) binary chunks, never splitting a single
-/// asset's bytes across two chunks — every real asset (max 256 bytes, an 8bpp 16x16 sprite)
-/// is tiny next to 8KB, so this costs at most a few bytes of padding per chunk boundary.
+/// Packs assets sequentially into fixed-size binary chunks (8KB by default; 16KB or "whole file" —
+/// <see cref="int.MaxValue"/> via <see cref="ExportChunkSizeExtensions.ToByteBoundary"/> — are also
+/// chosen per export row), never splitting a single asset's bytes across two chunks — every real
+/// asset (max 256 bytes, an 8bpp 16x16 sprite) is tiny next to even 8KB, so this costs at most a
+/// few bytes of padding per chunk boundary.
 /// </summary>
 public static class BinaryChunker
 {
+    /// <summary>The default/legacy chunk size (8KB) — still the standard Next ROM/RAM bank size, and what every export row starts selected as.</summary>
     public const int ChunkSizeBytes = 8192;
 
-    public static (List<ChunkFile> Chunks, List<AssetPlacement> Placements) Pack(IReadOnlyList<ExportableAsset> assets, string baseFileName, string extension = "bin")
+    public static (List<ChunkFile> Chunks, List<AssetPlacement> Placements) Pack(IReadOnlyList<ExportableAsset> assets, string baseFileName, string extension, int chunkSizeBytes)
     {
         if (assets.Count == 0) return ([], []);
 
@@ -18,14 +21,14 @@ public static class BinaryChunker
 
         foreach (var asset in assets)
         {
-            if (asset.Data.Length > ChunkSizeBytes)
+            if (asset.Data.Length > chunkSizeBytes)
             {
                 throw new InvalidOperationException(
-                    $"Asset '{asset.Name}' is {asset.Data.Length} bytes, larger than one {ChunkSizeBytes}-byte slot — this should never happen for real Next tile/sprite data.");
+                    $"Asset '{asset.Name}' is {asset.Data.Length} bytes, larger than one {chunkSizeBytes}-byte slot — this should never happen for real Next tile/sprite data.");
             }
 
             var current = chunkBuffers[^1];
-            if (current.Count + asset.Data.Length > ChunkSizeBytes)
+            if (current.Count + asset.Data.Length > chunkSizeBytes)
             {
                 current = [];
                 chunkBuffers.Add(current);

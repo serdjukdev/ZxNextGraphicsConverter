@@ -493,7 +493,28 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        await RunBusyAsync("Re-quantizing folder...", async progress =>
+        await ReQuantizeAssetsAsync(affected, category, newDitherMode, "Re-quantizing folder...", "in this folder");
+    }
+
+    /// <summary>
+    /// Re-quantizes an explicit set of tiles/sprites — the tree's "Re-quantize N selected..."
+    /// context menu action, for a Ctrl/Shift-click multi-selection. All given ids must share one
+    /// category (the tree's context menu disables this action otherwise, so it can safely assume
+    /// that here); same per-asset flow and overflow reporting as <see cref="ReQuantizeFolderAsync"/>,
+    /// just scoped to an explicit id set instead of a whole folder.
+    /// </summary>
+    public async Task ReQuantizeSelectedAsync(IReadOnlyList<Guid> assetIds, DitherMode newDitherMode)
+    {
+        var affected = _project.Assets.Where(a => assetIds.Contains(a.Id)).ToList();
+        if (affected.Count == 0) return;
+
+        var category = affected[0].Category;
+        await ReQuantizeAssetsAsync(affected, category, newDitherMode, "Re-quantizing selected...", "in the selection");
+    }
+
+    private async Task ReQuantizeAssetsAsync(List<GraphicsAsset> affected, AssetCategory category, DitherMode newDitherMode, string busyMessage, string scopeDescription)
+    {
+        await RunBusyAsync(busyMessage, async progress =>
         {
             var succeeded = 0;
             var overflowed = new List<string>();
@@ -570,7 +591,7 @@ public partial class MainViewModel : ObservableObject
             if (missingSource.Count > 0) problems.Add($"{missingSource.Count} have no source image left and were skipped: {string.Join(", ", missingSource)}");
 
             PixelEditor.StatusText = problems.Count == 0
-                ? $"Re-quantized {succeeded} tile(s)/sprite(s) in this folder (dither: {newDitherMode})."
+                ? $"Re-quantized {succeeded} tile(s)/sprite(s) {scopeDescription} (dither: {newDitherMode})."
                 : $"Re-quantized {succeeded}; {string.Join("; ", problems)}.";
         });
     }
@@ -651,10 +672,11 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Deletes the checkbox-marked tiles/sprites, or (if none are checked) the single natively
-    /// selected one. Always safe: palette banks/folder palettes and source images are independent,
-    /// standing objects that never require a specific asset to exist, so there is no consistency
-    /// conflict to check for — deleting an asset only ever removes that one row from the project.
+    /// Deletes whatever's currently multi-selected (Ctrl/Shift-click in the tree), or — if nothing's
+    /// multi-selected — the single last-clicked node. Always safe: palette banks/folder palettes and
+    /// source images are independent, standing objects that never require a specific asset to exist,
+    /// so there is no consistency conflict to check for — deleting an asset only ever removes that
+    /// one row from the project.
     /// </summary>
     [RelayCommand]
     private void DeleteSelected()

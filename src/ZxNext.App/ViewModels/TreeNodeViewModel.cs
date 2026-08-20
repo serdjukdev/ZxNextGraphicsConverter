@@ -31,7 +31,13 @@ public partial class TreeNodeViewModel : ObservableObject
     /// <summary>Set only on leaf (asset) nodes.</summary>
     public Guid? AssetId { get; init; }
 
-    /// <summary>Checkbox-driven multi-select for group operations (delete) — independent of the TreeView's own single-item "currently being edited" selection.</summary>
+    /// <summary>
+    /// True while this leaf is part of the mouse-driven (Ctrl/Shift-click) multi-selection, handled
+    /// entirely in ProjectTreeView's code-behind since WPF's TreeView has no built-in multi-select.
+    /// Drives both the row's highlight (via a DataTrigger on the TreeViewItem template) and bulk
+    /// delete/re-quantize — independent of <see cref="ProjectTreeViewModel.SelectedNode"/>, which
+    /// always tracks the single most-recently-clicked node (the one shown in the edit panels).
+    /// </summary>
     [ObservableProperty]
     private bool isMultiSelected;
 

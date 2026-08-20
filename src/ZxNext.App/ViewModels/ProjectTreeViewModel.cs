@@ -122,7 +122,12 @@ public partial class ProjectTreeViewModel : ObservableObject
     /// Swaps one leaf node for another representing a re-quantized replacement asset, keeping its
     /// position in the list (re-quantize would otherwise always append to the end via
     /// Remove+Add, which is confusing — the tile visibly "jumps" to the bottom for no reason a
-    /// user can see). Re-selects it if it was selected.
+    /// user can see). Re-selects it if it was selected, and carries over its multi-selection
+    /// highlight if it was part of a bulk re-quantize selection — the replacement is a brand-new
+    /// TreeNodeViewModel instance, so without this its row would silently lose its blue highlight
+    /// (and, for the single-selected case, keyboard focus would fall back to the nearest surviving
+    /// ancestor — the containing folder — since the old, focused container gets torn down by the
+    /// Remove/Insert; ProjectTreeView's SelectedNode-changed handler re-focuses the new container).
     /// </summary>
     public void ReplaceAssetNode(Guid oldAssetId, GraphicsAsset newAsset)
     {
@@ -137,13 +142,16 @@ public partial class ProjectTreeViewModel : ObservableObject
             }
             if (index < 0) continue;
 
-            var wasSelected = SelectedNode?.AssetId == oldAssetId;
+            var oldNode = folder.Children[index];
+            var wasSelected = SelectedNode == oldNode;
+            var wasMultiSelected = oldNode.IsMultiSelected;
             folder.Children.RemoveAt(index);
             var node = new TreeNodeViewModel(newAsset.Name, isFolder: false)
             {
                 AssetId = newAsset.Id,
                 FolderPath = newAsset.FolderPath,
-                Category = newAsset.Category
+                Category = newAsset.Category,
+                IsMultiSelected = wasMultiSelected
             };
             folder.Children.Insert(index, node);
             if (wasSelected) SelectedNode = node;
@@ -166,17 +174,47 @@ public partial class ProjectTreeViewModel : ObservableObject
         }
     }
 
-    /// <summary>Every leaf node currently checkbox-marked for a group operation (delete).</summary>
-    public List<Guid> GetMultiSelectedAssetIds() =>
-        AllFolders().SelectMany(f => f.Children)
-            .Where(c => c.IsMultiSelected && c.AssetId.HasValue)
-            .Select(c => c.AssetId!.Value)
-            .ToList();
+    /// <summary>Every leaf node currently in the mouse-driven (Ctrl/Shift-click) multi-selection — used for bulk delete/re-quantize and row highlighting.</summary>
+    public List<TreeNodeViewModel> GetMultiSelectedLeaves() =>
+        AllFolders().SelectMany(f => f.Children).Where(c => c.IsMultiSelected && c.AssetId.HasValue).ToList();
 
-    /// <summary>Clears every leaf node's multi-select checkbox (after a delete, or when switching projects).</summary>
+    /// <summary>Asset ids for <see cref="GetMultiSelectedLeaves"/> — used for a group operation (delete).</summary>
+    public List<Guid> GetMultiSelectedAssetIds() =>
+        GetMultiSelectedLeaves().Select(c => c.AssetId!.Value).ToList();
+
+    /// <summary>Clears every leaf node's multi-selection highlight (after a delete, or when switching projects).</summary>
     public void ClearMultiSelection()
     {
         foreach (var child in AllFolders().SelectMany(f => f.Children)) child.IsMultiSelected = false;
+    }
+
+    /// <summary>
+    /// Every leaf node in the same top-to-bottom order the tree currently displays them, skipping
+    /// anything inside a collapsed folder (invisible items can't be part of a Shift-click range).
+    /// Used to compute a Shift-click range between two leaves.
+    /// </summary>
+    public List<TreeNodeViewModel> GetVisibleLeavesInOrder()
+    {
+        var result = new List<TreeNodeViewModel>();
+        foreach (var root in Roots)
+        {
+            if (!root.IsExpanded) continue;
+            foreach (var child in root.Children)
+            {
+                if (!child.IsFolder)
+                {
+                    result.Add(child);
+                    continue;
+                }
+
+                if (!child.IsExpanded) continue;
+                foreach (var grandchild in child.Children)
+                {
+                    if (!grandchild.IsFolder) result.Add(grandchild);
+                }
+            }
+        }
+        return result;
     }
 
     private TreeNodeViewModel? FindFolderNode(string folderPath) =>

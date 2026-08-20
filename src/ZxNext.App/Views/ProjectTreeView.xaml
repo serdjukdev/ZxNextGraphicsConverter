@@ -15,6 +15,8 @@
         </StackPanel>
         <TreeView x:Name="Tree" ItemsSource="{Binding Roots}"
               SelectedItemChanged="Tree_OnSelectedItemChanged"
+              PreviewMouseLeftButtonDown="Tree_OnPreviewMouseLeftButtonDown"
+              PreviewMouseRightButtonDown="Tree_OnPreviewMouseRightButtonDown"
               AllowDrop="True" DragOver="Tree_OnDragOver" Drop="Tree_OnDrop"
               BorderThickness="0">
         <TreeView.InputBindings>
@@ -30,7 +32,6 @@
             <Style TargetType="TreeViewItem">
                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
                 <Setter Property="Padding" Value="2,3" />
-                <EventSetter Event="MouseDoubleClick" Handler="TreeViewItem_OnMouseDoubleClick" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="TreeViewItem">
@@ -86,6 +87,10 @@
                                     <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
                                     <Setter TargetName="PART_Header" Property="TextElement.Foreground" Value="White" />
                                 </Trigger>
+                                <DataTrigger Binding="{Binding IsMultiSelected}" Value="True">
+                                    <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
+                                    <Setter TargetName="PART_Header" Property="TextElement.Foreground" Value="White" />
+                                </DataTrigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Setter.Value>
@@ -103,44 +108,25 @@
         <TreeView.ItemTemplate>
             <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                 <StackPanel Orientation="Horizontal" Background="Transparent">
-                    <CheckBox IsChecked="{Binding IsMultiSelected}" VerticalAlignment="Center" Margin="0,0,4,0"
-                              ToolTip="Mark for group delete" Focusable="False" KeyboardNavigation.IsTabStop="False">
-                        <CheckBox.Style>
-                            <Style TargetType="CheckBox">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsFolder}" Value="True">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </CheckBox.Style>
-                    </CheckBox>
                     <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
                                ContextMenuOpening="NodeText_OnContextMenuOpening">
+                        <!-- One shared, always-present ContextMenu for every node type (leaf or folder) —
+                             NodeText_OnContextMenuOpening toggles Items[i].Visibility/Header by index
+                             depending on the node and the current multi-selection. Item order:
+                             0 Rename, 1 Re-quantize, 2 Delete, 3 Add sub-folder, 4 Re-quantize folder, 5 Delete folder. -->
                         <TextBlock.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Rename..." Click="RenameMenuItem_OnClick" />
                                 <MenuItem Header="Re-quantize... (Ctrl+R)" Click="ReQuantizeMenuItem_OnClick" />
+                                <MenuItem Header="Delete" Click="DeleteMenuItem_OnClick" />
+                                <MenuItem Header="Add sub-folder..." Click="AddSubfolderMenuItem_OnClick"
+                                          ToolTip="Add a sub-folder here (its own 8bpp/Layer2 palette)" />
                                 <MenuItem Header="Re-quantize folder..." Click="ReQuantizeFolderMenuItem_OnClick"
                                           ToolTip="Re-quantize every tile/sprite in THIS folder only, with a chosen dithering mode" />
                                 <MenuItem Header="Delete folder..." Click="DeleteFolderMenuItem_OnClick" />
                             </ContextMenu>
                         </TextBlock.ContextMenu>
                     </TextBlock>
-                    <Button Content=" + " Margin="6,0,0,0" Padding="2,0" FontWeight="Bold"
-                            ToolTip="Add sub-folder (its own 8bpp palette)"
-                            Focusable="False" Click="AddSubfolder_OnClick">
-                        <Button.Style>
-                            <Style TargetType="Button">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding CanHaveSubfolders}" Value="True">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
                 </StackPanel>
             </HierarchicalDataTemplate>
         </TreeView.ItemTemplate>

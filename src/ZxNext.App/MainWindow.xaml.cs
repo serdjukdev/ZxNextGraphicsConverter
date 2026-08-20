@@ -29,6 +29,8 @@ public partial class MainWindow : Window
         ProjectTreeViewControl.AssetDropRequested += OnAssetDropRequested;
         ProjectTreeViewControl.RenameAssetRequested += OnRenameAssetRequested;
         ProjectTreeViewControl.ReQuantizeContextRequested += _viewModel.RequestReQuantizeById;
+        ProjectTreeViewControl.ReQuantizeSelectedRequested += OnReQuantizeSelectedRequested;
+        ProjectTreeViewControl.DeleteRequested += () => _viewModel.DeleteSelectedCommand.Execute(null);
         ProjectTreeViewControl.DeleteFolderRequested += _viewModel.DeleteFolder;
         ProjectTreeViewControl.ReQuantizeFolderRequested += OnReQuantizeFolderRequested;
         PixelEditorViewControl.PaintStrokeStarted += _viewModel.BeginPaintStroke;
@@ -180,6 +182,22 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true) return;
 
         await _viewModel.ReQuantizeFolderAsync(category, folderPath, vm.SelectedDitherMode);
+    }
+
+    /// <summary>
+    /// Bulk-re-quantizes an explicit set of tiles/sprites — the tree's "Re-quantize N selected..."
+    /// context menu item, which only enables when every selected leaf shares one category (enforced
+    /// in ProjectTreeView's ContextMenuOpening handler, so <see cref="MainViewModel.ReQuantizeSelectedAsync"/>
+    /// can safely assume a single category here).
+    /// </summary>
+    private async void OnReQuantizeSelectedRequested(List<Guid> assetIds)
+    {
+        var vm = new ReQuantizeViewModel(DitherMode.None,
+            $"Re-converts {assetIds.Count} selected tile(s)/sprite(s) from their original source regions.");
+        var dialog = new ReQuantizeWindow { DataContext = vm, Owner = this, Title = $"Re-quantize {assetIds.Count} selected" };
+        if (dialog.ShowDialog() != true) return;
+
+        await _viewModel.ReQuantizeSelectedAsync(assetIds, vm.SelectedDitherMode);
     }
 
     /// <summary>True for either "the 4bpp bank slot is full" or "the flat folder palette is full" — both get the same reduce-and-retry remediation dialog.</summary>

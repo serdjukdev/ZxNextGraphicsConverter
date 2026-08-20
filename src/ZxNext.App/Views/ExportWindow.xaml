@@ -18,7 +18,8 @@
                 <DataGridTextColumn Header="Folder" Binding="{Binding FolderPath}" Width="2*" />
                 <DataGridTextColumn Header="Assets" Binding="{Binding AssetCount}" Width="*" />
                 <DataGridTextColumn Header="Chunks" Binding="{Binding ChunkCount}" Width="*" />
-                <DataGridTextColumn Header="Bytes" Binding="{Binding TotalBytes}" Width="*" />
+                <DataGridTextColumn Header="Data bytes" Binding="{Binding DataBytes}" Width="*" />
+                <DataGridTextColumn Header="Palette bytes" Binding="{Binding PaletteBytes}" Width="*" />
             </DataGrid.Columns>
         </DataGrid>
 

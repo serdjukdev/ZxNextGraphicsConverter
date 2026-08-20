@@ -94,4 +94,45 @@ public class ExportServiceTests : IDisposable
         var results = ExportService.ExportAll(new ProjectState());
         Assert.Empty(results);
     }
+
+    /// <summary>
+    /// Regression for a reported "size looks wrong" report: a Layer2_256x192 image's pixel data
+    /// (256*192 = 49152 bytes, exactly 6 whole 8KB chunks) was seen as 49664 bytes (49152 + 512) —
+    /// the palette's byte size — and read as "the palette got merged into the binary file." The
+    /// actual .l2 chunk files on disk are exactly 49152 bytes total; 49664 was only ever the Export
+    /// dialog's preview total, which used to sum chunk bytes + the separate .pal file's bytes into
+    /// one combined number with no breakdown. Fixed on the App side (ExportViewModel now reports
+    /// DataBytes/PaletteBytes as two separate columns) — this test locks down the CORE-level
+    /// invariant the confusion was actually about: the written .l2 chunk(s) and .pal file are
+    /// separate files with the exact expected sizes, nothing merged.
+    /// </summary>
+    [Fact]
+    public void Layer2_256x192_Export_PixelDataAndPaletteAreSeparateFilesWithExactSizes()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "screen", FilePath = _tempSourceFile, Width = 256, Height = 192 };
+        project.SourceImages.Add(source);
+
+        var rgba = new byte[256 * 192 * 4];
+        for (var i = 0; i < 256 * 192; i++)
+        {
+            var o = i * 4;
+            rgba[o] = 10; rgba[o + 1] = 20; rgba[o + 2] = 30; rgba[o + 3] = 255;
+        }
+
+        var imported = AssetImporter.Import(project, source, rgba, AssetCategory.Layer2_256x192, "layer2/256x192/images", DitherMode.None);
+        Assert.True(imported.Success, imported.Error);
+
+        var results = ExportService.ExportAll(project);
+        ExportService.WriteToDisk(results, _outputDir);
+
+        var l2Files = Directory.GetFiles(_outputDir, "*.l2");
+        var palFiles = Directory.GetFiles(_outputDir, "*.pal");
+
+        var totalPixelDataBytes = l2Files.Sum(f => new FileInfo(f).Length);
+        Assert.Equal(256 * 192, totalPixelDataBytes); // 49152 — never 49664
+        Assert.Equal(6, l2Files.Length); // 49152 / 8192 divides evenly into exactly 6 whole chunks, no padding chunk
+        Assert.Single(palFiles);
+        Assert.Equal(PaletteFileWriter.FileSizeBytes, new FileInfo(palFiles[0]).Length); // 512, its own separate file
+    }
 }

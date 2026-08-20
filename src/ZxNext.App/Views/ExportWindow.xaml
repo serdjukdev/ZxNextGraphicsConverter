@@ -9,7 +9,7 @@
         Title="Export for Next" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
     <StackPanel Margin="14" Width="460">
-        <TextBlock Text="Each folder below is packed into its own 8KB-chunked .bin file(s) plus a matching .asm address map."
+        <TextBlock Text="Each folder below is packed into its own 8KB-chunked .bin file(s) plus a matching .asm address map. Every folder also gets its own .pal palette file (always 512 bytes, regardless of category)."
                    TextWrapping="Wrap" Margin="0,0,0,10" />
 
         <DataGrid ItemsSource="{Binding Folders}" AutoGenerateColumns="False" IsReadOnly="True"
@@ -19,7 +19,6 @@
                 <DataGridTextColumn Header="Assets" Binding="{Binding AssetCount}" Width="*" />
                 <DataGridTextColumn Header="Chunks" Binding="{Binding ChunkCount}" Width="*" />
                 <DataGridTextColumn Header="Data bytes" Binding="{Binding DataBytes}" Width="*" />
-                <DataGridTextColumn Header="Palette bytes" Binding="{Binding PaletteBytes}" Width="*" />
             </DataGrid.Columns>
         </DataGrid>
 

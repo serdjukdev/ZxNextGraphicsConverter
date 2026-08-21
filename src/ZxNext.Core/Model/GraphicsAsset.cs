@@ -16,6 +16,15 @@ public class GraphicsAsset
     public required byte[] PackedPixelData { get; set; }
     public required string FolderPath { get; init; }
 
+    /// <summary>
+    /// Monotonically increasing creation order, assigned once at import time and preserved across
+    /// re-quantize (which internally removes and re-adds the asset). This — not <see cref="Name"/> —
+    /// is what export packing/tile-index order is based on, so a source image sliced into several
+    /// tiles keeps its raster (row-by-row) order in the exported binary regardless of how the
+    /// auto-generated "{name}_{x}_{y}" filenames happen to sort alphabetically.
+    /// </summary>
+    public int SortIndex { get; set; }
+
     /// <summary>4bpp only: which of the category's PaletteBank slots (0-15) this asset uses.</summary>
     public int PaletteSlotIndex { get; set; }
 

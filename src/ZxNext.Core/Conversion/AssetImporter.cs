@@ -92,6 +92,10 @@ public static class AssetImporter
         return candidateName;
     }
 
+    /// <summary>Next value in the project's global creation-order sequence — one higher than the highest <see cref="GraphicsAsset.SortIndex"/> currently in use, so newly imported assets always sort after everything already there (siblings of a multi-cell slice get consecutive values in raster order, since <see cref="AtlasSlicer.AtlasSliceParameters.ComputeCellRects"/> yields cells row by row and the caller imports them in that same order).</summary>
+    private static int NextSortIndex(ProjectState project) =>
+        project.Assets.Count == 0 ? 0 : project.Assets.Max(a => a.SortIndex) + 1;
+
     private static ImportResult ImportFourBpp(
         ProjectState project, SourceImage source, AssetCategory category, string folderPath, DitherMode ditherMode,
         NextColor[] matched, bool[] isTransparent, int width, int height, int? maxColors, int sourceOffsetX, int sourceOffsetY, Guid? excludeAssetIdFromNameCheck)
@@ -127,6 +131,7 @@ public static class AssetImporter
             Height = height,
             PackedPixelData = PixelPacker.PackNibbles(indices),
             FolderPath = folderPath,
+            SortIndex = NextSortIndex(project),
             PaletteSlotIndex = allocation.SlotIndex,
             DitherMode = ditherMode,
             SourceImageId = source.Id,
@@ -192,6 +197,7 @@ public static class AssetImporter
             Height = height,
             PackedPixelData = category.Is4BitPerPixel() ? PixelPacker.PackNibbles(indices) : PixelPacker.PackBytes(indices),
             FolderPath = folderPath,
+            SortIndex = NextSortIndex(project),
             PaletteSlotIndex = 0,
             DitherMode = ditherMode,
             SourceImageId = source.Id,

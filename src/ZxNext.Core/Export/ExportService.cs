@@ -32,14 +32,14 @@ public static class ExportService
             .Where(a => !a.Category.IsLayer2())
             .GroupBy(a => a.FolderPath)
             .OrderBy(g => g.Key, StringComparer.Ordinal)
-            .Select(g => ExportFolder(project, g.Key, g.OrderBy(a => a.Name, StringComparer.Ordinal).ToList(), chunkSizeForRow(g.Key).ToByteBoundary()))
+            .Select(g => ExportFolder(project, g.Key, g.OrderBy(a => a.SortIndex).ToList(), chunkSizeForRow(g.Key).ToByteBoundary()))
             .ToList();
 
         // Layer2 images are exported one-at-a-time, not grouped by folder — see Layer2Exporter's
         // remarks for why they can't share BinaryChunker's per-folder packing model.
         var layer2Results = project.Assets
             .Where(a => a.Category.IsLayer2())
-            .OrderBy(a => a.Name, StringComparer.Ordinal)
+            .OrderBy(a => a.SortIndex)
             .Select(a => Layer2Exporter.Export(a, project.GetOrCreateFolderPalette(a.Category, a.FolderPath), chunkSizeForRow(a.Name).ToByteBoundary()));
         results.AddRange(layer2Results);
 

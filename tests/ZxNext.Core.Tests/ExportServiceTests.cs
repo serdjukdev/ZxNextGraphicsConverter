@@ -88,6 +88,45 @@ public class ExportServiceTests : IDisposable
         Assert.Equal("hero_2", second.Asset!.Name); // same source dropped twice into the same folder -> auto-disambiguated, not a silent name clash
     }
 
+    /// <summary>
+    /// Regression: a source image sliced into tiles gets auto-generated names like
+    /// "hero_0_0", "hero_8_0", "hero_0_8", "hero_8_8" — alphabetically these sort into a
+    /// completely different (column-major) order than the raster (row-major) order they were
+    /// actually sliced/imported in. Export packing order (and therefore tile INDEX in the
+    /// exported .til file, which the Next tilemap addresses directly by position — see
+    /// GraphicsAsset.SortIndex's own remarks) must follow creation/import order, not the
+    /// asset's Name string.
+    /// </summary>
+    [Fact]
+    public void ExportFolder_PacksAssetsInImportOrder_NotAlphabeticalNameOrder()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "hero", FilePath = _tempSourceFile, Width = 8, Height = 8 };
+        project.SourceImages.Add(source);
+
+        var rgba = new byte[8 * 8 * 4];
+        for (var i = 0; i < 8 * 8; i++)
+        {
+            var o = i * 4;
+            rgba[o] = 10; rgba[o + 1] = 20; rgba[o + 2] = 30; rgba[o + 3] = 255;
+        }
+
+        // Imported in raster order (top-left, top-right, bottom-left, bottom-right), but named
+        // so alphabetical order would interleave them as top-left, bottom-left, top-right, bottom-right.
+        string[] rasterOrderNames = ["hero_0_0", "hero_8_0", "hero_0_8", "hero_8_8"];
+        foreach (var name in rasterOrderNames)
+        {
+            var cellSource = new SourceImage { FileName = name, FilePath = _tempSourceFile, Width = 8, Height = 8 };
+            var result = AssetImporter.Import(project, cellSource, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None);
+            Assert.True(result.Success, result.Error);
+        }
+
+        var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
+        var packedNames = results[0].Placements.Select(p => p.Name).ToList();
+
+        Assert.Equal(rasterOrderNames, packedNames);
+    }
+
     [Fact]
     public void ExportAll_EmptyProject_ProducesNoResults()
     {

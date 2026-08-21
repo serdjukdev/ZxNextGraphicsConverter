@@ -53,6 +53,9 @@ public class AssetDto
     public int Width { get; set; }
     public int Height { get; set; }
     public string FolderPath { get; set; } = "";
+
+    /// <summary>Null in project files saved before this field existed — <see cref="ProjectService.Load"/> falls back to the asset's position within the file's own <c>Assets</c> array, which was already its export/creation order.</summary>
+    public int? SortIndex { get; set; }
     public int PaletteSlotIndex { get; set; }
     public DitherMode DitherMode { get; set; }
     public Guid? SourceImageId { get; set; }

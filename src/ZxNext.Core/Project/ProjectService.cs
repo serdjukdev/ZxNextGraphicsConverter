@@ -80,6 +80,7 @@ public static class ProjectService
                     Width = asset.Width,
                     Height = asset.Height,
                     FolderPath = asset.FolderPath,
+                    SortIndex = asset.SortIndex,
                     PaletteSlotIndex = asset.PaletteSlotIndex,
                     DitherMode = asset.DitherMode,
                     SourceImageId = asset.SourceImageId,
@@ -145,8 +146,9 @@ public static class ProjectService
         foreach (var (folder, flatDto) in dto.Layer2_640x256x4FolderPalettes)
             project.Layer2_640x256x4FolderPalettes[folder] = FromFlatDto(flatDto);
 
-        foreach (var a in dto.Assets)
+        for (var i = 0; i < dto.Assets.Count; i++)
         {
+            var a = dto.Assets[i];
             var entry = zip.GetEntry(a.PackedDataFile) ?? throw new InvalidDataException($"Missing archive entry: {a.PackedDataFile}");
             using var entryStream = entry.Open();
             using var memory = new MemoryStream();
@@ -161,6 +163,7 @@ public static class ProjectService
                 Height = a.Height,
                 PackedPixelData = memory.ToArray(),
                 FolderPath = a.FolderPath,
+                SortIndex = a.SortIndex ?? i, // projects saved before this field existed fall back to their saved array order
                 PaletteSlotIndex = a.PaletteSlotIndex,
                 DitherMode = a.DitherMode,
                 SourceImageId = a.SourceImageId,

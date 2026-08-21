@@ -295,6 +295,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         result.Asset!.Name = originalName;
+        result.Asset.SortIndex = asset.SortIndex; // re-quantize replaces the asset object; keep its original export/tile-index position
         Tree.ReplaceAssetNode(asset.Id, result.Asset); // keeps its position in the list instead of jumping to the bottom
 
         if (asset.Category.UsesPaletteBank())
@@ -334,7 +335,7 @@ public partial class MainViewModel : ObservableObject
         {
             _undoStack.Clear();
 
-            var assetsInCategory = _project.Assets.Where(a => a.Category == category).OrderBy(a => a.Name, StringComparer.Ordinal).ToList();
+            var assetsInCategory = _project.Assets.Where(a => a.Category == category).OrderBy(a => a.SortIndex).ToList();
             _project.BankFor(category).Clear();
 
             var succeeded = 0;
@@ -369,6 +370,7 @@ public partial class MainViewModel : ObservableObject
                     if (result.Success)
                     {
                         result.Asset!.Name = asset.Name;
+                        result.Asset.SortIndex = asset.SortIndex; // full category rebuild replaces every asset; keep original relative order
                         replaced.Add((asset.Id, result.Asset));
                         succeeded++;
                     }
@@ -557,6 +559,7 @@ public partial class MainViewModel : ObservableObject
                     if (result.Success)
                     {
                         result.Asset!.Name = asset.Name;
+                        result.Asset.SortIndex = asset.SortIndex; // re-quantize replaces the asset object; keep its original export/tile-index position
                         replaced.Add((asset.Id, result.Asset));
                         succeeded++;
                     }
@@ -1019,7 +1022,7 @@ public partial class MainViewModel : ObservableObject
 
         var assets = _project.Assets
             .Where(a => !a.Category.IsLayer2() && a.FolderPath == rowKey)
-            .OrderBy(a => a.Name, StringComparer.Ordinal)
+            .OrderBy(a => a.SortIndex)
             .ToList();
         if (assets.Count == 0) return (0, 0);
 

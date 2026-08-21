@@ -46,7 +46,7 @@ public static class Layer2Exporter
         // here, occupying every chunk in sequence, so a placement table would be pointless.
         var placements = new List<AssetPlacement> { new(asset.Name, 0, 0, false, 0) };
         var asmText = GenerateAsm(asset.Name, chunkCount);
-        var paletteFile = new ChunkFile($"{baseFileName}.pal", PaletteFileWriter.Write(palette.Slots));
+        var paletteFile = new ChunkFile($"{baseFileName}.pal", PaletteFileWriter.Write(palette));
 
         return new FolderExportResult(asset.Name, asset.FolderPath, chunks, placements, asmText, $"{baseFileName}.asm", paletteFile);
     }

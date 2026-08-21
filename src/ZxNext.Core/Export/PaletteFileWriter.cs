@@ -10,39 +10,52 @@ namespace ZxNext.Core.Export;
 /// palette-bank categories get one combined 256-entry file (all 16 slots concatenated in slot
 /// order), everything else (8bpp sprite/tile, all three Layer2 categories) gets one per folder,
 /// straight from that folder's flat palette. Missing/unused entries are written as all-zero.
+///
+/// Every palette's own <see cref="NextPalette.TransparentIndex"/> slot always gets
+/// <see cref="NextColor.HardwareTransparentColor"/> written into it (never left black/all-zero
+/// like every other unused entry) — real Next hardware needs an actual matching colour there for
+/// the categories whose transparency compare is colour-based (Layer2's nextreg 0x14), and it's
+/// harmless/cosmetically correct for the index-based categories (sprites, tilemap) too.
 /// </summary>
 public static class PaletteFileWriter
 {
     public const int FileSizeBytes = 512;
     private const int EntryCount = 256;
 
-    public static byte[] Write(IReadOnlyList<NextColor?> colors)
+    public static byte[] Write(NextPalette palette)
     {
         var bytes = new byte[FileSizeBytes];
         for (var i = 0; i < EntryCount; i++)
         {
-            if (i >= colors.Count || colors[i] is not { } color) continue;
-            bytes[i] = color.ToRegByteRrrgggbb();
-            bytes[EntryCount + i] = color.ToBlueLsbBit() ? (byte)1 : (byte)0;
+            WriteEntry(bytes, i, ResolveColor(palette, i));
         }
         return bytes;
     }
 
-    /// <summary>Combines every slot of a 4bpp <see cref="PaletteBank"/> into one 256-entry list (slot 0 → entries 0-15, slot 1 → 16-31, etc.) for <see cref="Write"/>.</summary>
+    /// <summary>Combines every slot of a 4bpp <see cref="PaletteBank"/> into one 256-entry file (slot 0 → entries 0-15, slot 1 → 16-31, etc.), forcing every slot's own copy of <see cref="PaletteBank.TransparentIndex"/> to <see cref="NextColor.HardwareTransparentColor"/>.</summary>
     public static byte[] WriteBank(PaletteBank bank)
     {
-        var combined = new List<NextColor?>(EntryCount);
+        var bytes = new byte[FileSizeBytes];
         for (var slotIndex = 0; slotIndex < PaletteBank.MaxSlots; slotIndex++)
         {
-            if (slotIndex < bank.Slots.Count)
+            var slot = slotIndex < bank.Slots.Count ? bank.Slots[slotIndex] : null;
+            for (var localIndex = 0; localIndex < PaletteBank.SlotCapacity; localIndex++)
             {
-                combined.AddRange(bank.Slots[slotIndex].Slots);
-            }
-            else
-            {
-                combined.AddRange(new NextColor?[PaletteBank.SlotCapacity]);
+                var color = slot is null ? null : ResolveColor(slot, localIndex);
+                WriteEntry(bytes, slotIndex * PaletteBank.SlotCapacity + localIndex, color);
             }
         }
-        return Write(combined);
+        return bytes;
+    }
+
+    private static NextColor? ResolveColor(NextPalette palette, int index) =>
+        index == palette.TransparentIndex ? NextColor.HardwareTransparentColor
+        : index < palette.Slots.Count ? palette.Slots[index] : null;
+
+    private static void WriteEntry(byte[] bytes, int index, NextColor? color)
+    {
+        if (color is not { } c) return;
+        bytes[index] = c.ToRegByteRrrgggbb();
+        bytes[EntryCount + index] = c.ToBlueLsbBit() ? (byte)1 : (byte)0;
     }
 }

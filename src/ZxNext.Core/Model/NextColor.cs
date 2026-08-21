@@ -24,4 +24,15 @@ public readonly record struct NextColor(byte R3, byte G3, byte B3)
 
     /// <summary>The 9-bit value as a "RRRGGGBBB"-order binary string, e.g. "010101101".</summary>
     public string ToNineBitBinaryString() => Convert.ToString(ToNineBitValue(), 2).PadLeft(9, '0');
+
+    /// <summary>
+    /// Real Next hardware's own transparency-marker colour — confirmed against nextreg.txt: nextreg
+    /// 0x14 "Global Transparency Colour", 0x4A "Fallback Colour", and 0x4B "Sprite Transparency
+    /// Index" all soft-reset to the same byte, 0xE3. RRRGGGBB = 0xE3 decodes to R3=7, G3=0, B3=6
+    /// (the blue LSB is outside the 8-bit compare these registers use, so it's set to 0 here).
+    /// Written into every category's transparent palette slot at export time (see
+    /// <see cref="ZxNext.Core.Export.PaletteFileWriter"/>) so a project needs no custom nextreg
+    /// setup for transparency to work out of the box on real hardware.
+    /// </summary>
+    public static readonly NextColor HardwareTransparentColor = new(7, 0, 6);
 }

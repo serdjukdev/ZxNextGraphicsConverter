@@ -58,6 +58,36 @@ public static class AssetCategoryExtensions
         _ => throw new System.ArgumentOutOfRangeException(nameof(category), "Not a flat-palette category")
     };
 
+    /// <summary>
+    /// Fixed palette index this category's transparent slot must always occupy, matching real Next
+    /// hardware's transparency-compare default so a project needs no custom nextreg setup —
+    /// confirmed against nextreg.txt:
+    /// - Sprite4Bpp: 3 (nextreg 0x4B "Sprite Transparency Index", only the low nibble is used for
+    ///   4bpp sprites; soft-reset default 0xE3 &amp; 0xF = 3).
+    /// - Tile4Bpp: 15 (nextreg 0x4C "Tilemap Transparency Index" — a SEPARATE register from
+    ///   sprites, with its own different soft-reset default, 0xF).
+    /// - Sprite8Bpp: 0xE3/227 (nextreg 0x4B's full-byte soft-reset default, used as-is for 8bpp
+    ///   sprites).
+    /// Both of these are confirmed INDEX-based compares (the RTL compares the raw pattern
+    /// index/nibble, not a resolved colour) — which exact slot holds the transparent marker is what
+    /// matters, not what colour lives there.
+    /// Null for every other category: Tile8Bpp has no dedicated hardware register at all (it's a
+    /// software-only overlay, not the real hardware tilemap), and Layer2 (all three) is compared by
+    /// nextreg 0x14 "Global Transparency Colour" — confirmed in zxnext.vhd (signal
+    /// <c>nr_14_global_transparent_rgb</c>) to be a COLOUR-based compare against the resolved
+    /// output, not an index — so for these, which slot ends up transparent doesn't matter, only
+    /// that slot's colour (see <see cref="ZxNext.Core.Model.NextColor.HardwareTransparentColor"/>)
+    /// does, and it's left to <see cref="ZxNext.Core.Model.NextPalette"/>'s existing lazy
+    /// "highest still-empty slot" reservation.
+    /// </summary>
+    public static int? HardwareTransparentIndex(this AssetCategory category) => category switch
+    {
+        AssetCategory.Sprite4Bpp => 3,
+        AssetCategory.Tile4Bpp => 15,
+        AssetCategory.Sprite8Bpp => 0xE3,
+        _ => null
+    };
+
     /// <summary>File extension for this category's exported binary data — distinct per asset kind so the same output folder never collides across categories (previously everything shared a generic ".bin").</summary>
     public static string BinaryFileExtension(this AssetCategory category) => category switch
     {

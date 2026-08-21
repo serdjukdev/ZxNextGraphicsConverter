@@ -59,7 +59,7 @@ public static class ExportService
 
         var paletteBytes = category.UsesPaletteBank()
             ? PaletteFileWriter.WriteBank(project.BankFor(category))
-            : PaletteFileWriter.Write(project.GetOrCreateFolderPalette(category, folderPath).Slots);
+            : PaletteFileWriter.Write(project.GetOrCreateFolderPalette(category, folderPath));
         var paletteFile = new ChunkFile($"{baseFileName}.pal", paletteBytes);
 
         return new FolderExportResult(folderPath, folderPath, chunks, placements, asmText, $"{baseFileName}.asm", paletteFile);

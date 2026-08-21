@@ -11,7 +11,10 @@ public class PaletteBank(AssetCategory category)
     public const int SlotUsableColors = SlotCapacity - 1; // one index reserved for transparency
 
     public AssetCategory Category { get; } = category;
-    public int TransparentIndex { get; } = 0;
+
+    /// <summary>Fixed per real Next hardware's own default (3 for Sprite4Bpp, 15 for Tile4Bpp — see <see cref="AssetCategoryExtensions.HardwareTransparentIndex"/>), not an arbitrary choice.</summary>
+    public int TransparentIndex { get; } = category.HardwareTransparentIndex()
+        ?? throw new ArgumentOutOfRangeException(nameof(category), "PaletteBank only exists for categories with a fixed hardware transparent index (Sprite4Bpp/Tile4Bpp)");
     public List<NextPalette> Slots { get; } = [];
 
     public NextPalette CreateSlot()

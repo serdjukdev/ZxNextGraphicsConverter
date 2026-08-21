@@ -42,13 +42,23 @@ public class ProjectState
         _ => throw new ArgumentOutOfRangeException(nameof(category), "Not a flat-folder-palette category")
     };
 
-    /// <summary>A brand-new flat folder palette starts with NO transparent index reserved (-1) — it's claimed lazily, only once some asset in the folder actually turns out to need transparency, so a fully-opaque image can use every one of the folder's colours instead of always losing one up front.</summary>
+    /// <summary>
+    /// Sprite8Bpp reserves its hardware-fixed transparent index (0xE3 — see
+    /// <see cref="AssetCategoryExtensions.HardwareTransparentIndex"/>) up front, since nextreg 0x4B's
+    /// compare is index-based and needs that exact slot regardless of whether it's used yet. Every
+    /// other flat category starts with NO transparent index reserved (-1) — it's claimed lazily, only
+    /// once some asset in the folder actually turns out to need transparency, so a fully-opaque image
+    /// can use every one of the folder's colours instead of always losing one up front. This is safe
+    /// for them because their hardware compare (Layer2's nextreg 0x14) or lack of one (Tile8Bpp) only
+    /// cares about the slot's COLOUR, not which index it lands on.
+    /// </summary>
     public NextPalette GetOrCreateFolderPalette(AssetCategory category, string folderPath)
     {
         var palettes = FolderPalettesFor(category);
         if (!palettes.TryGetValue(folderPath, out var palette))
         {
-            palette = new NextPalette(category.FlatPaletteCapacity(), transparentIndex: -1);
+            var transparentIndex = category.HardwareTransparentIndex() ?? -1;
+            palette = new NextPalette(category.FlatPaletteCapacity(), transparentIndex);
             palettes[folderPath] = palette;
         }
         return palette;
@@ -121,7 +131,7 @@ public class ProjectState
         var assetsInFolder = Assets.Where(a => a.Category == category && a.FolderPath == folderPath).ToList();
         if (assetsInFolder.Count == 0)
         {
-            palettes[folderPath] = new NextPalette(category.FlatPaletteCapacity(), transparentIndex: -1);
+            palettes[folderPath] = new NextPalette(category.FlatPaletteCapacity(), category.HardwareTransparentIndex() ?? -1);
             return;
         }
 
@@ -149,7 +159,7 @@ public class ProjectState
             }
         }
 
-        var newPalette = new NextPalette(category.FlatPaletteCapacity(), transparentIndex: -1);
+        var newPalette = new NextPalette(category.FlatPaletteCapacity(), category.HardwareTransparentIndex() ?? -1);
         if (needsTransparency) newPalette.EnsureTransparentIndexReserved();
 
         var newIndexOf = new Dictionary<NextColor, int>();

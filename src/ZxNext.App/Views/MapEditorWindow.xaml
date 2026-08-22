@@ -9,6 +9,7 @@
         Title="Map Editor" Height="760" Width="1320" WindowStartupLocation="CenterOwner">
     <Window.InputBindings>
         <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
+        <KeyBinding Key="Delete" Command="{Binding DeleteSelectionCommand}" />
     </Window.InputBindings>
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
@@ -89,8 +90,11 @@
                     </ListBox>
                 </ScrollViewer>
             </Border>
-            <Button Grid.Row="3" Content="Delete selected" Command="{Binding DeleteMapCommand}"
-                    HorizontalAlignment="Left" Width="120" Margin="0,6,0,0" />
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,6,0,0">
+                <Button Content="Delete selected" Command="{Binding DeleteMapCommand}" Width="100" Margin="0,0,6,0" />
+                <Button Content="Resize..." Click="ResizeMap_OnClick" Width="70" Margin="0,0,6,0" />
+                <Button Content="Trim" Command="{Binding TrimCommand}" Width="60" />
+            </StackPanel>
             <TextBlock Grid.Row="4" Text="{Binding StatusText}" Style="{StaticResource StatusTextStyle}" TextWrapping="Wrap" MinHeight="16" Margin="0,8,0,0" />
         </Grid>
 
@@ -108,7 +112,7 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <TextBlock Grid.Row="0" Text="Layers (top = front; selected row = active for Paint/Erase)" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4" />
+            <TextBlock Grid.Row="0" Text="Layers (top = front; selected row = active for painting/selection)" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4" />
             <Grid Grid.Row="1" Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -127,11 +131,7 @@
                 </StackPanel>
             </Grid>
 
-            <TextBlock Grid.Row="2" Text="Tool" FontSize="11" Margin="0,0,0,2" />
-            <ComboBox Grid.Row="3" ItemsSource="{Binding AvailableTools}" DisplayMemberPath="Label"
-                      SelectedValuePath="Tool" SelectedValue="{Binding ActiveTool}" Width="100" HorizontalAlignment="Left" Margin="0,0,0,10" />
-
-            <TextBlock Grid.Row="4" Margin="0,0,0,4">
+            <TextBlock Grid.Row="4" Margin="0,0,0,4" TextWrapping="Wrap">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
                         <Setter Property="Text" Value="Pick something below, then click (or drag) on the canvas." />
@@ -140,6 +140,10 @@
                             <DataTrigger Binding="{Binding IsPaintReady}" Value="True">
                                 <Setter Property="Text" Value="Ready — click or drag on the canvas to paint." />
                                 <Setter Property="Foreground" Value="#1A7A1A" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                                <Setter Property="Text" Value="Selection active — Alt-drag inside it to move (Alt+Shift to copy). Delete key or the button below clears its contents." />
+                                <Setter Property="Foreground" Value="#1A5FA7" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
@@ -202,22 +206,46 @@
                 </ScrollViewer>
             </Border>
 
-            <Button Grid.Row="6" Content="Undo (Ctrl+Z)" Command="{Binding UndoCommand}" HorizontalAlignment="Left" Width="110" Margin="0,8,0,0" />
+            <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,8,0,0">
+                <Button Content="Fill Selection" Command="{Binding FillSelectionCommand}" IsEnabled="{Binding CanFillSelection}" Width="100" Margin="0,0,6,0" />
+                <Button Content="Delete Selection" Command="{Binding DeleteSelectionCommand}" IsEnabled="{Binding HasSelection}" Width="110" Margin="0,0,6,0" />
+                <Button Content="Undo (Ctrl+Z)" Command="{Binding UndoCommand}" Width="110" />
+            </StackPanel>
         </Grid>
 
         <GridSplitter Grid.Column="3" Width="1" HorizontalAlignment="Stretch" Background="#CCC" />
 
         <!-- Column 4: the map canvas -->
         <DockPanel Grid.Column="4">
-            <TextBlock DockPanel.Dock="Top" Text="Canvas — click or drag to paint/erase the active layer" FontWeight="Bold" Margin="0,0,0,6" />
+            <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" FontWeight="Bold" VerticalAlignment="Center" TextWrapping="Wrap"
+                           Text="Canvas — drag to paint. Ctrl=erase, Shift=snap sprite, Alt=select/move (Alt+Shift=copy). Wheel=zoom, middle-drag=pan." />
+                <CheckBox Grid.Column="1" Content="Show grid" IsChecked="{Binding IsGridVisible}" VerticalAlignment="Center" />
+            </Grid>
             <Border Style="{StaticResource CanvasBorderStyle}" Background="#333">
-                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="MapScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                              PreviewMouseWheel="MapScrollViewer_OnPreviewMouseWheel"
+                              PreviewMouseDown="MapScrollViewer_OnPreviewMouseDown"
+                              PreviewMouseMove="MapScrollViewer_OnPreviewMouseMove"
+                              PreviewMouseUp="MapScrollViewer_OnPreviewMouseUp"
+                              LostMouseCapture="MapScrollViewer_OnLostMouseCapture">
                     <Grid x:Name="MapCanvasHost" Background="Transparent"
+                          HorizontalAlignment="Left" VerticalAlignment="Top"
                           MouseLeftButtonDown="MapCanvasHost_OnMouseLeftButtonDown"
                           MouseMove="MapCanvasHost_OnMouseMove"
                           MouseLeftButtonUp="MapCanvasHost_OnMouseLeftButtonUp"
                           LostMouseCapture="MapCanvasHost_OnLostMouseCapture">
+                        <Grid.LayoutTransform>
+                            <ScaleTransform x:Name="MapZoomTransform" ScaleX="1" ScaleY="1" />
+                        </Grid.LayoutTransform>
                         <Image x:Name="MapImage" Source="{Binding MapPreview}" Stretch="None" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                        <Canvas x:Name="GridOverlay" IsHitTestVisible="False" />
+                        <Canvas x:Name="HoverOverlay" IsHitTestVisible="False" />
+                        <Canvas x:Name="SelectionOverlay" IsHitTestVisible="False" />
                     </Grid>
                 </ScrollViewer>
             </Border>

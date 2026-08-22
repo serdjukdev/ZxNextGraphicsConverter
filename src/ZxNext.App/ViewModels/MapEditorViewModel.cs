@@ -9,14 +9,16 @@ using ZxNext.Core.Project;
 
 namespace ZxNext.App.ViewModels;
 
-/// <summary>Which of the active layer's paint operations a mouse-down/drag performs.</summary>
-public enum MapEditTool
+/// <summary>A grid-layer selection, in cell (col/row) units, always normalized so Col0&lt;=Col1 and Row0&lt;=Row1 — inclusive on both ends.</summary>
+public readonly record struct CellRect(int Col0, int Row0, int Col1, int Row1)
 {
-    Paint,
-    Erase
-}
+    public int Width => Col1 - Col0 + 1;
+    public int Height => Row1 - Row0 + 1;
+    public bool Contains(int col, int row) => col >= Col0 && col <= Col1 && row >= Row0 && row <= Row1;
 
-public record MapToolOption(MapEditTool Tool, string Label);
+    public static CellRect Normalized(int colA, int rowA, int colB, int rowB) =>
+        new(Math.Min(colA, colB), Math.Min(rowA, rowB), Math.Max(colA, colB), Math.Max(rowA, rowB));
+}
 
 /// <summary>One row of the Map Editor's layer-order list — display-order top-to-bottom means front-to-back (top of the list is drawn last, on top), matching the usual layers-panel convention and <see cref="MapAsset.LayerOrder"/>'s own storage convention.</summary>
 public partial class LayerRowViewModel(MapLayerKind kind, string displayName) : ObservableObject
@@ -30,19 +32,29 @@ public partial class LayerRowViewModel(MapLayerKind kind, string displayName) : 
 
 /// <summary>
 /// Backs the modal Map Editor. Left side: browse existing maps (visual thumbnails, live-refreshed after
-/// painting) with delete, and a "New Map..." button opening the separate NewMapWindow dialog. Right
-/// side: the selected map rendered full-size with a reorderable/persisted layer list whose SELECTED row
-/// doubles as the "active layer" (which layer Paint/Erase target — also filters the metatile/sprite
-/// palette below it, deliberately not a second separate control), a Paint/Erase tool selector, a visual
-/// palette (metatiles for the two grid layers, sprite assets for the Sprite layer — same "click to
-/// select, click the canvas to place" flow as the Metatile Editor's own cell painting), and a local undo
-/// stack scoped to this window (mirrors MainViewModel's BeginPaintStroke/PaintPixel/EndPaintStroke
-/// shape, reimplemented self-contained here). Select/Move/Resize/Trim tools come in later stages.
+/// painting) with delete, and a "New Map..." button opening the separate NewMapWindow dialog. Right side:
+/// the selected map rendered full-size with a reorderable/persisted layer list whose SELECTED row doubles
+/// as the "active layer" (which layer painting/selection targets — also filters the metatile/sprite
+/// palette below it, deliberately not a second separate control), a visual palette (metatiles for the two
+/// grid layers, sprite assets for the Sprite layer — same "click to select, click the canvas to place"
+/// flow as the Metatile Editor's own cell painting), and a local undo stack scoped to this window (mirrors
+/// MainViewModel's BeginPaintStroke/PaintPixel/EndPaintStroke shape, reimplemented self-contained here).
+///
+/// There is deliberately no separate "tool" selector (Paint/Erase/Select were tried as a 3-way combo in an
+/// earlier iteration of this stage and dropped as redundant): the View's mouse handling is entirely
+/// modifier-driven instead — plain drag paints, Ctrl force-erases regardless of layer, Shift snaps a new
+/// sprite placement to the tile grid, and Alt switches the drag into rectangle-select/move (Alt+Shift
+/// copies instead of moving) — see MapEditorWindow.xaml.cs for the actual key handling; this ViewModel only
+/// exposes the operations (PaintOrEraseAt, Fill/Delete/MoveSelection) the View's modifier logic calls into.
+/// Resize/Trim tools come in a later stage.
 /// </summary>
 public partial class MapEditorViewModel : ObservableObject
 {
-    /// <summary>All sprite assets are a fixed 16x16 (AssetCategoryExtensions.CellSize for Sprite4Bpp/Sprite8Bpp).</summary>
-    private const int SpritePixelSize = 16;
+    /// <summary>All sprite assets are a fixed 16x16 (AssetCategoryExtensions.CellSize for Sprite4Bpp/Sprite8Bpp). Public so the View can size its hover-highlight rectangle identically.</summary>
+    public const int SpritePixelSize = 16;
+
+    /// <summary>Fine tile grid step (px) that Shift-snap rounds sprite placement down to — the same grid the faint 8x8 overlay draws. Public so the View's placement-preview highlight snaps identically.</summary>
+    public const int TileSnapSize = 8;
 
     private readonly ProjectState _project;
 
@@ -57,11 +69,8 @@ public partial class MapEditorViewModel : ObservableObject
     /// <summary>Set true by a successful Create/Delete/paint/erase/undo/visibility toggle/reorder — read once by the caller (MainWindow) after the dialog closes, to decide whether to mark the project as having unsaved changes.</summary>
     public bool HasChanges { get; private set; }
 
-    public IReadOnlyList<MapToolOption> AvailableTools { get; } =
-    [
-        new(MapEditTool.Paint, "Paint"),
-        new(MapEditTool.Erase, "Erase")
-    ];
+    /// <summary>Raised whenever Resize/Trim (or their undo) change the map's Width/Height — the View's grid/selection overlays size themselves from those and have no other way to notice, since neither SelectedMap nor MapPreview changing implies a size change on their own (SelectedMap doesn't change on a resize; MapPreview changes on every paint stroke too, which would make redrawing the grid on every stroke needlessly wasteful).</summary>
+    public event Action? MapResized;
 
     [ObservableProperty]
     private ObservableCollection<MapListItemViewModel> maps = [];
@@ -86,11 +95,9 @@ public partial class MapEditorViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsGridLayerActive))]
     [NotifyPropertyChangedFor(nameof(IsPaintReady))]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    [NotifyPropertyChangedFor(nameof(CanFillSelection))]
     private MapLayerKind activeLayer = MapLayerKind.Tilemap;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsPaintReady))]
-    private MapEditTool activeTool = MapEditTool.Paint;
 
     public bool IsGridLayerActive => ActiveLayer != MapLayerKind.Sprites;
 
@@ -99,6 +106,7 @@ public partial class MapEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsPaintReady))]
+    [NotifyPropertyChangedFor(nameof(CanFillSelection))]
     private MetatileListItemViewModel? selectedPaletteMetatile;
 
     [ObservableProperty]
@@ -108,9 +116,25 @@ public partial class MapEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsPaintReady))]
     private TilePaletteItemViewModel? selectedPaletteSprite;
 
-    /// <summary>True once Paint is selected AND the relevant palette (metatile or sprite, depending on the active layer) has something picked — drives the instructional banner/canvas highlight, same purpose as the Metatile Editor's IsPaintModeActive.</summary>
-    public bool IsPaintReady => ActiveTool == MapEditTool.Paint &&
-        (IsGridLayerActive ? SelectedPaletteMetatile is not null : SelectedPaletteSprite is not null);
+    /// <summary>True once the relevant palette (metatile or sprite, depending on the active layer) has something picked — drives the instructional banner/canvas highlight, same purpose as the Metatile Editor's IsPaintModeActive. There's no separate Paint "tool" to also check — see the class doc comment.</summary>
+    public bool IsPaintReady => IsGridLayerActive ? SelectedPaletteMetatile is not null : SelectedPaletteSprite is not null;
+
+    /// <summary>Active only on a grid layer (Tilemap/8bpp Tile) — cell-unit rectangle from the Select tool's marquee drag. Null selection and an empty SelectedSprites collection are mutually exclusive with each other (only one is ever populated, matching whichever layer was active when the selection was made) but both are cleared together on layer/map switch since neither survives a context they no longer apply to.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    [NotifyPropertyChangedFor(nameof(CanFillSelection))]
+    private CellRect? gridSelection;
+
+    /// <summary>Active only on the Sprite layer — the sprites currently selected by the Select tool's marquee (bounding-box intersection), populated in place of GridSelection.</summary>
+    public ObservableCollection<SpritePlacement> SelectedSprites { get; } = [];
+
+    public bool HasSelection => IsGridLayerActive ? GridSelection is not null : SelectedSprites.Count > 0;
+
+    public bool CanFillSelection => IsGridLayerActive && GridSelection is not null && SelectedPaletteMetatile is not null;
+
+    /// <summary>One shared grid overlay toggle for the whole canvas (fine 8x8 tile grid + brighter metatile-size grid) — not per-layer, since all layers occupy the same cell grid.</summary>
+    [ObservableProperty]
+    private bool isGridVisible = true;
 
     [ObservableProperty]
     private string? statusText;
@@ -125,6 +149,7 @@ public partial class MapEditorViewModel : ObservableObject
         {
             row.PropertyChanged += (_, _) => OnLayerVisibilityChanged();
         }
+        SelectedSprites.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSelection));
         SelectedLayerRow = LayerOrder.First(r => r.Kind == MapLayerKind.Tilemap);
         RefreshMapList();
     }
@@ -165,6 +190,60 @@ public partial class MapEditorViewModel : ObservableObject
         StatusText = $"Deleted '{deletedName}'.";
         IsStatusError = false;
     }
+
+    /// <summary>Applies a Resize plan built by the separate MapResizeWindow/MapResizeViewModel dialog — called from the View right after the dialog confirms. One undo step, restoring the exact pre-resize Width/Height/both grid layers/SpriteLayer via an inverse MapResizePlan (rather than inventing a second undo mechanism — MapAsset.ApplyResizePlan is already the one sanctioned way to change these, so undo just calls it again with the old state).</summary>
+    public void ApplyResize(MapResizePlan plan) => ApplyResizePlanInternal(plan, $"Resized to {plan.NewWidth}x{plan.NewHeight}.");
+
+    /// <summary>Auto-crops the map to its tightest real-content bounding box (see MapResizeCalculator.PlanTrim) — a no-op with a status message when the map is fully empty, since PlanTrim has nothing to compute in that case.</summary>
+    [RelayCommand]
+    private void Trim()
+    {
+        if (SelectedMap is null) return;
+        var plan = MapResizeCalculator.PlanTrim(SelectedMap.Map);
+        if (plan is null)
+        {
+            StatusText = "Nothing to trim — the map is empty.";
+            IsStatusError = false;
+            return;
+        }
+        ApplyResizePlanInternal(plan, $"Trimmed to {plan.NewWidth}x{plan.NewHeight}.");
+    }
+
+    private void ApplyResizePlanInternal(MapResizePlan plan, string successMessage)
+    {
+        if (SelectedMap is null) return;
+        var map = SelectedMap.Map;
+        var mapItem = SelectedMap;
+
+        var previousPlan = new MapResizePlan(map.Width, map.Height,
+            (byte[])map.TilemapLayer.MetatileIndices.Clone(),
+            (byte[])map.TileLayer8Bpp.MetatileIndices.Clone(),
+            CloneSprites(map.SpriteLayer),
+            0, 0, 0);
+
+        map.ApplyResizePlan(plan);
+        ClearSelection(); // old selection coordinates are almost certainly meaningless against the new bounds
+
+        _undoStack.Push(() =>
+        {
+            map.ApplyResizePlan(previousPlan);
+            mapItem.NotifySizeChanged();
+            RenderPreview();
+            RefreshSelectedMapThumbnail();
+            MapResized?.Invoke();
+        });
+
+        HasChanges = true;
+        mapItem.NotifySizeChanged();
+        RenderPreview();
+        RefreshSelectedMapThumbnail();
+        StatusText = successMessage;
+        IsStatusError = false;
+        MapResized?.Invoke();
+    }
+
+    private static List<SpritePlacement> CloneSprites(IEnumerable<SpritePlacement> sprites) =>
+        sprites.Select(s => new SpritePlacement { Id = s.Id, SpriteAssetId = s.SpriteAssetId, X = s.X, Y = s.Y }).ToList();
 
     [RelayCommand]
     private void MoveLayerUp()
@@ -218,12 +297,24 @@ public partial class MapEditorViewModel : ObservableObject
         }
 
         _undoStack.Clear(); // a stroke's undo closures capture the previously-selected map's arrays — never valid across a map switch
+        ClearSelection();
         RefreshMetatilePalette();
         RefreshSpritePalette();
         RenderPreview();
     }
 
-    partial void OnActiveLayerChanged(MapLayerKind value) => RefreshMetatilePalette();
+    partial void OnActiveLayerChanged(MapLayerKind value)
+    {
+        ClearSelection(); // GridSelection/SelectedSprites are each meaningful for only one kind of layer — never valid across a layer switch
+        RefreshMetatilePalette();
+    }
+
+    /// <summary>Clears whichever half of the selection state is currently populated — safe to call unconditionally (e.g. on every layer/map switch, or when starting a new marquee drag).</summary>
+    public void ClearSelection()
+    {
+        GridSelection = null;
+        SelectedSprites.Clear();
+    }
 
     private void ApplyOrderToRows(IReadOnlyList<MapLayerKind> desiredFrontToBack)
     {
@@ -301,25 +392,40 @@ public partial class MapEditorViewModel : ObservableObject
         _strokeChangedAnything = false;
     }
 
-    /// <summary>Applies the current tool at one map-canvas pixel position. The View is responsible for NOT calling this repeatedly during a drag when ActiveLayer is Sprites and ActiveTool is Paint (sprite placement is click-only — see the design's reasoning against drag-stamping).</summary>
-    public void PaintOrEraseAt(int pixelX, int pixelY)
+    /// <summary>Sprite under a given map-canvas pixel position, or null — shared by the erase hit-test below and by the View's hover-highlight (drawn while the Erase tool or Ctrl is active over the Sprite layer).</summary>
+    public SpritePlacement? FindSpriteAt(int pixelX, int pixelY) =>
+        SelectedMap?.Map.SpriteLayer.FirstOrDefault(p =>
+            pixelX >= p.X && pixelX < p.X + SpritePixelSize && pixelY >= p.Y && pixelY < p.Y + SpritePixelSize);
+
+    /// <summary>
+    /// Paints (or, if <paramref name="forceErase"/> is set, erases) at one map-canvas pixel position, on
+    /// whichever layer is currently active. The View is responsible for NOT calling this repeatedly during
+    /// a plain drag when ActiveLayer is Sprites (sprite placement is click-only — see the design's
+    /// reasoning against drag-stamping) UNLESS <paramref name="forceErase"/> is set. <paramref
+    /// name="forceErase"/> (View passes true while Ctrl is held) erases on the active layer instead of
+    /// painting — the View's Ctrl+LMB shortcut, which works uniformly on every layer, not just Sprites.
+    /// <paramref name="snapToGrid"/> (View passes true while Shift is held) rounds a new sprite placement's
+    /// position down to the nearest 8px tile-grid line; it has no effect while erasing or on the grid layers.
+    /// </summary>
+    public void PaintOrEraseAt(int pixelX, int pixelY, bool snapToGrid = false, bool forceErase = false)
     {
         if (SelectedMap is null || pixelX < 0 || pixelY < 0) return;
         var map = SelectedMap.Map;
 
         if (ActiveLayer == MapLayerKind.Sprites)
         {
-            if (ActiveTool == MapEditTool.Paint)
+            if (!forceErase)
             {
                 if (SelectedPaletteSprite is null) return;
-                var placement = new SpritePlacement { SpriteAssetId = SelectedPaletteSprite.Asset.Id, X = pixelX, Y = pixelY };
+                var placeX = snapToGrid ? (pixelX / TileSnapSize) * TileSnapSize : pixelX;
+                var placeY = snapToGrid ? (pixelY / TileSnapSize) * TileSnapSize : pixelY;
+                var placement = new SpritePlacement { SpriteAssetId = SelectedPaletteSprite.Asset.Id, X = placeX, Y = placeY };
                 map.SpriteLayer.Add(placement);
                 _undoStack.Push(() => { map.SpriteLayer.Remove(placement); RenderPreview(); RefreshSelectedMapThumbnail(); });
             }
             else
             {
-                var hit = map.SpriteLayer.FirstOrDefault(p =>
-                    pixelX >= p.X && pixelX < p.X + SpritePixelSize && pixelY >= p.Y && pixelY < p.Y + SpritePixelSize);
+                var hit = FindSpriteAt(pixelX, pixelY);
                 if (hit is null) return;
                 map.SpriteLayer.Remove(hit);
                 _strokeRemovedSprites.Add(hit);
@@ -338,7 +444,7 @@ public partial class MapEditorViewModel : ObservableObject
         var index = row * map.Width + col;
 
         byte newValue;
-        if (ActiveTool == MapEditTool.Paint)
+        if (!forceErase)
         {
             if (SelectedPaletteMetatile is null) return;
             newValue = (byte)SelectedPaletteMetatile.Metatile.SortIndex;
@@ -348,12 +454,24 @@ public partial class MapEditorViewModel : ObservableObject
             newValue = MapGridLayer.EmptyCell;
         }
 
-        if (layer.MetatileIndices[index] == newValue) return; // skip cells that already hold this value
+        SetGridCell(layer, index, newValue);
+        RenderPreview();
+    }
 
+    /// <summary>
+    /// Writes one grid cell, capturing its pre-write value into <see cref="_strokeOriginalCellValues"/> the
+    /// FIRST time (only) that index is touched during the current stroke — shared by PaintOrEraseAt (one
+    /// cell per mouse event), FillSelection, DeleteSelection, and MoveGridSelection (a whole rectangle per
+    /// call) so all four compose into the exact same single-undo-entry EndStroke machinery. Does not call
+    /// RenderPreview() — batch callers (Fill/Delete/Move) render once after their whole loop instead of once
+    /// per cell.
+    /// </summary>
+    private void SetGridCell(MapGridLayer layer, int index, byte newValue)
+    {
+        if (layer.MetatileIndices[index] == newValue) return; // skip cells that already hold this value
         _strokeOriginalCellValues.TryAdd(index, layer.MetatileIndices[index]);
         layer.MetatileIndices[index] = newValue;
         _strokeChangedAnything = true;
-        RenderPreview();
     }
 
     public void EndStroke()
@@ -393,6 +511,191 @@ public partial class MapEditorViewModel : ObservableObject
         _strokeOriginalCellValues.Clear();
         _strokeRemovedSprites.Clear();
         HasChanges = true;
+        RefreshSelectedMapThumbnail();
+    }
+
+    /// <summary>Sets the grid-layer selection from two corner cells (any order) of the Select tool's marquee drag, clamped to the map's bounds — called by the View once per finished drag, on mouse-up.</summary>
+    public void SetGridSelection(int colA, int rowA, int colB, int rowB)
+    {
+        if (SelectedMap is null) return;
+        var map = SelectedMap.Map;
+        var rect = CellRect.Normalized(colA, rowA, colB, rowB);
+        var clamped = new CellRect(
+            Math.Clamp(rect.Col0, 0, map.Width - 1), Math.Clamp(rect.Row0, 0, map.Height - 1),
+            Math.Clamp(rect.Col1, 0, map.Width - 1), Math.Clamp(rect.Row1, 0, map.Height - 1));
+        GridSelection = clamped;
+    }
+
+    /// <summary>Selects every sprite whose 16x16 bounding box intersects the given pixel rectangle (any corner order) — the Sprite layer's equivalent of SetGridSelection, called by the View on mouse-up after a marquee drag.</summary>
+    public void SetSpriteSelectionFromRect(int xA, int yA, int xB, int yB)
+    {
+        if (SelectedMap is null) return;
+        var x0 = Math.Min(xA, xB); var x1 = Math.Max(xA, xB);
+        var y0 = Math.Min(yA, yB); var y1 = Math.Max(yA, yB);
+
+        SelectedSprites.Clear();
+        foreach (var sprite in SelectedMap.Map.SpriteLayer)
+        {
+            var intersects = sprite.X < x1 && sprite.X + SpritePixelSize > x0 && sprite.Y < y1 && sprite.Y + SpritePixelSize > y0;
+            if (intersects) SelectedSprites.Add(sprite);
+        }
+    }
+
+    public bool IsCellInGridSelection(int col, int row) => GridSelection is { } rect && rect.Contains(col, row);
+
+    public bool IsPixelInSpriteSelection(int pixelX, int pixelY) =>
+        SelectedSprites.Any(s => pixelX >= s.X && pixelX < s.X + SpritePixelSize && pixelY >= s.Y && pixelY < s.Y + SpritePixelSize);
+
+    /// <summary>Stamps the selected palette metatile across every cell of the current grid selection — one undo step, reusing the same BeginStroke/SetGridCell/EndStroke machinery a paint stroke uses.</summary>
+    [RelayCommand]
+    private void FillSelection()
+    {
+        if (!CanFillSelection || SelectedMap is null || GridSelection is not { } rect) return;
+        var map = SelectedMap.Map;
+        var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
+        var newValue = (byte)SelectedPaletteMetatile!.Metatile.SortIndex;
+
+        BeginStroke();
+        for (var row = rect.Row0; row <= rect.Row1; row++)
+        {
+            for (var col = rect.Col0; col <= rect.Col1; col++)
+            {
+                SetGridCell(layer, row * map.Width + col, newValue);
+            }
+        }
+        RenderPreview();
+        EndStroke();
+    }
+
+    /// <summary>Clears the current selection's contents: grid cells become Empty (one undo step, same machinery as FillSelection); selected sprites are removed (one undo step, same shape as the Erase tool's stroke-batched sprite removal). Does not affect the selection region/list itself.</summary>
+    [RelayCommand]
+    private void DeleteSelection()
+    {
+        if (SelectedMap is null) return;
+        var map = SelectedMap.Map;
+
+        if (ActiveLayer == MapLayerKind.Sprites)
+        {
+            if (SelectedSprites.Count == 0) return;
+            var removed = SelectedSprites.ToList();
+            foreach (var sprite in removed) map.SpriteLayer.Remove(sprite);
+            _undoStack.Push(() => { map.SpriteLayer.AddRange(removed); RenderPreview(); RefreshSelectedMapThumbnail(); });
+            SelectedSprites.Clear();
+            HasChanges = true;
+            RenderPreview();
+            RefreshSelectedMapThumbnail();
+        }
+        else
+        {
+            if (GridSelection is not { } rect) return;
+            var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
+            BeginStroke();
+            for (var row = rect.Row0; row <= rect.Row1; row++)
+            {
+                for (var col = rect.Col0; col <= rect.Col1; col++)
+                {
+                    SetGridCell(layer, row * map.Width + col, MapGridLayer.EmptyCell);
+                }
+            }
+            RenderPreview();
+            EndStroke();
+        }
+    }
+
+    /// <summary>
+    /// Moves (or, if <paramref name="isCopy"/>, copies) the current grid selection by a cell delta. Correct
+    /// under source/destination overlap by construction: the ENTIRE pre-move rectangle is snapshotted into
+    /// <paramref name="buffer"/>-equivalent local values FIRST, the source is then cleared to Empty (skipped
+    /// entirely for a copy), and finally the destination is written from the snapshot — so an overlap cell
+    /// gets cleared-then-immediately-rewritten-correctly rather than reading an already-mutated neighbor.
+    /// Destination cells that land outside the map are dropped, not clamped (matches this project's existing
+    /// "drop, don't clamp" precedent for sprites falling off a shrunk map). One undo step either way, via the
+    /// same BeginStroke/SetGridCell/EndStroke machinery as FillSelection/DeleteSelection — EndStroke's
+    /// first-seen-value-wins snapshot naturally captures the ORIGINAL value of every touched cell, source and
+    /// destination alike, which is exactly what makes the overlap case undo correctly in one step.
+    /// </summary>
+    public void MoveGridSelection(int deltaCols, int deltaRows, bool isCopy)
+    {
+        if (SelectedMap is null || GridSelection is not { } rect) return;
+        if (deltaCols == 0 && deltaRows == 0) return;
+        var map = SelectedMap.Map;
+        var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
+
+        var buffer = new byte[rect.Height, rect.Width];
+        for (var row = rect.Row0; row <= rect.Row1; row++)
+        {
+            for (var col = rect.Col0; col <= rect.Col1; col++)
+            {
+                buffer[row - rect.Row0, col - rect.Col0] = layer.MetatileIndices[row * map.Width + col];
+            }
+        }
+
+        BeginStroke();
+        if (!isCopy)
+        {
+            for (var row = rect.Row0; row <= rect.Row1; row++)
+            {
+                for (var col = rect.Col0; col <= rect.Col1; col++)
+                {
+                    SetGridCell(layer, row * map.Width + col, MapGridLayer.EmptyCell);
+                }
+            }
+        }
+        for (var row = rect.Row0; row <= rect.Row1; row++)
+        {
+            for (var col = rect.Col0; col <= rect.Col1; col++)
+            {
+                var destCol = col + deltaCols;
+                var destRow = row + deltaRows;
+                if (destCol < 0 || destCol >= map.Width || destRow < 0 || destRow >= map.Height) continue; // dropped, not clamped
+                SetGridCell(layer, destRow * map.Width + destCol, buffer[row - rect.Row0, col - rect.Col0]);
+            }
+        }
+        RenderPreview();
+        EndStroke();
+
+        var destRect = CellRect.Normalized(rect.Col0 + deltaCols, rect.Row0 + deltaRows, rect.Col1 + deltaCols, rect.Row1 + deltaRows);
+        SetGridSelection(destRect.Col0, destRect.Row0, destRect.Col1, destRect.Row1);
+    }
+
+    /// <summary>Moves (or, if <paramref name="isCopy"/>, copies) every selected sprite by a pixel delta. Copy creates new SpritePlacement instances (selection follows the new copies, originals stay put); Move mutates the existing placements' X/Y in place, with one combined undo step restoring every moved sprite's original position.</summary>
+    public void MoveSpriteSelection(int deltaX, int deltaY, bool isCopy)
+    {
+        if (SelectedMap is null || SelectedSprites.Count == 0) return;
+        if (deltaX == 0 && deltaY == 0) return;
+        var map = SelectedMap.Map;
+
+        if (isCopy)
+        {
+            var copies = SelectedSprites.Select(s => new SpritePlacement { SpriteAssetId = s.SpriteAssetId, X = s.X + deltaX, Y = s.Y + deltaY }).ToList();
+            map.SpriteLayer.AddRange(copies);
+            _undoStack.Push(() =>
+            {
+                foreach (var copy in copies) map.SpriteLayer.Remove(copy);
+                RenderPreview();
+                RefreshSelectedMapThumbnail();
+            });
+            SelectedSprites.Clear();
+            foreach (var copy in copies) SelectedSprites.Add(copy);
+        }
+        else
+        {
+            var originalPositions = SelectedSprites.Select(s => (Sprite: s, s.X, s.Y)).ToList();
+            foreach (var sprite in SelectedSprites)
+            {
+                sprite.X += deltaX;
+                sprite.Y += deltaY;
+            }
+            _undoStack.Push(() =>
+            {
+                foreach (var (sprite, originalX, originalY) in originalPositions) { sprite.X = originalX; sprite.Y = originalY; }
+                RenderPreview();
+                RefreshSelectedMapThumbnail();
+            });
+        }
+
+        HasChanges = true;
+        RenderPreview();
         RefreshSelectedMapThumbnail();
     }
 

@@ -28,4 +28,7 @@ public partial class MapListItemViewModel : ObservableObject
     }
 
     public void RefreshPreview(ProjectState project) => Preview = TileGridBitmapRenderer.RenderMap(Map, project);
+
+    /// <summary>SizeLabel reads Map.Width/Height directly (not an ObservableProperty of its own), so nothing re-renders it automatically when Resize/Trim change those — call this right after, alongside RefreshPreview.</summary>
+    public void NotifySizeChanged() => OnPropertyChanged(nameof(SizeLabel));
 }

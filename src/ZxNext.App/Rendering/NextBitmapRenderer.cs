@@ -13,9 +13,18 @@ namespace ZxNext.App.Rendering;
 /// </summary>
 public static class NextBitmapRenderer
 {
-    public static WriteableBitmap Render(GraphicsAsset asset, ProjectState project)
+    public static WriteableBitmap Render(GraphicsAsset asset, ProjectState project) => Render(asset, project, paletteSlotOverride: null);
+
+    /// <summary>
+    /// <paramref name="paletteSlotOverride"/> renders the asset's own pixel data against a DIFFERENT
+    /// bank slot than the one it was actually quantized against (a deliberate retro "same tile shape,
+    /// different palette" recolor trick — see Metatile cell palette override in the Metatile Editor).
+    /// Only meaningful for bank categories (Tile4Bpp/Sprite4Bpp); ignored otherwise, since flat-palette
+    /// categories have no per-asset slot to swap.
+    /// </summary>
+    public static WriteableBitmap Render(GraphicsAsset asset, ProjectState project, int? paletteSlotOverride)
     {
-        var palette = ResolvePalette(asset, project);
+        var palette = ResolvePalette(asset, project, paletteSlotOverride);
         var width = asset.Width;
         var height = asset.Height;
         var bgra = new byte[width * height * 4];
@@ -57,8 +66,15 @@ public static class NextBitmapRenderer
         return bitmap;
     }
 
-    private static NextPalette ResolvePalette(GraphicsAsset asset, ProjectState project) =>
-        asset.Category.UsesPaletteBank()
-            ? project.BankFor(asset.Category).Slots[asset.PaletteSlotIndex]
-            : project.GetOrCreateFolderPalette(asset.Category, asset.FolderPath);
+    private static NextPalette ResolvePalette(GraphicsAsset asset, ProjectState project, int? paletteSlotOverride)
+    {
+        if (!asset.Category.UsesPaletteBank())
+        {
+            return project.GetOrCreateFolderPalette(asset.Category, asset.FolderPath);
+        }
+
+        var bank = project.BankFor(asset.Category);
+        var slotIndex = paletteSlotOverride is { } o && o >= 0 && o < bank.Slots.Count ? o : asset.PaletteSlotIndex;
+        return bank.Slots[slotIndex];
+    }
 }

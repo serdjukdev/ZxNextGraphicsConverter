@@ -329,6 +329,22 @@ public partial class MainWindow : Window
         }
     }
 
+    private void MetatileEditor_OnClick(object sender, RoutedEventArgs e)
+    {
+        var vm = new MetatileEditorViewModel(_viewModel.Project);
+        var dialog = new MetatileEditorWindow { DataContext = vm, Owner = this };
+        dialog.ShowDialog();
+        if (vm.HasChanges) _viewModel.HasUnsavedChanges = true;
+    }
+
+    private void MapEditor_OnClick(object sender, RoutedEventArgs e)
+    {
+        var vm = new MapEditorViewModel(_viewModel.Project);
+        var dialog = new MapEditorWindow { DataContext = vm, Owner = this };
+        dialog.ShowDialog();
+        if (vm.HasChanges) _viewModel.HasUnsavedChanges = true;
+    }
+
     private void MainWindow_OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         if (!_viewModel.ConfirmDiscardUnsavedChanges())

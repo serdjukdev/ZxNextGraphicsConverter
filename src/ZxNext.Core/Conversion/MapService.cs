@@ -1,0 +1,72 @@
+using ZxNext.Core.Export;
+using ZxNext.Core.Model;
+using ZxNext.Core.Project;
+
+namespace ZxNext.Core.Conversion;
+
+public record MapCreateResult(bool Success, MapAsset? Map, string? Error);
+
+/// <summary>Creates <see cref="MapAsset"/>s in a <see cref="ProjectState"/>. Mirrors <see cref="MetatileService"/>/<see cref="AssetImporter"/>'s "single entry point, all-or-nothing result" shape.</summary>
+public static class MapService
+{
+    public static MapCreateResult Create(ProjectState project, string name, int width, int height, int metatileGridSize)
+    {
+        if (metatileGridSize is not (2 or 3 or 4))
+        {
+            return new MapCreateResult(false, null, $"MetatileGridSize must be 2, 3, or 4 (got {metatileGridSize}).");
+        }
+
+        if (width <= 0 || height <= 0)
+        {
+            return new MapCreateResult(false, null, "Width and Height must both be positive.");
+        }
+
+        if ((long)width * height > MapExporter.MaxGridCells)
+        {
+            return new MapCreateResult(false, null,
+                $"{width}x{height} = {width * height} cells, over the {MapExporter.MaxGridCells}-cell-per-layer limit.");
+        }
+
+        var cellCount = width * height;
+        var map = new MapAsset(width, height)
+        {
+            Name = EnsureUniqueName(project, name),
+            SortIndex = NextSortIndex(project),
+            MetatileGridSize = metatileGridSize,
+            TilemapLayer = new MapGridLayer { MetatileIndices = FullOfEmptyCells(cellCount) },
+            TileLayer8Bpp = new MapGridLayer { MetatileIndices = FullOfEmptyCells(cellCount) }
+        };
+
+        project.Maps.Add(map);
+        return new MapCreateResult(true, map, null);
+    }
+
+    private static byte[] FullOfEmptyCells(int length)
+    {
+        var indices = new byte[length];
+        Array.Fill(indices, MapGridLayer.EmptyCell);
+        return indices;
+    }
+
+    /// <summary>Global counter across all maps (unlike Metatile.SortIndex, a map's SortIndex is never itself an exported byte value another entity indexes by, so there's no per-Kind subtlety here — same simple shape as GraphicsAsset.SortIndex).</summary>
+    private static int NextSortIndex(ProjectState project) =>
+        project.Maps.Count == 0 ? 0 : project.Maps.Max(m => m.SortIndex) + 1;
+
+    /// <summary>A map's name doubles as its exported ASM label prefix (see MapExporter's "{map.Name}_tilemap" etc. row keys), so it must be unique among maps — same auto-suffix approach as AssetImporter.EnsureUniqueName / MetatileService.EnsureUniqueName.</summary>
+    private static string EnsureUniqueName(ProjectState project, string desiredName)
+    {
+        bool IsTaken(string candidate) => project.Maps.Any(m => string.Equals(m.Name, candidate, StringComparison.OrdinalIgnoreCase));
+
+        if (!IsTaken(desiredName)) return desiredName;
+
+        var suffix = 2;
+        string candidateName;
+        do
+        {
+            candidateName = $"{desiredName}_{suffix}";
+            suffix++;
+        } while (IsTaken(candidateName));
+
+        return candidateName;
+    }
+}

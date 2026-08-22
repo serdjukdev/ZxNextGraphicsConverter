@@ -9,7 +9,7 @@
         Title="Export for Next" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
     <StackPanel Margin="14" Width="620">
-        <TextBlock Text="Each folder below is packed into its own 8KB-chunked .bin file(s) plus a matching .asm address map. Every folder also gets its own .pal palette file (always 512 bytes, regardless of category)."
+        <TextBlock Text="Each row below is packed into its own 8KB-chunked .bin file(s) plus a matching .asm address map. Rows for a real tile/sprite/Layer2 folder also get their own .pal palette file (always 512 bytes) — metatile and map rows carry no colour data of their own, so they don't."
                    TextWrapping="Wrap" Margin="0,0,0,10" />
 
         <!-- Clicking anywhere in a row (except the Chunk size dropdown, which needs its own clicks

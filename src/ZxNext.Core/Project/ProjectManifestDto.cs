@@ -16,6 +16,8 @@ public class ProjectManifestDto
     public Dictionary<string, FlatPaletteDto> Layer2_320x256FolderPalettes { get; set; } = [];
     public Dictionary<string, FlatPaletteDto> Layer2_640x256x4FolderPalettes { get; set; } = [];
     public List<AssetDto> Assets { get; set; } = [];
+    public List<MetatileDto> Metatiles { get; set; } = [];
+    public List<MapDto> Maps { get; set; } = [];
 }
 
 public class SourceImageDto
@@ -64,4 +66,56 @@ public class AssetDto
     public int SourceOffsetY { get; set; }
     public int SourceCropWidth { get; set; }
     public int SourceCropHeight { get; set; }
+}
+
+public class MetatileCellDto
+{
+    public Guid TileAssetId { get; set; }
+    public bool MirrorX { get; set; }
+    public bool MirrorY { get; set; }
+    public bool Rotate { get; set; }
+    public int? PaletteSlotOverride { get; set; }
+}
+
+/// <summary>Small, always inline JSON — a metatile is at most 4x4=16 cells, unlike a map's grid layers.</summary>
+public class MetatileDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public MetatileKind Kind { get; set; }
+    public int GridSize { get; set; }
+    public List<MetatileCellDto> Cells { get; set; } = [];
+    public int SortIndex { get; set; }
+}
+
+public class SpritePlacementDto
+{
+    public Guid Id { get; set; }
+    public Guid SpriteAssetId { get; set; }
+    public int X { get; set; }
+    public int Y { get; set; }
+}
+
+/// <summary>
+/// The two grid layers' byte arrays live in sidecar <c>maps/&lt;id&gt;_tilemap.bin</c> /
+/// <c>maps/&lt;id&gt;_8bpp.bin</c> files (same "large binary payload -&gt; sidecar" convention as
+/// <see cref="AssetDto.PackedDataFile"/>), never inlined here. The sprite list is small and structured,
+/// so it stays inline JSON like <see cref="PaletteBankDto.Slots"/>.
+/// </summary>
+public class MapDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public int SortIndex { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public int MetatileGridSize { get; set; }
+    public string TilemapDataFile { get; set; } = "";
+    public string TileLayer8BppDataFile { get; set; } = "";
+    public List<SpritePlacementDto> SpriteLayer { get; set; } = [];
+    public bool TilemapLayerVisible { get; set; } = true;
+    public bool TileLayer8BppVisible { get; set; } = true;
+    public bool SpriteLayerVisible { get; set; } = true;
+    /// <summary>Front-to-back (index 0 = frontmost). Defaults to the same order MapAsset itself defaults to, so a project.json saved before this field existed loads with a sensible order rather than an empty/broken one.</summary>
+    public List<MapLayerKind> LayerOrder { get; set; } = [MapLayerKind.Sprites, MapLayerKind.TileLayer8Bpp, MapLayerKind.Tilemap];
 }

@@ -25,6 +25,24 @@ public class ProjectState
 
     public List<GraphicsAsset> Assets { get; } = [];
 
+    public List<Metatile> Metatiles { get; } = [];
+    public List<MapAsset> Maps { get; } = [];
+
+    /// <summary>
+    /// Next value in the PER-KIND creation-order sequence for metatiles — deliberately NOT a single
+    /// global counter across every <see cref="MetatileKind"/> like <see cref="GraphicsAsset.SortIndex"/>
+    /// is across every <see cref="AssetCategory"/> (see <see cref="Conversion.AssetImporter"/>'s
+    /// NextSortIndex). A <see cref="Metatile.SortIndex"/> is also the literal exported map-cell byte
+    /// value, which must be densely 0-254 WITHIN ITS OWN KIND — FourBpp and EightBpp metatiles index two
+    /// independent map layers, so they may legitimately (and will routinely) share the same SortIndex
+    /// value, which a single global counter could never produce.
+    /// </summary>
+    public int NextMetatileSortIndex(MetatileKind kind)
+    {
+        var existing = Metatiles.Where(m => m.Kind == kind).Select(m => m.SortIndex).ToList();
+        return existing.Count == 0 ? 0 : existing.Max() + 1;
+    }
+
     public PaletteBank BankFor(AssetCategory category) => category switch
     {
         AssetCategory.Sprite4Bpp => Sprite4BppBank,

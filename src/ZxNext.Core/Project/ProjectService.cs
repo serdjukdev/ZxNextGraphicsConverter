@@ -93,6 +93,64 @@ public static class ProjectService
                 });
             }
 
+            foreach (var metatile in project.Metatiles)
+            {
+                dto.Metatiles.Add(new MetatileDto
+                {
+                    Id = metatile.Id,
+                    Name = metatile.Name,
+                    Kind = metatile.Kind,
+                    GridSize = metatile.GridSize,
+                    Cells = metatile.Cells.Select(c => new MetatileCellDto
+                    {
+                        TileAssetId = c.TileAssetId,
+                        MirrorX = c.MirrorX,
+                        MirrorY = c.MirrorY,
+                        Rotate = c.Rotate,
+                        PaletteSlotOverride = c.PaletteSlotOverride
+                    }).ToList(),
+                    SortIndex = metatile.SortIndex
+                });
+            }
+
+            foreach (var map in project.Maps)
+            {
+                var tilemapEntryName = $"maps/{map.Id}_tilemap.bin";
+                using (var entryStream = zip.CreateEntry(tilemapEntryName, CompressionLevel.Fastest).Open())
+                {
+                    entryStream.Write(map.TilemapLayer.MetatileIndices);
+                }
+
+                var tileLayer8BppEntryName = $"maps/{map.Id}_8bpp.bin";
+                using (var entryStream = zip.CreateEntry(tileLayer8BppEntryName, CompressionLevel.Fastest).Open())
+                {
+                    entryStream.Write(map.TileLayer8Bpp.MetatileIndices);
+                }
+
+                dto.Maps.Add(new MapDto
+                {
+                    Id = map.Id,
+                    Name = map.Name,
+                    SortIndex = map.SortIndex,
+                    Width = map.Width,
+                    Height = map.Height,
+                    MetatileGridSize = map.MetatileGridSize,
+                    TilemapDataFile = tilemapEntryName,
+                    TileLayer8BppDataFile = tileLayer8BppEntryName,
+                    SpriteLayer = map.SpriteLayer.Select(s => new SpritePlacementDto
+                    {
+                        Id = s.Id,
+                        SpriteAssetId = s.SpriteAssetId,
+                        X = s.X,
+                        Y = s.Y
+                    }).ToList(),
+                    TilemapLayerVisible = map.TilemapLayerVisible,
+                    TileLayer8BppVisible = map.TileLayer8BppVisible,
+                    SpriteLayerVisible = map.SpriteLayerVisible,
+                    LayerOrder = map.LayerOrder.ToList()
+                });
+            }
+
             var jsonEntry = zip.CreateEntry("project.json", CompressionLevel.Fastest);
             using var jsonStream = jsonEntry.Open();
             using var writer = new StreamWriter(jsonStream);
@@ -172,6 +230,59 @@ public static class ProjectService
                 SourceOffsetY = a.SourceOffsetY,
                 SourceCropWidth = a.SourceCropWidth > 0 ? a.SourceCropWidth : a.Width, // projects saved before this field existed default to "no padding" (crop == full size)
                 SourceCropHeight = a.SourceCropHeight > 0 ? a.SourceCropHeight : a.Height
+            });
+        }
+
+        foreach (var m in dto.Metatiles)
+        {
+            project.Metatiles.Add(new Metatile
+            {
+                Id = m.Id,
+                Name = m.Name,
+                Kind = m.Kind,
+                GridSize = m.GridSize,
+                Cells = m.Cells.Select(c => new MetatileCell
+                {
+                    TileAssetId = c.TileAssetId,
+                    MirrorX = c.MirrorX,
+                    MirrorY = c.MirrorY,
+                    Rotate = c.Rotate,
+                    PaletteSlotOverride = c.PaletteSlotOverride
+                }).ToList(),
+                SortIndex = m.SortIndex
+            });
+        }
+
+        foreach (var mapDto in dto.Maps)
+        {
+            byte[] ReadMapEntry(string entryName)
+            {
+                var entry = zip.GetEntry(entryName) ?? throw new InvalidDataException($"Missing archive entry: {entryName}");
+                using var entryStream = entry.Open();
+                using var memory = new MemoryStream();
+                entryStream.CopyTo(memory);
+                return memory.ToArray();
+            }
+
+            project.Maps.Add(new MapAsset(mapDto.Width, mapDto.Height)
+            {
+                Id = mapDto.Id,
+                Name = mapDto.Name,
+                SortIndex = mapDto.SortIndex,
+                MetatileGridSize = mapDto.MetatileGridSize,
+                TilemapLayer = new MapGridLayer { MetatileIndices = ReadMapEntry(mapDto.TilemapDataFile) },
+                TileLayer8Bpp = new MapGridLayer { MetatileIndices = ReadMapEntry(mapDto.TileLayer8BppDataFile) },
+                SpriteLayer = mapDto.SpriteLayer.Select(s => new SpritePlacement
+                {
+                    Id = s.Id,
+                    SpriteAssetId = s.SpriteAssetId,
+                    X = s.X,
+                    Y = s.Y
+                }).ToList(),
+                TilemapLayerVisible = mapDto.TilemapLayerVisible,
+                TileLayer8BppVisible = mapDto.TileLayer8BppVisible,
+                SpriteLayerVisible = mapDto.SpriteLayerVisible,
+                LayerOrder = mapDto.LayerOrder.Count == 3 ? mapDto.LayerOrder : [MapLayerKind.Sprites, MapLayerKind.TileLayer8Bpp, MapLayerKind.Tilemap]
             });
         }
 

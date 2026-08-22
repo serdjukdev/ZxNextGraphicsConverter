@@ -27,6 +27,10 @@ public record ImportOutcome(bool Success, ImportFailureReason Reason, AssetCateg
 public partial class MainViewModel : ObservableObject
 {
     private ProjectState _project = new();
+
+    /// <summary>Read-only access to the live project state for windows (Metatile/Map Editor) that need broad read/write access beyond what a narrow callback could reasonably capture — mirrors how Core services (MetatileService, etc.) already take ProjectState directly rather than individual fields.</summary>
+    public ProjectState Project => _project;
+
     private readonly IImageDecoder _decoder;
     private GraphicsAsset? _selectedAsset;
     private readonly Stack<Action> _undoStack = new();
@@ -703,6 +707,19 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        var blockingReasons = targetIds
+            .Select(id => _project.Assets.FirstOrDefault(a => a.Id == id))
+            .Where(asset => asset is not null)
+            .Select(asset => ReferenceIntegrityService.CanDeleteAsset(_project, asset!))
+            .Where(check => !check.CanDelete)
+            .Select(check => check.BlockingReason!)
+            .ToList();
+        if (blockingReasons.Count > 0)
+        {
+            MessageBox.Show(string.Join("\n", blockingReasons), "Cannot delete", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         var confirmMessage = targetIds.Count == 1
             ? "Delete this tile/sprite?"
             : $"Delete {targetIds.Count} selected tiles/sprites?";
@@ -769,6 +786,17 @@ public partial class MainViewModel : ObservableObject
 
         var affected = _project.Assets.Where(a => a.FolderPath == folderPath).ToList();
 
+        var blockingReasons = affected
+            .Select(asset => ReferenceIntegrityService.CanDeleteAsset(_project, asset))
+            .Where(check => !check.CanDelete)
+            .Select(check => check.BlockingReason!)
+            .ToList();
+        if (blockingReasons.Count > 0)
+        {
+            MessageBox.Show(string.Join("\n", blockingReasons), "Cannot delete folder", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         var message = affected.Count == 0
             ? $"Delete empty folder \"{folderNode.Name}\"?"
             : $"Delete folder \"{folderNode.Name}\" and its {affected.Count} tile(s)/sprite(s)? This cannot be undone.";
@@ -797,6 +825,17 @@ public partial class MainViewModel : ObservableObject
         if (source is null) return;
 
         var affected = _project.Assets.Where(a => a.SourceImageId == sourceImageId).ToList();
+
+        var blockingReasons = affected
+            .Select(asset => ReferenceIntegrityService.CanDeleteAsset(_project, asset))
+            .Where(check => !check.CanDelete)
+            .Select(check => check.BlockingReason!)
+            .ToList();
+        if (blockingReasons.Count > 0)
+        {
+            MessageBox.Show(string.Join("\n", blockingReasons), "Cannot delete source image", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
 
         var message = affected.Count == 0
             ? $"Delete source image \"{source.FileName}\"?"

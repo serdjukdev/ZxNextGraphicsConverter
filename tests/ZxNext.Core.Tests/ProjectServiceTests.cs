@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using ZxNext.Core.Conversion;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
@@ -102,5 +103,164 @@ public class ProjectServiceTests : IDisposable
         {
             Assert.Equal(originalPalette.Slots[i], loadedPalette.Slots[i]);
         }
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsMetatilesAndMaps()
+    {
+        var project = new ProjectState();
+
+        var tile = new MetatileCell { TileAssetId = Guid.NewGuid(), MirrorX = true, Rotate = true, PaletteSlotOverride = 7 };
+        var metatileResult = MetatileService.Create(project, "grass", MetatileKind.FourBpp, 2,
+            [tile, new MetatileCell { TileAssetId = Guid.NewGuid() }, new MetatileCell { TileAssetId = Guid.NewGuid() }, new MetatileCell { TileAssetId = Guid.NewGuid() }]);
+        Assert.True(metatileResult.Success, metatileResult.Error);
+
+        var map = new MapAsset(4, 3)
+        {
+            Name = "level1",
+            MetatileGridSize = 2,
+            TilemapLayer = new MapGridLayer { MetatileIndices = [0, 0xFF, 0xFF, 0, 0xFF, 0, 0, 0xFF, 0, 0xFF, 0xFF, 0] },
+            TileLayer8Bpp = new MapGridLayer { MetatileIndices = new byte[12] },
+            SpriteLayer = [new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 32, Y = 16 }],
+            TilemapLayerVisible = true,
+            TileLayer8BppVisible = false,
+            LayerOrder = [MapLayerKind.Tilemap, MapLayerKind.Sprites, MapLayerKind.TileLayer8Bpp] // deliberately non-default order
+        };
+        project.Maps.Add(map);
+
+        ProjectService.Save(project, _tempProjectFile);
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        var loadedMetatile = Assert.Single(loaded.Metatiles);
+        Assert.Equal("grass", loadedMetatile.Name);
+        Assert.Equal(MetatileKind.FourBpp, loadedMetatile.Kind);
+        Assert.Equal(0, loadedMetatile.SortIndex);
+        Assert.True(loadedMetatile.Cells[0].MirrorX);
+        Assert.True(loadedMetatile.Cells[0].Rotate);
+        Assert.False(loadedMetatile.Cells[0].MirrorY);
+        Assert.Equal(tile.TileAssetId, loadedMetatile.Cells[0].TileAssetId);
+        Assert.Equal(7, loadedMetatile.Cells[0].PaletteSlotOverride);
+        Assert.Null(loadedMetatile.Cells[1].PaletteSlotOverride); // the other 3 cells never set an override -> stays null (native)
+
+        var loadedMap = Assert.Single(loaded.Maps);
+        Assert.Equal("level1", loadedMap.Name);
+        Assert.Equal(4, loadedMap.Width);
+        Assert.Equal(3, loadedMap.Height);
+        Assert.Equal(2, loadedMap.MetatileGridSize);
+        Assert.Equal(map.TilemapLayer.MetatileIndices, loadedMap.TilemapLayer.MetatileIndices);
+        Assert.Equal(map.TileLayer8Bpp.MetatileIndices, loadedMap.TileLayer8Bpp.MetatileIndices);
+        Assert.Equal([MapLayerKind.Tilemap, MapLayerKind.Sprites, MapLayerKind.TileLayer8Bpp], loadedMap.LayerOrder);
+        Assert.True(loadedMap.TilemapLayerVisible);
+        Assert.False(loadedMap.TileLayer8BppVisible);
+        var loadedSprite = Assert.Single(loadedMap.SpriteLayer);
+        Assert.Equal(map.SpriteLayer[0].SpriteAssetId, loadedSprite.SpriteAssetId);
+        Assert.Equal(32, loadedSprite.X);
+        Assert.Equal(16, loadedSprite.Y);
+    }
+
+    /// <summary>
+    /// A project.json saved before Metatiles/Maps existed simply has no such keys at all (this is a
+    /// brand-new pair of lists, not a new field bolted onto an existing entity — unlike
+    /// GraphicsAsset.SortIndex, there's no per-item nullable-fallback needed, just "missing key ->
+    /// the property's own [] default survives deserialization"). Hand-builds a minimal pre-feature
+    /// .zxngc file rather than relying on a fixture file on disk, so this test doesn't depend on a
+    /// committed binary sample staying in sync with the DTO shape.
+    /// </summary>
+    [Fact]
+    public void Load_PreMapEditorProjectFile_HasNoMetatilesOrMapsKeys_LoadsWithEmptyLists()
+    {
+        const string oldFormatJson = """
+        {
+          "FormatVersion": 1,
+          "SourceImages": [],
+          "Sprite4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Tile4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Sprite8BppFolderPalettes": {},
+          "Tile8BppFolderPalettes": {},
+          "Layer2_256x192FolderPalettes": {},
+          "Layer2_320x256FolderPalettes": {},
+          "Layer2_640x256x4FolderPalettes": {},
+          "Assets": []
+        }
+        """;
+
+        using (var stream = new FileStream(_tempProjectFile, FileMode.Create, FileAccess.Write))
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            using var entryStream = zip.CreateEntry("project.json", CompressionLevel.Fastest).Open();
+            using var writer = new StreamWriter(entryStream);
+            writer.Write(oldFormatJson);
+        }
+
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        Assert.Empty(loaded.Metatiles);
+        Assert.Empty(loaded.Maps);
+    }
+
+    /// <summary>
+    /// LayerOrder was added to MapDto AFTER Maps themselves already existed and were saveable (Stage 8
+    /// round 1/2 shipped without it) — this is the "new field bolted onto an already-real entity" case
+    /// (unlike the Metatiles/Maps lists above), so it's worth its own explicit test rather than assuming
+    /// the DTO's own default initializer is enough. Grid layer sidecar files still need to exist for
+    /// Load to succeed at all, even though this test only cares about LayerOrder.
+    /// </summary>
+    [Fact]
+    public void Load_MapEntryWithNoLayerOrderKey_FallsBackToDefaultOrder_NotEmpty()
+    {
+        const string oldMapJson = """
+        {
+          "FormatVersion": 1,
+          "SourceImages": [],
+          "Sprite4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Tile4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Sprite8BppFolderPalettes": {},
+          "Tile8BppFolderPalettes": {},
+          "Layer2_256x192FolderPalettes": {},
+          "Layer2_320x256FolderPalettes": {},
+          "Layer2_640x256x4FolderPalettes": {},
+          "Assets": [],
+          "Metatiles": [],
+          "Maps": [
+            {
+              "Id": "11111111-1111-1111-1111-111111111111",
+              "Name": "old_map",
+              "SortIndex": 0,
+              "Width": 2,
+              "Height": 2,
+              "MetatileGridSize": 2,
+              "TilemapDataFile": "maps/old_tilemap.bin",
+              "TileLayer8BppDataFile": "maps/old_8bpp.bin",
+              "SpriteLayer": [],
+              "TilemapLayerVisible": true,
+              "TileLayer8BppVisible": true,
+              "SpriteLayerVisible": true
+            }
+          ]
+        }
+        """;
+
+        using (var stream = new FileStream(_tempProjectFile, FileMode.Create, FileAccess.Write))
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            using (var entryStream = zip.CreateEntry("project.json", CompressionLevel.Fastest).Open())
+            using (var writer = new StreamWriter(entryStream))
+            {
+                writer.Write(oldMapJson);
+            }
+            using (var entryStream = zip.CreateEntry("maps/old_tilemap.bin", CompressionLevel.Fastest).Open())
+            {
+                entryStream.Write(new byte[4]);
+            }
+            using (var entryStream = zip.CreateEntry("maps/old_8bpp.bin", CompressionLevel.Fastest).Open())
+            {
+                entryStream.Write(new byte[4]);
+            }
+        }
+
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        var loadedMap = Assert.Single(loaded.Maps);
+        Assert.Equal([MapLayerKind.Sprites, MapLayerKind.TileLayer8Bpp, MapLayerKind.Tilemap], loadedMap.LayerOrder);
     }
 }

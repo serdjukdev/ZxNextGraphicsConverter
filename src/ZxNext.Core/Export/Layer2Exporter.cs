@@ -26,7 +26,7 @@ public static class Layer2Exporter
     public static FolderExportResult Export(GraphicsAsset asset, NextPalette palette, int chunkSizeBytes)
     {
         var data = ReorderForHardware(asset, palette);
-        var baseFileName = SanitizeFileName(asset.Name);
+        var baseFileName = ExportFileNaming.GraphicsDataBaseFileName(SanitizeFileName(asset.Name));
 
         var extension = asset.Category.BinaryFileExtension();
         // A chunk size of int.MaxValue (ExportChunkSize.WholeFile) would overflow the "+chunkSizeBytes-1"

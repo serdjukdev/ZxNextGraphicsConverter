@@ -9,7 +9,7 @@
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
         mc:Ignorable="d"
         Title="{Binding WindowTitle}" Height="600" Width="1000"
-        Closing="MainWindow_OnClosing">
+        Closing="MainWindow_OnClosing" PreviewKeyDown="MainWindow_OnPreviewKeyDown">
     <Window.InputBindings>
         <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveProjectCommand}" />
         <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
@@ -39,6 +39,9 @@
             <MenuItem Header="_Tools">
                 <MenuItem Header="_Metatile Editor..." Click="MetatileEditor_OnClick" />
                 <MenuItem Header="_Map Editor..." Click="MapEditor_OnClick" />
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Header="_Shortcuts &amp; Controls..." Command="{Binding ShowHelpCommand}" InputGestureText="F1" />
             </MenuItem>
         </Menu>
 

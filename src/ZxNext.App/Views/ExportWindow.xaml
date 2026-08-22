@@ -9,7 +9,10 @@
         Title="Export for Next" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
     <StackPanel Margin="14" Width="620">
-        <TextBlock Text="Each row below is packed into its own 8KB-chunked .bin file(s) plus a matching .asm address map. Rows for a real tile/sprite/Layer2 folder also get their own .pal palette file (always 512 bytes) — metatile and map rows carry no colour data of their own, so they don't."
+        <StackPanel.Resources>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        </StackPanel.Resources>
+        <TextBlock Text="Each row below is packed into its own 8KB-chunked .bin file(s) plus a matching .asm address map. Rows for a real tile/sprite/Layer2 folder also get their own .pal palette file (always 512 bytes). Map/metatile/object rows instead embed their data directly as `db` bytes in one plain .asm file — no chunk size to pick, no palette file (they carry no colour data of their own)."
                    TextWrapping="Wrap" Margin="0,0,0,10" />
 
         <!-- Clicking anywhere in a row (except the Chunk size dropdown, which needs its own clicks
@@ -22,10 +25,10 @@
                   HeadersVisibility="Column" MaxHeight="220" CanUserAddRows="False" GridLinesVisibility="Horizontal">
             <DataGrid.Columns>
                 <DataGridCheckBoxColumn Header="Export?" Binding="{Binding IsIncluded, Mode=TwoWay}" Width="Auto" />
-                <DataGridTextColumn Header="Folder" Binding="{Binding FolderPath}" IsReadOnly="True" Width="2*" />
-                <DataGridTextColumn Header="Assets" Binding="{Binding AssetCount}" IsReadOnly="True" Width="*" />
-                <DataGridTextColumn Header="Chunks" Binding="{Binding ChunkCount}" IsReadOnly="True" Width="*" />
-                <DataGridTextColumn Header="Data bytes" Binding="{Binding DataBytes}" IsReadOnly="True" Width="*" />
+                <DataGridTextColumn Header="What's this row?" Binding="{Binding RowKey}" IsReadOnly="True" Width="2*" />
+                <DataGridTextColumn Header="Assets" Binding="{Binding AssetCountDisplay}" IsReadOnly="True" Width="*" />
+                <DataGridTextColumn Header="Chunks" Binding="{Binding ChunkCountDisplay}" IsReadOnly="True" Width="*" />
+                <DataGridTextColumn Header="Data bytes" Binding="{Binding DataBytesDisplay}" IsReadOnly="True" Width="*" />
                 <!-- Per-row choice of how this folder's/image's data is split into files at write time —
                      goes in the same "one number per row" slot the redundant constant palette-size
                      column used to occupy. A plain ComboBox in a CellTemplate (not a
@@ -37,12 +40,29 @@
                             <ComboBox ItemsSource="{x:Static vm:ExportViewModel.AvailableChunkSizes}"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
                                       SelectedValue="{Binding SelectedChunkSize, UpdateSourceTrigger=PropertyChanged}"
+                                      Visibility="{Binding IsChunkConfigurable, Converter={StaticResource BoolToVis}}"
+                                      Margin="2" VerticalAlignment="Center" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <!-- Tile8Bpp only — see PixelExportOrder's remarks on why this is a real performance
+                     choice (matching the target Layer2 resolution's row/column-major SRAM addressing
+                     for a fast sequential blit), not a style preference. -->
+                <DataGridTemplateColumn Header="Pixel order" Width="1.2*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{x:Static vm:ExportViewModel.AvailablePixelOrders}"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectedValue="{Binding SelectedPixelOrder, UpdateSourceTrigger=PropertyChanged}"
+                                      Visibility="{Binding IsPixelOrderConfigurable, Converter={StaticResource BoolToVis}}"
                                       Margin="2" VerticalAlignment="Center" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
+        <TextBlock Text="Pixel order (Tile8Bpp only): Row-major matches Layer2_256x192's SRAM addressing; Column-major matches Layer2_320x256/640x256x4's — pick whichever your game's Layer2 mode uses, so the blit can copy sequentially instead of doing per-pixel address math."
+                   FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,4,0,0" />
 
         <TextBlock Text="Output folder" FontSize="11" Margin="0,10,0,2" />
         <Grid>

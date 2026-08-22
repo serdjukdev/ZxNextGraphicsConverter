@@ -55,7 +55,7 @@ public class ExportServiceTests : IDisposable
         Assert.Single(binFiles);
         Assert.Single(asmFiles);
         Assert.Single(palFiles);
-        Assert.Contains("tile_4bpp_images", Path.GetFileName(binFiles[0]));
+        Assert.Equal("tile_4bpp_images_gfx.til", Path.GetFileName(binFiles[0])); // _gfx: see ExportFileNaming.GraphicsDataSuffix
         Assert.True(new FileInfo(binFiles[0]).Length <= BinaryChunker.ChunkSizeBytes);
         Assert.Equal(PaletteFileWriter.FileSizeBytes, new FileInfo(palFiles[0]).Length);
 
@@ -173,5 +173,58 @@ public class ExportServiceTests : IDisposable
         Assert.Equal(6, l2Files.Length); // 49152 / 8192 divides evenly into exactly 6 whole chunks, no padding chunk
         Assert.Single(palFiles);
         Assert.Equal(PaletteFileWriter.FileSizeBytes, new FileInfo(palFiles[0]).Length); // 512, its own separate file
+    }
+
+    /// <summary>See PixelExportOrder's remarks: Tile8Bpp is the one category where pixel scan order is a
+    /// user choice (matching whichever Layer2 resolution the game's software blitter targets), since
+    /// Layer2's SRAM addressing is row-major for 256x192 but column-major for 320x256/640x256x4.</summary>
+    [Fact]
+    public void ExportFolder_Tile8Bpp_RowKeyIsPixelOrderConfigurable_OthersAreNot()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "hero", FilePath = _tempSourceFile, Width = 8, Height = 8 };
+        project.SourceImages.Add(source);
+        var rgba = new byte[8 * 8 * 4];
+
+        AssetImporter.Import(project, source, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None);
+        AssetImporter.Import(project, source, rgba, AssetCategory.Tile8Bpp, "tile/8bpp/images", DitherMode.None);
+
+        var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
+
+        Assert.True(results.Single(r => r.RowKey == "tile/8bpp/images").IsPixelOrderConfigurable);
+        Assert.False(results.Single(r => r.RowKey == "tile/4bpp/images").IsPixelOrderConfigurable);
+    }
+
+    [Fact]
+    public void ExportFolder_Tile8Bpp_ColumnMajor_ActuallyReordersEachTilesPixelsIndependently()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "hero", FilePath = _tempSourceFile, Width = 8, Height = 8 };
+        project.SourceImages.Add(source);
+
+        // A non-uniform 8x8 pattern (row index repeated across each row) so row-major vs column-major
+        // byte order is actually distinguishable in the exported bytes, not just a coincidence.
+        var rgba = new byte[8 * 8 * 4];
+        for (var y = 0; y < 8; y++)
+        {
+            for (var x = 0; x < 8; x++)
+            {
+                var o = (y * 8 + x) * 4;
+                rgba[o] = (byte)(y * 20); rgba[o + 1] = (byte)(y * 20); rgba[o + 2] = (byte)(y * 20); rgba[o + 3] = 255;
+            }
+        }
+        var imported = AssetImporter.Import(project, source, rgba, AssetCategory.Tile8Bpp, "tile/8bpp/images", DitherMode.None);
+        Assert.True(imported.Success, imported.Error);
+
+        var rowMajorResults = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb, _ => PixelExportOrder.RowMajor);
+        var columnMajorResults = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb, _ => PixelExportOrder.ColumnMajor);
+
+        // Only the first 64 bytes are this one tile's real data — the rest of the chunk is zero-padding
+        // (BinaryChunker's own concern, already covered by its own tests), so slice it off before comparing.
+        var rowMajorTileBytes = rowMajorResults.Single(r => r.RowKey == "tile/8bpp/images").Chunks[0].Data.Take(64).ToArray();
+        var columnMajorTileBytes = columnMajorResults.Single(r => r.RowKey == "tile/8bpp/images").Chunks[0].Data.Take(64).ToArray();
+
+        Assert.NotEqual(rowMajorTileBytes, columnMajorTileBytes);
+        Assert.Equal(TilePixelReorder.Apply(rowMajorTileBytes, 8, 8, PixelExportOrder.ColumnMajor), columnMajorTileBytes);
     }
 }

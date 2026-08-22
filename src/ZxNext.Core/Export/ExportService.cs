@@ -4,9 +4,14 @@ using ZxNext.Core.Project;
 namespace ZxNext.Core.Export;
 
 /// <summary>
-/// <paramref name="PaletteFile"/> is null for rows that own no colour data of their own — the
-/// metatile-library and map (tilemap/8bpp/sprites) rows added by the Map/Metatile feature. Every
-/// pre-existing row kind (a real tile/sprite/Layer2 category folder) still always produces one.
+/// <paramref name="PaletteFile"/> is null for rows that own no colour data of their own — the map grid
+/// layer, metatile-definition, and object rows added by the Map/Metatile feature. Every pre-existing row
+/// kind (a real tile/sprite/Layer2 category folder) still always produces one. <paramref name="IsChunked"/>
+/// is false for those same new row kinds (2026-08-23 export-format redesign) — their data is embedded
+/// directly as `db` bytes in <paramref name="AsmText"/> rather than packed into separate chunked <see
+/// cref="ChunkFile"/>s, so <paramref name="Chunks"/> is always empty for them and a chunk-size choice is
+/// meaningless (the Export dialog hides that control for these rows). Defaults to true so every
+/// pre-existing call site (which only ever produces genuinely chunked rows) needs no change.
 /// </summary>
 public record FolderExportResult(
     string RowKey,
@@ -15,7 +20,9 @@ public record FolderExportResult(
     IReadOnlyList<AssetPlacement> Placements,
     string AsmText,
     string AsmFileName,
-    ChunkFile? PaletteFile);
+    ChunkFile? PaletteFile,
+    bool IsChunked = true,
+    bool IsPixelOrderConfigurable = false);
 
 /// <summary>
 /// Orchestrates export: groups the project's assets by tree folder (so each folder gets its
@@ -31,13 +38,15 @@ public static class ExportService
     /// images, each needing its own chunk-size choice) so a caller (the Export dialog) can offer a
     /// per-row 8KB/16KB/whole-file choice without needing to know that distinction itself.
     /// </summary>
-    public static List<FolderExportResult> ExportAll(ProjectState project, Func<string, ExportChunkSize> chunkSizeForRow)
+    public static List<FolderExportResult> ExportAll(ProjectState project, Func<string, ExportChunkSize> chunkSizeForRow, Func<string, PixelExportOrder>? pixelOrderForRow = null)
     {
+        pixelOrderForRow ??= _ => PixelExportOrder.RowMajor;
+
         var results = project.Assets
             .Where(a => !a.Category.IsLayer2())
             .GroupBy(a => a.FolderPath)
             .OrderBy(g => g.Key, StringComparer.Ordinal)
-            .Select(g => ExportFolder(project, g.Key, g.OrderBy(a => a.SortIndex).ToList(), chunkSizeForRow(g.Key).ToByteBoundary()))
+            .Select(g => ExportFolder(project, g.Key, g.OrderBy(a => a.SortIndex).ToList(), chunkSizeForRow(g.Key).ToByteBoundary(), pixelOrderForRow(g.Key)))
             .ToList();
 
         // Layer2 images are exported one-at-a-time, not grouped by folder — see Layer2Exporter's
@@ -48,65 +57,43 @@ public static class ExportService
             .Select(a => Layer2Exporter.Export(a, project.GetOrCreateFolderPalette(a.Category, a.FolderPath), chunkSizeForRow(a.Name).ToByteBoundary()));
         results.AddRange(layer2Results);
 
-        foreach (var kind in Enum.GetValues<MetatileKind>())
-        {
-            var metatileResult = ExportMetatileLibrary(project, kind, chunkSizeForRow(MetatileLibraryRowKey(kind)).ToByteBoundary());
-            if (metatileResult is not null) results.Add(metatileResult);
-        }
-
+        // Map grid layers, per-map-per-layer metatile definitions, and object placements are all
+        // asm-embedded (IsChunked: false — see FolderExportResult's remarks) as of the 2026-08-23
+        // export-format redesign — there is no more project-wide metatile "library" row at all;
+        // metatile definitions are exported per-map-per-layer instead (see MapExporter).
         foreach (var map in project.Maps.OrderBy(m => m.SortIndex))
         {
             var (sizeOk, sizeError) = MapExporter.ValidateSize(map);
             if (!sizeOk) throw new InvalidOperationException(sizeError);
 
-            results.Add(MapExporter.ExportTilemapLayer(map, chunkSizeForRow($"{map.Name}_tilemap").ToByteBoundary()));
-            results.Add(MapExporter.ExportTileLayer8Bpp(map, chunkSizeForRow($"{map.Name}_8bpp").ToByteBoundary()));
+            var tilemap = MapExporter.ExportTilemapLayer(map, project);
+            results.Add(tilemap.Grid);
+            if (tilemap.Metatiles is not null) results.Add(tilemap.Metatiles);
 
-            var (spritesOk, spriteResult, spriteError) = MapExporter.ExportSprites(map, project.Assets, chunkSizeForRow($"{map.Name}_sprites").ToByteBoundary());
-            if (!spritesOk) throw new InvalidOperationException(spriteError);
-            results.Add(spriteResult!);
+            var eightBpp = MapExporter.ExportTileLayer8Bpp(map, project);
+            results.Add(eightBpp.Grid);
+            if (eightBpp.Metatiles is not null) results.Add(eightBpp.Metatiles);
+
+            var (objectsOk, objectsResult, objectsError) = MapExporter.ExportObjects(map, project.Assets);
+            if (!objectsOk) throw new InvalidOperationException(objectsError);
+            results.Add(objectsResult!);
         }
 
         return results;
     }
 
-    public static string MetatileLibraryRowKey(MetatileKind kind) => kind == MetatileKind.FourBpp ? "metatile/4bpp/library" : "metatile/8bpp/library";
-
-    /// <summary>Null when the project has no metatiles of this Kind — an empty row would be pointless. Throws (like <see cref="BinaryChunker.Pack"/>'s own hard-invariant checks) if a metatile can't be serialized — see <see cref="MetatileSerializer"/> — since that should never happen once the App layer surfaces the same validation earlier (e.g. the &gt;256-assets-per-category cap), matching this codebase's existing style for "should never happen, but if it does, fail loudly" export invariants.</summary>
-    public static FolderExportResult? ExportMetatileLibrary(ProjectState project, MetatileKind kind, int chunkSizeBytes)
-    {
-        var metatiles = project.Metatiles.Where(m => m.Kind == kind).OrderBy(m => m.SortIndex).ToList();
-        if (metatiles.Count == 0) return null;
-
-        var rowKey = MetatileLibraryRowKey(kind);
-        var exportables = new List<ExportableAsset>();
-        foreach (var metatile in metatiles)
-        {
-            var serialized = MetatileSerializer.Serialize(metatile, project.Assets);
-            if (!serialized.Success)
-            {
-                throw new InvalidOperationException(serialized.Error);
-            }
-            // IsFourBpp deliberately false regardless of Kind — palette info is already embedded
-            // per-cell inside the metatile's own bytes (the attribute byte), so AsmMapGenerator must
-            // NOT also emit its own extra palette-slot line for this label.
-            exportables.Add(new ExportableAsset(metatile.Name, serialized.Data!, IsFourBpp: false, PaletteSlotIndex: 0));
-        }
-
-        var baseFileName = SanitizeFileName(rowKey);
-        var (chunks, placements) = BinaryChunker.Pack(exportables, baseFileName, "bin", chunkSizeBytes);
-        var asmText = AsmMapGenerator.Generate(placements, chunks.Count);
-
-        return new FolderExportResult(rowKey, rowKey, chunks, placements, asmText, $"{baseFileName}.asm", null);
-    }
-
-    public static FolderExportResult ExportFolder(ProjectState project, string folderPath, IReadOnlyList<GraphicsAsset> assets, int chunkSizeBytes)
+    /// <summary><paramref name="pixelOrder"/> only actually affects Tile8Bpp assets (see <see cref="PixelExportOrder"/>) — passed for every category for a uniform call shape, but ignored otherwise.</summary>
+    public static FolderExportResult ExportFolder(ProjectState project, string folderPath, IReadOnlyList<GraphicsAsset> assets, int chunkSizeBytes, PixelExportOrder pixelOrder = PixelExportOrder.RowMajor)
     {
         var category = assets[0].Category;
-        var baseFileName = SanitizeFileName(folderPath);
+        var baseFileName = ExportFileNaming.GraphicsDataBaseFileName(SanitizeFileName(folderPath));
+        var isPixelOrderConfigurable = category == AssetCategory.Tile8Bpp;
 
         var exportables = assets
-            .Select(a => new ExportableAsset(a.Name, a.PackedPixelData, a.Category.UsesPaletteBank(), a.PaletteSlotIndex))
+            .Select(a => new ExportableAsset(
+                a.Name,
+                isPixelOrderConfigurable ? TilePixelReorder.Apply(a.PackedPixelData, a.Width, a.Height, pixelOrder) : a.PackedPixelData,
+                a.Category.UsesPaletteBank(), a.PaletteSlotIndex))
             .ToList();
         var (chunks, placements) = BinaryChunker.Pack(exportables, baseFileName, category.BinaryFileExtension(), chunkSizeBytes);
         var asmText = AsmMapGenerator.Generate(placements, chunks.Count);
@@ -116,7 +103,7 @@ public static class ExportService
             : PaletteFileWriter.Write(project.GetOrCreateFolderPalette(category, folderPath));
         var paletteFile = new ChunkFile($"{baseFileName}.pal", paletteBytes);
 
-        return new FolderExportResult(folderPath, folderPath, chunks, placements, asmText, $"{baseFileName}.asm", paletteFile);
+        return new FolderExportResult(folderPath, folderPath, chunks, placements, asmText, $"{baseFileName}.asm", paletteFile, IsPixelOrderConfigurable: isPixelOrderConfigurable);
     }
 
     public static void WriteToDisk(IEnumerable<FolderExportResult> results, string outputDirectory)

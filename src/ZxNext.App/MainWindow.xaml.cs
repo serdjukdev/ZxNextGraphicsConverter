@@ -40,8 +40,47 @@ public partial class MainWindow : Window
         ImageViewerViewControl.PixelPicked += _viewModel.PickColorAt;
         _viewModel.PaletteStrip.SwatchDoubleClicked += OnPaletteSwatchDoubleClicked;
         _viewModel.ReQuantizeRequested += OnReQuantizeRequested;
+        _viewModel.HelpRequested += OnHelpRequested;
 
         RestoreWindowGeometry();
+    }
+
+    /// <summary>
+    /// F1 is handled here (PreviewKeyDown, tunnelling from the Window down) instead of as a declarative
+    /// &lt;KeyBinding Key="F1"&gt; — that was tried first and silently never fired. F1 is WPF's default
+    /// gesture for the built-in <see cref="ApplicationCommands.Help"/> RoutedCommand, and something in the
+    /// focus/routing chain appears to consume it before a plain Window-level KeyBinding ever sees it (no
+    /// such CommandBinding is registered anywhere in this app, so it just silently swallows the key rather
+    /// than doing anything). Handling PreviewKeyDown directly on the Window sidesteps that entirely.
+    /// </summary>
+    private void MainWindow_OnPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.F1) return;
+        e.Handled = true;
+        if (_viewModel.ShowHelpCommand.CanExecute(null)) _viewModel.ShowHelpCommand.Execute(null);
+    }
+
+    /// <summary>
+    /// Non-modal by deliberate exception to this app's otherwise-universal "every window is modal" rule
+    /// (see the Map/Metatile Editor design decisions) — Help is pure reference content with no result to
+    /// hand back and no owner-window state to keep in sync, so there's no Closing-semantics/enable-disable
+    /// machinery to invent, and the whole point is to be able to leave it open while working elsewhere.
+    /// Re-invoking (F1 again, or the menu item again) brings the existing window forward instead of
+    /// opening a second copy.
+    /// </summary>
+    private HelpWindow? _helpWindow;
+
+    private void OnHelpRequested()
+    {
+        if (_helpWindow is not null)
+        {
+            _helpWindow.Activate();
+            return;
+        }
+
+        _helpWindow = new HelpWindow { Owner = this };
+        _helpWindow.Closed += (_, _) => _helpWindow = null;
+        _helpWindow.Show();
     }
 
     /// <summary>Applies the saved window size/position, falling back to the XAML defaults if nothing was saved yet or the saved bounds no longer fit any screen.</summary>
@@ -296,7 +335,7 @@ public partial class MainWindow : Window
         // the dialog only ever showed a live preview per-row, never mutated initialResults itself —
         // then drop whichever rows the user unchecked (CanExport already guarantees at least one stays).
         var includedRowKeys = new HashSet<string>(vm.IncludedRowKeys);
-        var results = _viewModel.PreviewExport(vm.ChunkSizeForRow)
+        var results = _viewModel.PreviewExport(vm.ChunkSizeForRow, vm.PixelOrderForRow)
             .Where(r => includedRowKeys.Contains(r.RowKey))
             .ToList();
 

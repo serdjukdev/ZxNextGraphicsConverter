@@ -135,7 +135,7 @@ public class Layer2ExporterTests
         var result = Layer2Exporter.Export(asset, DummyPalette, ExportChunkSize.WholeFile.ToByteBoundary());
 
         Assert.Single(result.Chunks);
-        Assert.Equal("screen.l2", result.Chunks[0].FileName);
+        Assert.Equal("screen_gfx.l2", result.Chunks[0].FileName); // _gfx: see ExportFileNaming.GraphicsDataSuffix
         Assert.Equal(pixelCount, result.Chunks[0].Data.Length);
         for (var i = 0; i < pixelCount; i++) Assert.Equal((byte)indices[i], result.Chunks[0].Data[i]);
     }

@@ -62,6 +62,12 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Raised (handled by code-behind, which owns dialog ownership) when the user wants to re-quantize the currently selected tile/sprite.</summary>
     public event Action<Guid, DitherMode>? ReQuantizeRequested;
 
+    /// <summary>Raised (handled by code-behind, which owns window ownership) when the user asks for Help — F1 or the Help menu.</summary>
+    public event Action? HelpRequested;
+
+    [RelayCommand]
+    private void ShowHelp() => HelpRequested?.Invoke();
+
     public MainViewModel(
         ProjectTreeViewModel tree,
         SourceImagesPanelViewModel sourceImages,
@@ -1036,8 +1042,8 @@ public partial class MainViewModel : ObservableObject
     /// (called with a plain "always 8KB" selector) and to regenerate the FINAL plan right before
     /// writing, once the user has picked a possibly-different chunk size per row in the dialog.
     /// </summary>
-    public List<FolderExportResult> PreviewExport(Func<string, ExportChunkSize> chunkSizeForRow) =>
-        ExportService.ExportAll(_project, chunkSizeForRow);
+    public List<FolderExportResult> PreviewExport(Func<string, ExportChunkSize> chunkSizeForRow, Func<string, PixelExportOrder>? pixelOrderForRow = null) =>
+        ExportService.ExportAll(_project, chunkSizeForRow, pixelOrderForRow);
 
     /// <summary>
     /// Recomputes just ONE export row (by its RowKey) at a newly-picked chunk size — used for the

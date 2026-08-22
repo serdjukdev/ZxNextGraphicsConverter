@@ -59,13 +59,13 @@ public class ExportServiceMapMetatileTests : IDisposable
         return result.Metatile!;
     }
 
-    private static MapAsset AddMap(ProjectState project, string name, int width = 2, int height = 2, int gridSize = 2)
+    private static MapAsset AddMap(ProjectState project, string name, int width = 2, int height = 2, int gridSize = 2, byte[]? tilemap = null)
     {
         var map = new MapAsset(width, height)
         {
             Name = name,
             MetatileGridSize = gridSize,
-            TilemapLayer = new MapGridLayer { MetatileIndices = FullOfEmpty(width * height) },
+            TilemapLayer = new MapGridLayer { MetatileIndices = tilemap ?? FullOfEmpty(width * height) },
             TileLayer8Bpp = new MapGridLayer { MetatileIndices = FullOfEmpty(width * height) }
         };
         project.Maps.Add(map);
@@ -73,41 +73,64 @@ public class ExportServiceMapMetatileTests : IDisposable
     }
 
     [Fact]
-    public void ExportAll_AddsOneMetatileLibraryRow_PerKindThatActuallyHasMetatiles()
+    public void ExportAll_NoLongerProducesAProjectWideMetatileLibraryRow()
     {
         var project = new ProjectState();
         var tile = ImportOneTile(project, "grass");
         CreateMetatile(project, "grass_block", tile.Id);
+        // No map places it -> under the 2026-08-23 per-map design, an unused metatile contributes NOTHING to export at all (no global library row exists anymore).
 
         var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
 
-        Assert.Contains(results, r => r.RowKey == "metatile/4bpp/library");
-        Assert.DoesNotContain(results, r => r.RowKey == "metatile/8bpp/library"); // no EightBpp metatiles -> no row
-        var metatileRow = results.Single(r => r.RowKey == "metatile/4bpp/library");
-        Assert.Null(metatileRow.PaletteFile);
+        Assert.DoesNotContain(results, r => r.RowKey == "metatile/4bpp/library");
+        Assert.DoesNotContain(results, r => r.RowKey == "metatile/8bpp/library");
+        Assert.DoesNotContain(results, r => r.RowKey.Contains("metatiles")); // no map -> no metatile-definitions row of any kind
     }
 
     [Fact]
-    public void ExportAll_AddsThreeRowsPerMap()
-    {
-        var project = new ProjectState();
-        AddMap(project, "level1");
-
-        var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
-
-        Assert.Contains(results, r => r.RowKey == "level1_tilemap");
-        Assert.Contains(results, r => r.RowKey == "level1_8bpp");
-        Assert.Contains(results, r => r.RowKey == "level1_sprites");
-        Assert.All(results.Where(r => r.RowKey.StartsWith("level1")), r => Assert.Null(r.PaletteFile));
-    }
-
-    [Fact]
-    public void ExportAll_EveryRowKey_IsUnique_AcrossFoldersMetatilesAndMaps()
+    public void ExportAll_MapPlacingAMetatile_AddsGridAndMetatilesRowsForThatLayerOnly()
     {
         var project = new ProjectState();
         var tile = ImportOneTile(project, "grass");
-        CreateMetatile(project, "grass_block", tile.Id);
-        AddMap(project, "level1");
+        var metatile = CreateMetatile(project, "grass_block", tile.Id);
+        AddMap(project, "level1", tilemap: [(byte)metatile.SortIndex, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell]);
+
+        var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
+
+        Assert.Contains(results, r => r.RowKey == "level1_tilemap_grid");
+        Assert.Contains(results, r => r.RowKey == "level1_tilemap_metatiles"); // Tilemap layer actually places one -> row exists
+        Assert.Contains(results, r => r.RowKey == "level1_8bpp_grid");
+        Assert.DoesNotContain(results, r => r.RowKey == "level1_8bpp_metatiles"); // 8bpp layer places none -> no row
+        Assert.Contains(results, r => r.RowKey == "level1_objects");
+        Assert.All(results.Where(r => r.RowKey.StartsWith("level1")), r =>
+        {
+            Assert.Null(r.PaletteFile);
+            Assert.False(r.IsChunked);
+            Assert.Empty(r.Chunks);
+        });
+    }
+
+    [Fact]
+    public void ExportAll_MapWithNothingPlacedAnywhere_OnlyGridAndObjectsRows_NoMetatilesRows()
+    {
+        var project = new ProjectState();
+        AddMap(project, "level1"); // both grid layers fully empty, per FullOfEmpty default
+
+        var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
+
+        Assert.Contains(results, r => r.RowKey == "level1_tilemap_grid");
+        Assert.Contains(results, r => r.RowKey == "level1_8bpp_grid");
+        Assert.Contains(results, r => r.RowKey == "level1_objects");
+        Assert.DoesNotContain(results, r => r.RowKey.Contains("metatiles"));
+    }
+
+    [Fact]
+    public void ExportAll_EveryRowKey_IsUnique_AcrossFoldersAndMaps()
+    {
+        var project = new ProjectState();
+        var tile = ImportOneTile(project, "grass");
+        var metatile = CreateMetatile(project, "grass_block", tile.Id);
+        AddMap(project, "level1", tilemap: [(byte)metatile.SortIndex, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell]);
 
         var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
 
@@ -126,16 +149,18 @@ public class ExportServiceMapMetatileTests : IDisposable
     }
 
     [Fact]
-    public void ExportAll_MetatileWithDanglingTileReference_ThrowsWithClearMessage()
+    public void ExportAll_MapPlacesMetatileWithDanglingTileReference_ThrowsWithClearMessage()
     {
         var project = new ProjectState();
-        // A metatile referencing a tile id that isn't (or no longer is) in project.Assets — defensive
+        // A metatile referencing tile ids that aren't (or no longer are) in project.Assets — defensive
         // re-check, mirrors the "fail loudly rather than corrupt" style already used for
-        // BinaryChunker's own hard invariant.
+        // BinaryChunker's own hard invariant. Must actually be PLACED on a map for the new per-map
+        // design to ever attempt serializing it — an orphaned-but-unused metatile contributes nothing.
         var cells = new List<MetatileCell> { new() { TileAssetId = Guid.NewGuid() }, new() { TileAssetId = Guid.NewGuid() },
                                               new() { TileAssetId = Guid.NewGuid() }, new() { TileAssetId = Guid.NewGuid() } };
         var createResult = MetatileService.Create(project, "orphaned", MetatileKind.FourBpp, 2, cells);
         Assert.True(createResult.Success, createResult.Error);
+        AddMap(project, "level1", tilemap: [(byte)createResult.Metatile!.SortIndex, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell]);
 
         Assert.Throws<InvalidOperationException>(() => ExportService.ExportAll(project, _ => ExportChunkSize.EightKb));
     }
@@ -146,24 +171,26 @@ public class ExportServiceMapMetatileTests : IDisposable
     /// locks down the Core-level mechanism it depends on: WriteToDisk/ListOutputFileNames operate
     /// generically over whatever subset of FolderExportResult rows they're given, with nothing
     /// hardcoded per row kind, so filtering the list before calling them genuinely excludes that row's
-    /// files for a NEW row kind (map/metatile) exactly as it already does for an existing one — directly
-    /// targeting the same bug class as commit 3c848eb ("check for export asset").
+    /// files for a NEW row kind (map grid/metatiles/objects) exactly as it already does for an existing
+    /// one — directly targeting the same bug class as commit 3c848eb ("check for export asset").
     /// </summary>
     [Fact]
     public void WriteToDisk_ExcludingAMapRowFromTheList_GenuinelyExcludesItsFiles()
     {
         var project = new ProjectState();
         var tile = ImportOneTile(project, "grass");
-        AddMap(project, "level1");
+        var metatile = CreateMetatile(project, "grass_block", tile.Id);
+        AddMap(project, "level1", tilemap: [(byte)metatile.SortIndex, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell]);
 
         var allResults = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
-        var filtered = allResults.Where(r => r.RowKey != "level1_tilemap").ToList(); // simulates unchecking this one row
+        var filtered = allResults.Where(r => r.RowKey != "level1_tilemap_grid").ToList(); // simulates unchecking this one row
 
         ExportService.WriteToDisk(filtered, _outputDir);
 
         var writtenFiles = Directory.GetFiles(_outputDir).Select(Path.GetFileName).ToList();
-        Assert.DoesNotContain(writtenFiles, f => f!.StartsWith("level1_tilemap"));
-        Assert.Contains(writtenFiles, f => f!.StartsWith("level1_8bpp")); // the OTHER map rows still write normally
-        Assert.Contains(writtenFiles, f => f!.StartsWith("level1_sprites"));
+        Assert.DoesNotContain(writtenFiles, f => f!.StartsWith("level1_tilemap_grid"));
+        Assert.Contains(writtenFiles, f => f!.StartsWith("level1_tilemap_metatiles")); // the OTHER map rows still write normally
+        Assert.Contains(writtenFiles, f => f!.StartsWith("level1_8bpp_grid"));
+        Assert.Contains(writtenFiles, f => f!.StartsWith("level1_objects"));
     }
 }

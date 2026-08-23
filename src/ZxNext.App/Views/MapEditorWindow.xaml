@@ -67,28 +67,26 @@
 
             <TextBlock Grid.Row="1" Text="Existing maps" FontSize="11" Margin="0,0,0,2" />
             <Border Grid.Row="2" BorderBrush="#999" BorderThickness="1">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <ListBox ItemsSource="{Binding Maps}" SelectedItem="{Binding SelectedMap}"
-                             BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                             ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}">
-                        <ListBox.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ListBox.ItemsPanel>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Margin="2" Width="72" Background="Transparent" ToolTip="{Binding Name}">
-                                    <Border BorderBrush="#CCC" BorderThickness="1" Width="64" Height="64" HorizontalAlignment="Center">
-                                        <Image Source="{Binding Preview}" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                                    </Border>
-                                    <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" />
-                                    <TextBlock Text="{Binding SizeLabel}" FontSize="8" Foreground="Gray" HorizontalAlignment="Center" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </ScrollViewer>
+                <ListBox ItemsSource="{Binding Maps}" SelectedItem="{Binding SelectedMap}"
+                         BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="2" Width="72" Background="Transparent" ToolTip="{Binding Name}">
+                                <Border BorderBrush="#CCC" BorderThickness="1" Width="64" Height="64" HorizontalAlignment="Center">
+                                    <Image Source="{Binding Preview}" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                </Border>
+                                <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" />
+                                <TextBlock Text="{Binding SizeLabel}" FontSize="8" Foreground="Gray" HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </Border>
             <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,6,0,0">
                 <Button Content="Delete selected" Command="{Binding DeleteMapCommand}" Width="100" Margin="0,0,6,0" />
@@ -150,25 +148,23 @@
 
             <!-- Metatile palette: grid layers -->
             <Border Grid.Row="5" BorderBrush="#999" BorderThickness="1" Visibility="{Binding IsGridLayerActive, Converter={StaticResource BoolToVis}}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <ListBox ItemsSource="{Binding MetatilePalette}" SelectedItem="{Binding SelectedPaletteMetatile}"
-                             BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                             ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}">
-                        <ListBox.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ListBox.ItemsPanel>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding Name}">
-                                    <Image Source="{Binding Preview}" Width="48" Height="48" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                                    <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="52" HorizontalAlignment="Center" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </ScrollViewer>
+                <ListBox ItemsSource="{Binding MetatilePalette}" SelectedItem="{Binding SelectedPaletteMetatile}"
+                         BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding Name}">
+                                <Image Source="{Binding Preview}" Width="48" Height="48" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="52" HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </Border>
 
             <!-- Sprite palette: Sprite layer -->
@@ -183,25 +179,23 @@
                         </Style.Triggers>
                     </Style>
                 </Border.Style>
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <ListBox ItemsSource="{Binding SpritePalette}" SelectedItem="{Binding SelectedPaletteSprite}"
-                             BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                             ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}">
-                        <ListBox.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ListBox.ItemsPanel>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding Name}">
-                                    <Image Source="{Binding Preview}" Width="48" Height="48" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                                    <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="52" HorizontalAlignment="Center" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </ScrollViewer>
+                <ListBox ItemsSource="{Binding SpritePalette}" SelectedItem="{Binding SelectedPaletteSprite}"
+                         BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding Name}">
+                                <Image Source="{Binding Preview}" Width="48" Height="48" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="52" HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </Border>
 
             <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,8,0,0">

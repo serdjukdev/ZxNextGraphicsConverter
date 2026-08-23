@@ -1,0 +1,66 @@
+name: Release
+
+# Runs ONLY when a version tag is pushed (e.g. `git push origin v0.1.0`) — never on an ordinary
+# commit/PR push. The pushed tag name (minus the leading "v") becomes the app's <Version> for this
+# build, so there is no separate version number to remember to bump anywhere else: pushing a new
+# tag is the only thing that produces a new release, and re-pushing an existing tag name is
+# rejected by git itself, so a release can never accidentally ship without its version changing.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Derive version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v', ''
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Publish framework-dependent (small, needs .NET 9 Desktop Runtime installed)
+        run: >
+          dotnet publish src/ZxNext.App -c Release -r win-x64 --self-contained false
+          -p:PublishSingleFile=true -p:Version=${{ steps.version.outputs.version }}
+          -o publish/framework-dependent
+
+      - name: Publish self-contained (large, no dependencies)
+        run: >
+          dotnet publish src/ZxNext.App -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:Version=${{ steps.version.outputs.version }}
+          -o publish/self-contained
+
+      - name: Stage release assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+          Copy-Item publish/framework-dependent/ZxNext.App.exe release-assets/ZxNextStudio-x64.exe
+          Copy-Item publish/self-contained/ZxNext.App.exe release-assets/ZxNextStudio-x64-standalone.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*.exe
+          body: |
+            ## ZxNext Studio ${{ steps.version.outputs.version }}
+
+            Two builds — pick one:
+
+            - **ZxNextStudio-x64.exe** (small) — requires the [.NET 9 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/9.0) to already be installed.
+            - **ZxNextStudio-x64-standalone.exe** (large, ~135 MB) — no dependencies, just run it. Nothing else needed.
+
+            Both are single files, 64-bit Windows only.

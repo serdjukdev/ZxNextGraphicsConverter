@@ -1,4 +1,4 @@
-# ZX Next Graphics Converter
+# ZxNext Studio
 
 A Windows desktop tool (WPF, .NET 9) that converts ordinary images into native [ZX Spectrum Next](https://www.specnext.com/) graphics — sprites, tiles, full-screen Layer2 bitmaps, and tile-based maps with typed, linkable objects — with correct palette allocation, optional dithering, manual pixel/palette editing, and a ready-to-assemble Z80 export.
 

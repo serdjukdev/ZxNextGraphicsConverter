@@ -35,3 +35,7 @@ Thumbs.db
 # App-generated output that shouldn't be shipped in the repo (exported .bin/.asm, user's own test projects)
 /export/
 *.zxngc
+
+# dotnet publish output
+publish/
+publish-*/

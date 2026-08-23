@@ -57,7 +57,7 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private bool hasUnsavedChanges;
 
-    public string WindowTitle => $"ZX Next Graphics Converter — {ProjectTitle}{(HasUnsavedChanges ? " *" : "")}";
+    public string WindowTitle => $"ZxNext Studio — {ProjectTitle}{(HasUnsavedChanges ? " *" : "")}";
 
     /// <summary>Raised (handled by code-behind, which owns dialog ownership) when the user wants to re-quantize the currently selected tile/sprite.</summary>
     public event Action<Guid, DitherMode>? ReQuantizeRequested;

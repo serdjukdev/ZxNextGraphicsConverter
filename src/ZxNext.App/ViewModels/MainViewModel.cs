@@ -196,7 +196,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Called after the user confirms the atlas slicer dialog for an oversized dropped sprite-sheet/tile-sheet image — can be thousands of cells, so it runs off the UI thread behind a busy indicator. Not used for Layer2 categories, which go through <see cref="ImportLayer2Placement"/> instead (exactly one output image, never a repeating grid).</summary>
-    public async Task ImportSlicedAsync(SourceImageViewModel source, AssetCategory category, string folderPath, AtlasSliceParameters parameters, bool skipDuplicateCells)
+    public async Task ImportSlicedAsync(SourceImageViewModel source, AssetCategory category, string folderPath, AtlasSliceParameters parameters, bool skipDuplicateCells, bool placeTransparentTileFirst = false)
     {
         var decoded = DecodeSource(source);
         var rects = parameters.ComputeCellRects(decoded.Width, decoded.Height);
@@ -246,11 +246,35 @@ public partial class MainViewModel : ObservableObject
                 }
             });
 
-            foreach (var asset in imported) Tree.AddAssetNode(asset);
+            var movedTransparentToFront = false;
+            Guid? transparentAssetId = null;
+            if (placeTransparentTileFirst)
+            {
+                // Only the FIRST fully-transparent import (there could be several identical ones if
+                // duplicate-skipping is off) needs moving — the rest, if any, just stay wherever they
+                // landed; there's nothing meaningfully "more correct" about moving every one of them.
+                var transparentAsset = imported.FirstOrDefault(a => TransparentTileDetector.IsAssetFullyTransparent(_project, a));
+                if (transparentAsset is not null)
+                {
+                    // SortIndex only needs to be LOWER than every sibling in this category for
+                    // AssetExportIndexer's OrderBy-based ranking to put it first — it doesn't need to be
+                    // dense or non-negative (see NextSortIndex, which only ever reads the Max()).
+                    var siblingIndices = _project.Assets.Where(a => a.Category == category && a.Id != transparentAsset.Id).Select(a => a.SortIndex).ToList();
+                    transparentAsset.SortIndex = (siblingIndices.Count > 0 ? siblingIndices.Min() : 0) - 1;
+                    movedTransparentToFront = true;
+                    transparentAssetId = transparentAsset.Id;
+                }
+            }
+
+            // The tree's display order is plain insertion order, not SortIndex (see AddAssetNode's own
+            // doc comment) — the transparent asset needs to go in at the front of its folder explicitly,
+            // or the SortIndex change above would be invisible in the tree despite being real for export.
+            foreach (var asset in imported) Tree.AddAssetNode(asset, insertAtFront: asset.Id == transparentAssetId);
 
             if (imported.Count > 0) HasUnsavedChanges = true;
 
             var message = $"Sliced {source.Model.FileName}: {imported.Count} cell(s) imported into {folderPath}.";
+            if (movedTransparentToFront) message += " Transparent tile placed first.";
             if (duplicatesSkipped > 0) message += $" {duplicatesSkipped} duplicate(s) skipped.";
             if (failed > 0) message += $" {failed} failed (likely palette overflow — try Re-quantize category from the overflow dialog on a single-tile import, or reduce colours before slicing).";
             PixelEditor.StatusText = message;
@@ -849,11 +873,13 @@ public partial class MainViewModel : ObservableObject
         if (MessageBox.Show(message, "Delete source image", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
 
         var affectedFlatFolders = new HashSet<(AssetCategory Category, string FolderPath)>();
+        var affectedBankCategories = new HashSet<AssetCategory>();
         foreach (var asset in affected)
         {
             _project.RemoveAsset(asset.Id);
             Tree.RemoveAssetNode(asset.Id);
-            if (!asset.Category.UsesPaletteBank()) affectedFlatFolders.Add((asset.Category, asset.FolderPath));
+            if (asset.Category.UsesPaletteBank()) affectedBankCategories.Add(asset.Category);
+            else affectedFlatFolders.Add((asset.Category, asset.FolderPath));
         }
 
         foreach (var (category, folderPath) in affectedFlatFolders)
@@ -861,10 +887,19 @@ public partial class MainViewModel : ObservableObject
             _project.CompactFlatPalette(category, folderPath);
         }
 
+        // Mirrors the single-asset delete path (see DeleteSelectedCommand) — CompactPaletteBank is the
+        // ONLY thing that ever frees a 4bpp bank slot orphaned by the last asset using it, and this
+        // cascading delete had been skipping it entirely, leaving a dead, still-"Optimize"-able,
+        // save/reload-surviving palette slot behind for a folder with zero real assets left in it.
+        foreach (var category in affectedBankCategories)
+        {
+            _project.CompactPaletteBank(category);
+        }
+
         _project.SourceImages.Remove(source);
         SourceImages.RemoveById(sourceImageId);
         _undoStack.Clear();
-        if (affectedFlatFolders.Count > 0) RefreshSelectedAssetRender();
+        if (affectedFlatFolders.Count > 0 || affectedBankCategories.Count > 0) RefreshSelectedAssetRender();
 
         HasUnsavedChanges = true;
         PixelEditor.StatusText = affected.Count == 0

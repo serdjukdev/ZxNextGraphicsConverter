@@ -8,6 +8,9 @@
         mc:Ignorable="d"
         Title="Slice Atlas" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
     <StackPanel Margin="14">
         <TextBlock TextWrapping="Wrap" MaxWidth="420" Margin="0,0,0,10"
                    Text="This image is larger than one cell. Set the grid below, then slice it into individual tiles/sprites." />
@@ -48,6 +51,10 @@
 
         <CheckBox Content="Skip duplicate cells (identical pixels imported only once)"
                   IsChecked="{Binding SkipDuplicateCells}" Margin="0,8,0,0" />
+
+        <CheckBox Content="Place the transparent tile first (index 0)" IsChecked="{Binding PlaceTransparentTileFirst}" Margin="0,4,0,0"
+                  Visibility="{Binding CanOfferTransparentTileFirst, Converter={StaticResource BoolToVis}}"
+                  ToolTip="This slice includes a fully transparent cell and this category has no designated transparent tile yet — put it at the front of the list so it's easy to find (e.g. as a 'walk-through' tile) instead of scrolling through the rest." />
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button Content="Cancel" Width="80" Margin="0,0,8,0" IsCancel="True" Click="Cancel_OnClick" />

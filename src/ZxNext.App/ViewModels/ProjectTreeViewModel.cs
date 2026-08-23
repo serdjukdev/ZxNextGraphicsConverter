@@ -90,15 +90,18 @@ public partial class ProjectTreeViewModel : ObservableObject
         owner.Children.Add(new TreeNodeViewModel(name, isFolder: true) { Category = owner.Category, FolderPath = path });
     }
 
-    public void AddAssetNode(GraphicsAsset asset)
+    /// <summary>Tree display order is plain insertion order, NOT SortIndex — a caller that just gave this asset a lower SortIndex than its siblings (e.g. moving a transparent tile to export index 0) needs <paramref name="insertAtFront"/> to actually show that, otherwise it silently lands at the end like any other new node.</summary>
+    public void AddAssetNode(GraphicsAsset asset, bool insertAtFront = false)
     {
         var folder = FindFolderNode(asset.FolderPath) ?? _categoryFolders[asset.Category];
-        folder.Children.Add(new TreeNodeViewModel(asset.Name, isFolder: false)
+        var node = new TreeNodeViewModel(asset.Name, isFolder: false)
         {
             AssetId = asset.Id,
             FolderPath = asset.FolderPath,
             Category = asset.Category
-        });
+        };
+        if (insertAtFront) folder.Children.Insert(0, node);
+        else folder.Children.Add(node);
     }
 
     /// <summary>Removes a leaf node by asset id from whichever category folder (or its sub-folder) holds it (no-op if not found).</summary>

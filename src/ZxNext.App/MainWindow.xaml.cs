@@ -171,12 +171,14 @@ public partial class MainWindow : Window
         }
 
         var preview = RawBitmapRenderer.FromRgba32(decoded.Width, decoded.Height, decoded.Rgba32);
-        var slicerVm = new AtlasSlicerViewModel(preview, decoded.Width, decoded.Height, cellWidth, cellHeight);
+        var slicerVm = new AtlasSlicerViewModel(preview, decoded.Width, decoded.Height, cellWidth, cellHeight,
+            _viewModel.Project, category, decoded.Rgba32);
         var dialog = new AtlasSlicerWindow { DataContext = slicerVm, Owner = this };
 
         if (dialog.ShowDialog() == true)
         {
-            await _viewModel.ImportSlicedAsync(source, category, folderPath, slicerVm.BuildParameters(), slicerVm.SkipDuplicateCells);
+            var placeTransparentFirst = slicerVm.CanOfferTransparentTileFirst && slicerVm.PlaceTransparentTileFirst;
+            await _viewModel.ImportSlicedAsync(source, category, folderPath, slicerVm.BuildParameters(), slicerVm.SkipDuplicateCells, placeTransparentFirst);
         }
     }
 

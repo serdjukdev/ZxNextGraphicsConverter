@@ -18,6 +18,7 @@ public class ProjectManifestDto
     public List<AssetDto> Assets { get; set; } = [];
     public List<MetatileDto> Metatiles { get; set; } = [];
     public List<MapDto> Maps { get; set; } = [];
+    public List<ObjectTypeDto> ObjectTypes { get; set; } = [];
 }
 
 public class SourceImageDto
@@ -94,6 +95,15 @@ public class SpritePlacementDto
     public Guid SpriteAssetId { get; set; }
     public int X { get; set; }
     public int Y { get; set; }
+    public Guid? TypeId { get; set; }
+    public Guid? LinkedPlacementId { get; set; }
+    public byte UserByte { get; set; }
+}
+
+public class ObjectTypeDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
 }
 
 /// <summary>

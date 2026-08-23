@@ -148,6 +148,33 @@ public class ReferenceIntegrityServiceTests
         Assert.False(ReferenceIntegrityService.CanDeleteMetatile(project, eightBpp).CanDelete);
     }
 
+    [Fact]
+    public void CanDeleteObjectType_AssignedToPlacementOnMap_Blocked()
+    {
+        var project = new ProjectState();
+        var type = new ObjectType { Name = "portal" };
+        project.ObjectTypes.Add(type);
+
+        var map = FakeMap("level1");
+        map.SpriteLayer.Add(new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 0, Y = 0, TypeId = type.Id });
+        project.Maps.Add(map);
+
+        var check = ReferenceIntegrityService.CanDeleteObjectType(project, type);
+
+        Assert.False(check.CanDelete);
+        Assert.Contains("level1", check.BlockingReason);
+    }
+
+    [Fact]
+    public void CanDeleteObjectType_NotAssignedAnywhere_Allowed()
+    {
+        var project = new ProjectState();
+        var type = new ObjectType { Name = "unused" };
+        project.ObjectTypes.Add(type);
+
+        Assert.True(ReferenceIntegrityService.CanDeleteObjectType(project, type).CanDelete);
+    }
+
     private static Metatile MetatileServiceCreate(ProjectState project, MetatileKind kind = MetatileKind.FourBpp)
     {
         var cells = new List<MetatileCell>

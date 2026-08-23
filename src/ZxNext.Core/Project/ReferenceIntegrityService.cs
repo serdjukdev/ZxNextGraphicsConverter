@@ -78,4 +78,19 @@ public static class ReferenceIntegrityService
         }
         return new DeletionCheck(true, null);
     }
+
+    /// <summary>Every MapAsset with at least one SpritePlacement whose TypeId is the given object type.</summary>
+    public static List<MapAsset> FindMapsReferencingObjectType(ProjectState project, Guid typeId) =>
+        project.Maps.Where(m => m.SpriteLayer.Any(s => s.TypeId == typeId)).ToList();
+
+    public static DeletionCheck CanDeleteObjectType(ProjectState project, ObjectType type)
+    {
+        var maps = FindMapsReferencingObjectType(project, type.Id);
+        if (maps.Count > 0)
+        {
+            return new DeletionCheck(false,
+                $"Cannot delete '{type.Name}': assigned to object(s) on map(s) {string.Join(", ", maps.Select(m => m.Name))}.");
+        }
+        return new DeletionCheck(true, null);
+    }
 }

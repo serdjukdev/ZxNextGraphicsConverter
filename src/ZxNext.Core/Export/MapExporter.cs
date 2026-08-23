@@ -87,19 +87,22 @@ public static class MapExporter
         return new GridLayerExportResult(gridResult, metatilesResult);
     }
 
-    private readonly record struct ObjectRecord(byte SpriteIndex, short X, short Y, string SpriteName);
+    /// <summary>0xFF sentinel shared by both Type and Connect: "no type assigned" / "no link" respectively — resolved from the placement's Guid reference (<see cref="SpritePlacement.TypeId"/>/<see cref="SpritePlacement.LinkedPlacementId"/>) into this positional byte only here, at export time; the live app never stores or renumbers a raw index itself.</summary>
+    private const byte NoneByte = 0xFF;
+
+    private readonly record struct ObjectRecord(byte SpriteIndex, short X, short Y, string SpriteName, byte Type, byte Connect, byte UserByte, string? TypeName, int? LinkTargetIndex, string? LinkTargetName);
 
     /// <summary>
     /// One `db` line per object — deliberately NOT run through <see cref="AsmByteDataWriter"/>'s generic
-    /// 16-bytes-per-line wrapping: a 5-byte record doesn't divide 16 evenly, so wrapping would smear
+    /// 16-bytes-per-line wrapping: an 8-byte record doesn't divide 16 evenly, so wrapping would smear
     /// object boundaries across line breaks and make the file unreadable as a list of objects (the whole
     /// point of "objects" being their own row is that a programmer can SEE each one). Each line is
     /// preceded by a comment naming the sprite and its placement, purely for human readability — the
     /// actual data is only the `db` line itself.
     /// </summary>
-    public static (bool Success, FolderExportResult? Result, string? Error) ExportObjects(MapAsset map, IReadOnlyList<GraphicsAsset> projectAssets)
+    public static (bool Success, FolderExportResult? Result, string? Error) ExportObjects(MapAsset map, IReadOnlyList<GraphicsAsset> projectAssets, IReadOnlyList<ObjectType> objectTypes)
     {
-        var (success, records, error) = BuildObjectRecords(map, projectAssets);
+        var (success, records, error) = BuildObjectRecords(map, projectAssets, objectTypes);
         if (!success)
         {
             return (false, null, error);
@@ -108,7 +111,8 @@ public static class MapExporter
         var rowKey = ExportFileNaming.ObjectsRowKey(map.Name);
         var sb = new StringBuilder();
         sb.Append("; ").Append(rowKey).Append(" -- object (sprite) placements on this map\n");
-        sb.Append("; One `db` line per object -- 5 bytes: spriteIndex (this sprite's rank within its own Sprite4Bpp/Sprite8Bpp category), X lo, X hi, Y lo, Y hi (X/Y int16 little-endian)\n");
+        sb.Append("; One `db` line per object -- 8 bytes: spriteIndex (this sprite's rank within its own Sprite4Bpp/Sprite8Bpp category), X lo, X hi, Y lo, Y hi (X/Y int16 little-endian), type, connect, userByte\n");
+        sb.Append("; type = obj_<name> equ index from object_types.asm (0xFF = no type); connect = index of the linked object below (0xFF = no link); userByte reserved, always 0 for now\n");
         sb.Append(rowKey).Append("_count: equ ").Append(records!.Count).Append('\n');
         sb.Append('\n');
         sb.Append(rowKey).Append(":\n");
@@ -124,15 +128,19 @@ public static class MapExporter
             var yLo = le[0];
             var yHi = le[1];
 
-            sb.Append("; [").Append(i).Append("] ").Append(r.SpriteName).Append(" at (").Append(r.X).Append(',').Append(r.Y).Append(")\n");
-            sb.Append("    db ").Append(r.SpriteIndex).Append(',').Append(xLo).Append(',').Append(xHi).Append(',').Append(yLo).Append(',').Append(yHi).Append('\n');
+            sb.Append("; [").Append(i).Append("] ").Append(r.SpriteName).Append(" at (").Append(r.X).Append(',').Append(r.Y).Append(')');
+            if (r.TypeName is not null) sb.Append(", type ").Append(r.TypeName);
+            if (r.LinkTargetIndex is { } targetIndex) sb.Append(", links to [").Append(targetIndex).Append("] ").Append(r.LinkTargetName);
+            sb.Append('\n');
+            sb.Append("    db ").Append(r.SpriteIndex).Append(',').Append(xLo).Append(',').Append(xHi).Append(',').Append(yLo).Append(',').Append(yHi)
+                .Append(',').Append(r.Type).Append(',').Append(r.Connect).Append(',').Append(r.UserByte).Append('\n');
         }
 
         var result = new FolderExportResult(rowKey, $"map/{map.Name}", [], [], sb.ToString(), $"{SanitizeFileName(rowKey)}.asm", null, IsChunked: false);
         return (true, result, null);
     }
 
-    private static (bool Success, List<ObjectRecord>? Records, string? Error) BuildObjectRecords(MapAsset map, IReadOnlyList<GraphicsAsset> projectAssets)
+    private static (bool Success, List<ObjectRecord>? Records, string? Error) BuildObjectRecords(MapAsset map, IReadOnlyList<GraphicsAsset> projectAssets, IReadOnlyList<ObjectType> objectTypes)
     {
         var referencedCategories = new HashSet<AssetCategory>();
         foreach (var placement in map.SpriteLayer)
@@ -155,12 +163,41 @@ public static class MapExporter
             }
         }
 
+        var typeIndexById = new Dictionary<Guid, int>();
+        for (var i = 0; i < objectTypes.Count; i++) typeIndexById[objectTypes[i].Id] = i;
+
+        // Connect is positional WITHIN THIS MAP's own SpriteLayer order — the same order records are built
+        // in below — resolved here rather than stored anywhere, exactly like spriteIndex/type above.
+        var placementIndexById = new Dictionary<Guid, int>();
+        for (var i = 0; i < map.SpriteLayer.Count; i++) placementIndexById[map.SpriteLayer[i].Id] = i;
+
         var records = new List<ObjectRecord>(map.SpriteLayer.Count);
-        foreach (var placement in map.SpriteLayer)
+        for (var i = 0; i < map.SpriteLayer.Count; i++)
         {
+            var placement = map.SpriteLayer[i];
             var asset = projectAssets.First(a => a.Id == placement.SpriteAssetId);
             var spriteIndex = (byte)AssetExportIndexer.IndexOf(asset, projectAssets);
-            records.Add(new ObjectRecord(spriteIndex, (short)placement.X, (short)placement.Y, asset.Name));
+
+            byte typeByte = NoneByte;
+            string? typeName = null;
+            if (placement.TypeId is { } typeId && typeIndexById.TryGetValue(typeId, out var typeIdx))
+            {
+                typeByte = (byte)typeIdx;
+                typeName = objectTypes[typeIdx].Name;
+            }
+
+            byte connectByte = NoneByte;
+            int? linkTargetIndex = null;
+            string? linkTargetName = null;
+            if (placement.LinkedPlacementId is { } linkId && placementIndexById.TryGetValue(linkId, out var linkIdx))
+            {
+                connectByte = (byte)linkIdx;
+                linkTargetIndex = linkIdx;
+                linkTargetName = projectAssets.FirstOrDefault(a => a.Id == map.SpriteLayer[linkIdx].SpriteAssetId)?.Name;
+            }
+
+            records.Add(new ObjectRecord(spriteIndex, (short)placement.X, (short)placement.Y, asset.Name,
+                typeByte, connectByte, placement.UserByte, typeName, linkTargetIndex, linkTargetName));
         }
 
         return (true, records, null);

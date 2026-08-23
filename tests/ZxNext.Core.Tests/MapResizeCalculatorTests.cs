@@ -83,6 +83,24 @@ public class MapResizeCalculatorTests
     }
 
     [Fact]
+    public void Plan_KeepsSpriteTypeAndLink_ClearsLinkIfTargetDropped()
+    {
+        var doorId = Guid.NewGuid();
+        var button = new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 20, Y = 20, TypeId = Guid.NewGuid(), UserByte = 3, LinkedPlacementId = doorId };
+        var door = new SpritePlacement { Id = doorId, SpriteAssetId = Guid.NewGuid(), X = 10, Y = 10 }; // will land at -6,-6 -> dropped
+        var map = MakeMap(4, 4, metatileGridSize: 1, sprites: [button, door]);
+
+        // cellPixelSize = 8px; offset -2 cells = -16px on each axis — same shrink as the negative-position test above.
+        var plan = MapResizeCalculator.Plan(map, newWidth: 4, newHeight: 4, offsetX: -2, offsetY: -2);
+
+        Assert.Equal(1, plan.DroppedSpriteCount);
+        var kept = Assert.Single(plan.KeptSprites);
+        Assert.Equal(button.TypeId, kept.TypeId); // type/userByte survive the resize
+        Assert.Equal(3, kept.UserByte);
+        Assert.Null(kept.LinkedPlacementId); // link target got dropped -> dangling reference cleared, not left pointing at nothing
+    }
+
+    [Fact]
     public void PlanTrim_BoundingBoxIsJointAcrossBothGridLayers()
     {
         var tilemap = FullOfEmpty(25);

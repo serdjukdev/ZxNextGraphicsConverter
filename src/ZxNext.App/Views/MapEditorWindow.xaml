@@ -131,24 +131,22 @@
                 </StackPanel>
             </Grid>
 
-            <TextBlock Grid.Row="4" Margin="0,0,0,4" TextWrapping="Wrap">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock">
-                        <Setter Property="Text" Value="Pick something below, then click (or drag) on the canvas." />
-                        <Setter Property="Foreground" Value="Gray" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsPaintReady}" Value="True">
-                                <Setter Property="Text" Value="Ready — click or drag on the canvas to paint." />
-                                <Setter Property="Foreground" Value="#1A7A1A" />
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding HasSelection}" Value="True">
-                                <Setter Property="Text" Value="Selection active — Alt-drag inside it to move (Alt+Shift to copy). Delete key or the button below clears its contents." />
-                                <Setter Property="Foreground" Value="#1A5FA7" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </TextBlock.Style>
-            </TextBlock>
+            <Grid Grid.Row="2" Margin="0,0,0,6" Visibility="{Binding IsSpritesLayerActive, Converter={StaticResource BoolToVis}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Selected object's type" FontSize="10" Foreground="Gray" />
+                    <ComboBox ItemsSource="{Binding ObjectTypePalette}" SelectedItem="{Binding SelectedTypeForAssignment}"
+                              DisplayMemberPath="Name" IsEnabled="{Binding HasSelection}" />
+                    <TextBlock Text="{Binding TypeAssignmentHint}" FontSize="9" Foreground="Gray" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="Manage Types..." Click="ManageTypes_OnClick" VerticalAlignment="Bottom" Margin="6,0,0,0" />
+            </Grid>
+
+            <TextBlock Grid.Row="4" Margin="0,0,0,4" TextWrapping="Wrap"
+                       Text="{Binding CanvasHintText}" Foreground="{Binding CanvasHintForeground}" />
 
             <!-- Metatile palette: grid layers -->
             <Border Grid.Row="5" BorderBrush="#999" BorderThickness="1" Visibility="{Binding IsGridLayerActive, Converter={StaticResource BoolToVis}}">
@@ -209,6 +207,19 @@
             <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,8,0,0">
                 <Button Content="Fill Selection" Command="{Binding FillSelectionCommand}" IsEnabled="{Binding CanFillSelection}" Width="100" Margin="0,0,6,0" />
                 <Button Content="Delete Selection" Command="{Binding DeleteSelectionCommand}" IsEnabled="{Binding HasSelection}" Width="110" Margin="0,0,6,0" />
+                <Button Command="{Binding ToggleLinkToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}" Width="70" Margin="0,0,6,0" ToolTip="Link two objects: click one, then click the other.">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Content" Value="Link" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsLinkToolActive}" Value="True">
+                                    <Setter Property="Content" Value="Link (click B)" />
+                                    <Setter Property="Background" Value="Orange" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
                 <Button Content="Undo (Ctrl+Z)" Command="{Binding UndoCommand}" Width="110" />
             </StackPanel>
         </Grid>
@@ -222,8 +233,18 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" FontWeight="Bold" VerticalAlignment="Center" TextWrapping="Wrap"
-                           Text="Canvas — drag to paint. Ctrl=erase, Shift=snap sprite, Alt=select/move (Alt+Shift=copy). Wheel=zoom, middle-drag=pan." />
+                <TextBlock Grid.Column="0" FontWeight="Bold" VerticalAlignment="Center" TextWrapping="Wrap">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Text" Value="Canvas — click to place. Ctrl=erase, Shift=snap to grid, Alt=select/move (Alt+Shift=copy). Wheel=zoom, middle-drag=pan." />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsGridLayerActive}" Value="True">
+                                    <Setter Property="Text" Value="Canvas — click or drag to paint. Ctrl=erase, Alt=select/move (Alt+Shift=copy). Wheel=zoom, middle-drag=pan." />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
                 <CheckBox Grid.Column="1" Content="Show grid" IsChecked="{Binding IsGridVisible}" VerticalAlignment="Center" />
             </Grid>
             <Border Style="{StaticResource CanvasBorderStyle}" Background="#333">
@@ -244,6 +265,7 @@
                         </Grid.LayoutTransform>
                         <Image x:Name="MapImage" Source="{Binding MapPreview}" Stretch="None" RenderOptions.BitmapScalingMode="NearestNeighbor" />
                         <Canvas x:Name="GridOverlay" IsHitTestVisible="False" />
+                        <Canvas x:Name="LinksOverlay" IsHitTestVisible="False" />
                         <Canvas x:Name="HoverOverlay" IsHitTestVisible="False" />
                         <Canvas x:Name="SelectionOverlay" IsHitTestVisible="False" />
                     </Grid>

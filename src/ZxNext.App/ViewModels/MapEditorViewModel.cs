@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -69,6 +70,9 @@ public partial class MapEditorViewModel : ObservableObject
     /// <summary>Set true by a successful Create/Delete/paint/erase/undo/visibility toggle/reorder — read once by the caller (MainWindow) after the dialog closes, to decide whether to mark the project as having unsaved changes.</summary>
     public bool HasChanges { get; private set; }
 
+    /// <summary>Lets the View flag a change made outside this ViewModel's own operations — e.g. the Object Types management dialog, which mutates <see cref="ProjectState.ObjectTypes"/> directly and has no undo step of its own here.</summary>
+    public void MarkChanged() => HasChanges = true;
+
     /// <summary>Raised whenever Resize/Trim (or their undo) change the map's Width/Height — the View's grid/selection overlays size themselves from those and have no other way to notice, since neither SelectedMap nor MapPreview changing implies a size change on their own (SelectedMap doesn't change on a resize; MapPreview changes on every paint stroke too, which would make redrawing the grid on every stroke needlessly wasteful).</summary>
     public event Action? MapResized;
 
@@ -94,12 +98,19 @@ public partial class MapEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsGridLayerActive))]
+    [NotifyPropertyChangedFor(nameof(IsSpritesLayerActive))]
     [NotifyPropertyChangedFor(nameof(IsPaintReady))]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     [NotifyPropertyChangedFor(nameof(CanFillSelection))]
+    [NotifyPropertyChangedFor(nameof(CanvasHintText))]
+    [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
+    [NotifyPropertyChangedFor(nameof(TypeAssignmentHint))]
     private MapLayerKind activeLayer = MapLayerKind.Tilemap;
 
     public bool IsGridLayerActive => ActiveLayer != MapLayerKind.Sprites;
+
+    /// <summary>Gates the Link tool (Object types/links only ever apply to the Sprite layer — see the design discussion 2026-08-23) — same shape as <see cref="IsGridLayerActive"/>, just the opposite layer.</summary>
+    public bool IsSpritesLayerActive => ActiveLayer == MapLayerKind.Sprites;
 
     [ObservableProperty]
     private ObservableCollection<MetatileListItemViewModel> metatilePalette = [];
@@ -107,6 +118,8 @@ public partial class MapEditorViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsPaintReady))]
     [NotifyPropertyChangedFor(nameof(CanFillSelection))]
+    [NotifyPropertyChangedFor(nameof(CanvasHintText))]
+    [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
     private MetatileListItemViewModel? selectedPaletteMetatile;
 
     [ObservableProperty]
@@ -114,6 +127,8 @@ public partial class MapEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsPaintReady))]
+    [NotifyPropertyChangedFor(nameof(CanvasHintText))]
+    [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
     private TilePaletteItemViewModel? selectedPaletteSprite;
 
     /// <summary>True once the relevant palette (metatile or sprite, depending on the active layer) has something picked — drives the instructional banner/canvas highlight, same purpose as the Metatile Editor's IsPaintModeActive. There's no separate Paint "tool" to also check — see the class doc comment.</summary>
@@ -123,6 +138,9 @@ public partial class MapEditorViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     [NotifyPropertyChangedFor(nameof(CanFillSelection))]
+    [NotifyPropertyChangedFor(nameof(CanvasHintText))]
+    [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
+    [NotifyPropertyChangedFor(nameof(TypeAssignmentHint))]
     private CellRect? gridSelection;
 
     /// <summary>Active only on the Sprite layer — the sprites currently selected by the Select tool's marquee (bounding-box intersection), populated in place of GridSelection.</summary>
@@ -131,6 +149,30 @@ public partial class MapEditorViewModel : ObservableObject
     public bool HasSelection => IsGridLayerActive ? GridSelection is not null : SelectedSprites.Count > 0;
 
     public bool CanFillSelection => IsGridLayerActive && GridSelection is not null && SelectedPaletteMetatile is not null;
+
+    /// <summary>Single source of truth for the Row-4 instructional banner text — computed here rather than via XAML DataTrigger/MultiDataTrigger, since WPF resolves conflicting trigger setters by trigger TYPE precedence (MultiDataTrigger always beats a plain DataTrigger, regardless of declaration order), which made a mixed Trigger/MultiDataTrigger style pick the wrong text on the Sprites layer.</summary>
+    public string CanvasHintText
+    {
+        get
+        {
+            if (HasSelection) return "Selection active — Alt-drag inside it to move (Alt+Shift to copy). Delete key or the button below clears its contents.";
+            if (IsPaintReady) return IsGridLayerActive ? "Ready — click or drag on the canvas to paint." : "Ready — click on the canvas to place it.";
+            return IsGridLayerActive ? "Pick something below, then click or drag on the canvas." : "Pick something below, then click on the canvas.";
+        }
+    }
+
+    public Brush CanvasHintForeground
+    {
+        get
+        {
+            if (HasSelection) return new SolidColorBrush(Color.FromRgb(0x1A, 0x5F, 0xA7));
+            if (IsPaintReady) return new SolidColorBrush(Color.FromRgb(0x1A, 0x7A, 0x1A));
+            return Brushes.Gray;
+        }
+    }
+
+    /// <summary>Empty once an object is selected (the type ComboBox becomes usable) — shown next to it so the reason it starts disabled isn't a mystery.</summary>
+    public string TypeAssignmentHint => HasSelection ? "" : "Select an object first (Alt-drag on the canvas).";
 
     /// <summary>One shared grid overlay toggle for the whole canvas (fine 8x8 tile grid + brighter metatile-size grid) — not per-layer, since all layers occupy the same cell grid.</summary>
     [ObservableProperty]
@@ -142,6 +184,28 @@ public partial class MapEditorViewModel : ObservableObject
     [ObservableProperty]
     private bool isStatusError;
 
+    /// <summary>Sentinel entry prepended to <see cref="ObjectTypePalette"/> for "no type assigned" — a real <see cref="ObjectType"/> can never have <see cref="ObjectType.Id"/> Guid.Empty, so this is unambiguous.</summary>
+    public static readonly ObjectType NoTypeSentinel = new() { Id = Guid.Empty, Name = "(none)" };
+
+    [ObservableProperty]
+    private ObservableCollection<ObjectType> objectTypePalette = [];
+
+    private bool _isSyncingTypeAssignment;
+
+    /// <summary>Bound to the Sprites-layer inspector's type ComboBox — reflects the (first) selected sprite's current TypeId, and assigning a different value here applies it to every currently selected sprite. See <see cref="OnSelectedTypeForAssignmentChanged"/>.</summary>
+    [ObservableProperty]
+    private ObjectType? selectedTypeForAssignment;
+
+    /// <summary>Exposed only so the View can open the Object Types management dialog without duplicating ProjectState plumbing — the dialog mutates <see cref="ProjectState.ObjectTypes"/> directly, same as every other list-management dialog in this app.</summary>
+    public ProjectState Project => _project;
+
+    /// <summary>True while the Link tool is armed (Sprites layer only) — first canvas click on a sprite sets <see cref="LinkSource"/>, second click on a DIFFERENT sprite commits the link and deactivates. See <see cref="ToggleLinkTool"/>/<see cref="HandleLinkClick"/>.</summary>
+    [ObservableProperty]
+    private bool isLinkToolActive;
+
+    [ObservableProperty]
+    private SpritePlacement? linkSource;
+
     public MapEditorViewModel(ProjectState project)
     {
         _project = project;
@@ -149,8 +213,16 @@ public partial class MapEditorViewModel : ObservableObject
         {
             row.PropertyChanged += (_, _) => OnLayerVisibilityChanged();
         }
-        SelectedSprites.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSelection));
+        SelectedSprites.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasSelection));
+            OnPropertyChanged(nameof(CanvasHintText));
+            OnPropertyChanged(nameof(CanvasHintForeground));
+            OnPropertyChanged(nameof(TypeAssignmentHint));
+            SyncTypeAssignmentFromSelection();
+        };
         SelectedLayerRow = LayerOrder.First(r => r.Kind == MapLayerKind.Tilemap);
+        RefreshObjectTypePalette();
         RefreshMapList();
     }
 
@@ -243,7 +315,7 @@ public partial class MapEditorViewModel : ObservableObject
     }
 
     private static List<SpritePlacement> CloneSprites(IEnumerable<SpritePlacement> sprites) =>
-        sprites.Select(s => new SpritePlacement { Id = s.Id, SpriteAssetId = s.SpriteAssetId, X = s.X, Y = s.Y }).ToList();
+        sprites.Select(s => new SpritePlacement { Id = s.Id, SpriteAssetId = s.SpriteAssetId, X = s.X, Y = s.Y, TypeId = s.TypeId, LinkedPlacementId = s.LinkedPlacementId, UserByte = s.UserByte }).ToList();
 
     [RelayCommand]
     private void MoveLayerUp()
@@ -298,6 +370,7 @@ public partial class MapEditorViewModel : ObservableObject
 
         _undoStack.Clear(); // a stroke's undo closures capture the previously-selected map's arrays — never valid across a map switch
         ClearSelection();
+        CancelLinkTool(); // LinkSource points at a placement on the map we're leaving
         RefreshMetatilePalette();
         RefreshSpritePalette();
         RenderPreview();
@@ -306,7 +379,99 @@ public partial class MapEditorViewModel : ObservableObject
     partial void OnActiveLayerChanged(MapLayerKind value)
     {
         ClearSelection(); // GridSelection/SelectedSprites are each meaningful for only one kind of layer — never valid across a layer switch
+        CancelLinkTool(); // the Link tool only makes sense on the Sprites layer
         RefreshMetatilePalette();
+    }
+
+    /// <summary>Refreshes the type-assignment ComboBox's source list — call after Object Types are added/renamed/deleted via the management dialog, since that dialog mutates <see cref="ProjectState.ObjectTypes"/> directly without this ViewModel otherwise noticing.</summary>
+    public void RefreshObjectTypePalette()
+    {
+        ObjectTypePalette = new ObservableCollection<ObjectType>(new[] { NoTypeSentinel }.Concat(_project.ObjectTypes));
+        SyncTypeAssignmentFromSelection();
+    }
+
+    private void SyncTypeAssignmentFromSelection()
+    {
+        _isSyncingTypeAssignment = true;
+        try
+        {
+            var first = SelectedSprites.FirstOrDefault();
+            SelectedTypeForAssignment = first is null
+                ? null
+                : ObjectTypePalette.FirstOrDefault(t => t.Id == first.TypeId) ?? NoTypeSentinel;
+        }
+        finally
+        {
+            _isSyncingTypeAssignment = false;
+        }
+    }
+
+    /// <summary>Applies the newly-picked type to every currently selected sprite — a bulk "set", not a per-sprite toggle, since a multi-selection with mixed types has no single value to show anyway (falls back to the first sprite's type — see SyncTypeAssignmentFromSelection). One combined undo step.</summary>
+    partial void OnSelectedTypeForAssignmentChanged(ObjectType? value)
+    {
+        if (_isSyncingTypeAssignment || value is null || SelectedSprites.Count == 0) return;
+
+        var newTypeId = value.Id == Guid.Empty ? (Guid?)null : value.Id;
+        var original = SelectedSprites.Select(s => (Sprite: s, s.TypeId)).ToList();
+        foreach (var sprite in SelectedSprites) sprite.TypeId = newTypeId;
+        _undoStack.Push(() =>
+        {
+            foreach (var (sprite, typeId) in original) sprite.TypeId = typeId;
+            RenderPreview();
+        });
+
+        HasChanges = true;
+        RenderPreview();
+    }
+
+    [RelayCommand]
+    private void ToggleLinkTool()
+    {
+        if (IsLinkToolActive)
+        {
+            CancelLinkTool();
+            return;
+        }
+        if (!IsSpritesLayerActive) return;
+
+        ClearSelection();
+        LinkSource = null;
+        IsLinkToolActive = true;
+    }
+
+    private void CancelLinkTool()
+    {
+        IsLinkToolActive = false;
+        LinkSource = null;
+    }
+
+    /// <summary>Called by the View on a canvas click while the Link tool is armed — <paramref name="clicked"/> is whatever <see cref="FindSpriteAt"/> hit, or null for empty space. First hit becomes the link source; a second, DIFFERENT hit commits <see cref="SpritePlacement.LinkedPlacementId"/> and deactivates the tool. Clicking empty space or the source again is a no-op (stays armed) rather than cancelling — cancelling is the button's job.</summary>
+    public void HandleLinkClick(SpritePlacement? clicked)
+    {
+        if (!IsLinkToolActive || clicked is null) return;
+
+        if (LinkSource is null)
+        {
+            LinkSource = clicked;
+            return;
+        }
+        if (ReferenceEquals(LinkSource, clicked)) return;
+
+        var source = LinkSource;
+        var previousLink = source.LinkedPlacementId;
+        source.LinkedPlacementId = clicked.Id;
+        _undoStack.Push(() =>
+        {
+            source.LinkedPlacementId = previousLink;
+            RenderPreview();
+            RefreshSelectedMapThumbnail();
+        });
+
+        LinkSource = null;
+        IsLinkToolActive = false;
+        HasChanges = true;
+        RenderPreview();
+        RefreshSelectedMapThumbnail();
     }
 
     /// <summary>Clears whichever half of the selection state is currently populated — safe to call unconditionally (e.g. on every layer/map switch, or when starting a new marquee drag).</summary>
@@ -578,8 +743,22 @@ public partial class MapEditorViewModel : ObservableObject
         {
             if (SelectedSprites.Count == 0) return;
             var removed = SelectedSprites.ToList();
+            var removedIds = removed.Select(s => s.Id).ToHashSet();
             foreach (var sprite in removed) map.SpriteLayer.Remove(sprite);
-            _undoStack.Push(() => { map.SpriteLayer.AddRange(removed); RenderPreview(); RefreshSelectedMapThumbnail(); });
+
+            // Any surviving placement that linked to one of the removed objects loses that link — its
+            // export connect-byte would otherwise dangle. Snapshot before clearing so undo can restore it.
+            var danglingLinks = map.SpriteLayer.Where(s => s.LinkedPlacementId is { } linkId && removedIds.Contains(linkId)).ToList();
+            var clearedLinks = danglingLinks.Select(s => (Sprite: s, s.LinkedPlacementId)).ToList();
+            foreach (var sprite in danglingLinks) sprite.LinkedPlacementId = null;
+
+            _undoStack.Push(() =>
+            {
+                map.SpriteLayer.AddRange(removed);
+                foreach (var (sprite, linkId) in clearedLinks) sprite.LinkedPlacementId = linkId;
+                RenderPreview();
+                RefreshSelectedMapThumbnail();
+            });
             SelectedSprites.Clear();
             HasChanges = true;
             RenderPreview();
@@ -667,7 +846,8 @@ public partial class MapEditorViewModel : ObservableObject
 
         if (isCopy)
         {
-            var copies = SelectedSprites.Select(s => new SpritePlacement { SpriteAssetId = s.SpriteAssetId, X = s.X + deltaX, Y = s.Y + deltaY }).ToList();
+            // LinkedPlacementId is deliberately NOT carried over — a copy starts unlinked (see design discussion 2026-08-23).
+            var copies = SelectedSprites.Select(s => new SpritePlacement { SpriteAssetId = s.SpriteAssetId, X = s.X + deltaX, Y = s.Y + deltaY, TypeId = s.TypeId, UserByte = s.UserByte }).ToList();
             map.SpriteLayer.AddRange(copies);
             _undoStack.Push(() =>
             {

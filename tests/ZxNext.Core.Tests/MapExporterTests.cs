@@ -170,7 +170,7 @@ public class MapExporterTests
     }
 
     [Fact]
-    public void ExportObjects_EncodesFixedFiveByteLittleEndianRecords_AsDbBytes_InPlacementOrder()
+    public void ExportObjects_EncodesFixedEightByteLittleEndianRecords_AsDbBytes_InPlacementOrder()
     {
         var spriteA = FakeSprite("hero", sortIndex: 0);
         var spriteB = FakeSprite("enemy", sortIndex: 1);
@@ -182,7 +182,7 @@ public class MapExporterTests
             new SpritePlacement { SpriteAssetId = spriteB.Id, X = 5, Y = 7 }
         ]);
 
-        var (success, result, error) = MapExporter.ExportObjects(map, assets);
+        var (success, result, error) = MapExporter.ExportObjects(map, assets, []);
 
         Assert.True(success, error);
         Assert.False(result!.IsChunked);
@@ -191,16 +191,53 @@ public class MapExporterTests
         Assert.Contains("level1_objects_count: equ 2", result.AsmText);
 
         var data = ExtractDbBytes(result.AsmText, "level1_objects");
-        Assert.Equal(10, data.Count); // 2 records * 5 bytes
+        Assert.Equal(16, data.Count); // 2 records * 8 bytes
         var dataBytes = data.ToArray();
 
         Assert.Equal(0, dataBytes[0]); // spriteA's export index
         Assert.Equal(300, BinaryPrimitives.ReadInt16LittleEndian(dataBytes.AsSpan(1, 2)));
         Assert.Equal(10, BinaryPrimitives.ReadInt16LittleEndian(dataBytes.AsSpan(3, 2)));
+        Assert.Equal(0xFF, dataBytes[5]); // type: none assigned
+        Assert.Equal(0xFF, dataBytes[6]); // connect: no link
+        Assert.Equal(0, dataBytes[7]); // userByte: always 0 for now
 
-        Assert.Equal(1, dataBytes[5]); // spriteB's export index
-        Assert.Equal(5, BinaryPrimitives.ReadInt16LittleEndian(dataBytes.AsSpan(6, 2)));
-        Assert.Equal(7, BinaryPrimitives.ReadInt16LittleEndian(dataBytes.AsSpan(8, 2)));
+        Assert.Equal(1, dataBytes[8]); // spriteB's export index
+        Assert.Equal(5, BinaryPrimitives.ReadInt16LittleEndian(dataBytes.AsSpan(9, 2)));
+        Assert.Equal(7, BinaryPrimitives.ReadInt16LittleEndian(dataBytes.AsSpan(11, 2)));
+        Assert.Equal(0xFF, dataBytes[13]);
+        Assert.Equal(0xFF, dataBytes[14]);
+        Assert.Equal(0, dataBytes[15]);
+    }
+
+    [Fact]
+    public void ExportObjects_ResolvesTypeAndLinkGuidsToPositionalBytes()
+    {
+        var spriteA = FakeSprite("button", sortIndex: 0);
+        var spriteB = FakeSprite("door", sortIndex: 1);
+        var assets = new List<GraphicsAsset> { spriteA, spriteB };
+
+        var portalType = new ObjectType { Name = "portal" };
+        var characterType = new ObjectType { Name = "character" };
+        var objectTypes = new List<ObjectType> { characterType, portalType }; // portal is at position 1, not 0
+
+        var doorPlacement = new SpritePlacement { SpriteAssetId = spriteB.Id, X = 50, Y = 50, TypeId = portalType.Id, UserByte = 7 };
+        var buttonPlacement = new SpritePlacement { SpriteAssetId = spriteA.Id, X = 0, Y = 0, LinkedPlacementId = doorPlacement.Id };
+        var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [buttonPlacement, doorPlacement]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, assets, objectTypes);
+
+        Assert.True(success, error);
+        var data = ExtractDbBytes(result!.AsmText, "level1_objects").ToArray();
+
+        // Record 0 (button): type 0xFF (none), connect 1 (door is at placement index 1), userByte 0
+        Assert.Equal(0xFF, data[5]);
+        Assert.Equal(1, data[6]);
+        Assert.Equal(0, data[7]);
+
+        // Record 1 (door): type 1 (portal's position in objectTypes), connect 0xFF (no link), userByte 7
+        Assert.Equal(1, data[13]);
+        Assert.Equal(0xFF, data[14]);
+        Assert.Equal(7, data[15]);
     }
 
     [Fact]
@@ -212,7 +249,7 @@ public class MapExporterTests
 
         var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [new SpritePlacement { SpriteAssetId = spriteZ.Id, X = 0, Y = 0 }]);
 
-        var (success, result, error) = MapExporter.ExportObjects(map, assets);
+        var (success, result, error) = MapExporter.ExportObjects(map, assets, []);
 
         Assert.True(success, error);
         Assert.Equal(0, ExtractDbBytes(result!.AsmText, "level1_objects")[0]); // spriteZ has SortIndex 0 -> export index 0, despite its name
@@ -225,7 +262,7 @@ public class MapExporterTests
         for (var i = 0; i < 257; i++) assets.Add(FakeSprite($"s{i}", i));
         var map = FakeMap("level1", 2, 2, gridSize: 1, sprites: [new SpritePlacement { SpriteAssetId = assets[0].Id, X = 0, Y = 0 }]);
 
-        var (success, result, error) = MapExporter.ExportObjects(map, assets);
+        var (success, result, error) = MapExporter.ExportObjects(map, assets, []);
 
         Assert.False(success);
         Assert.Null(result);
@@ -237,7 +274,7 @@ public class MapExporterTests
     {
         var map = FakeMap("level1", 2, 2, gridSize: 1, sprites: [new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 0, Y = 0 }]);
 
-        var (success, result, error) = MapExporter.ExportObjects(map, []);
+        var (success, result, error) = MapExporter.ExportObjects(map, [], []);
 
         Assert.False(success);
         Assert.Null(result);

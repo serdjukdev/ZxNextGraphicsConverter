@@ -142,13 +142,21 @@ public static class ProjectService
                         Id = s.Id,
                         SpriteAssetId = s.SpriteAssetId,
                         X = s.X,
-                        Y = s.Y
+                        Y = s.Y,
+                        TypeId = s.TypeId,
+                        LinkedPlacementId = s.LinkedPlacementId,
+                        UserByte = s.UserByte
                     }).ToList(),
                     TilemapLayerVisible = map.TilemapLayerVisible,
                     TileLayer8BppVisible = map.TileLayer8BppVisible,
                     SpriteLayerVisible = map.SpriteLayerVisible,
                     LayerOrder = map.LayerOrder.ToList()
                 });
+            }
+
+            foreach (var type in project.ObjectTypes)
+            {
+                dto.ObjectTypes.Add(new ObjectTypeDto { Id = type.Id, Name = type.Name });
             }
 
             var jsonEntry = zip.CreateEntry("project.json", CompressionLevel.Fastest);
@@ -277,13 +285,21 @@ public static class ProjectService
                     Id = s.Id,
                     SpriteAssetId = s.SpriteAssetId,
                     X = s.X,
-                    Y = s.Y
+                    Y = s.Y,
+                    TypeId = s.TypeId,
+                    LinkedPlacementId = s.LinkedPlacementId,
+                    UserByte = s.UserByte
                 }).ToList(),
                 TilemapLayerVisible = mapDto.TilemapLayerVisible,
                 TileLayer8BppVisible = mapDto.TileLayer8BppVisible,
                 SpriteLayerVisible = mapDto.SpriteLayerVisible,
                 LayerOrder = mapDto.LayerOrder.Count == 3 ? mapDto.LayerOrder : [MapLayerKind.Sprites, MapLayerKind.TileLayer8Bpp, MapLayerKind.Tilemap]
             });
+        }
+
+        foreach (var t in dto.ObjectTypes)
+        {
+            project.ObjectTypes.Add(new ObjectType { Id = t.Id, Name = t.Name });
         }
 
         return project;

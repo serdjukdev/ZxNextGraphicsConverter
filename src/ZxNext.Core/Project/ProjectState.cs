@@ -28,6 +28,9 @@ public class ProjectState
     public List<Metatile> Metatiles { get; } = [];
     public List<MapAsset> Maps { get; } = [];
 
+    /// <summary>Project-wide list of user-defined map-object categories (e.g. "portal", "character"). See <see cref="ObjectType"/> for why this is project-wide rather than per-map.</summary>
+    public List<ObjectType> ObjectTypes { get; } = [];
+
     /// <summary>
     /// Next value in the PER-KIND creation-order sequence for metatiles — deliberately NOT a single
     /// global counter across every <see cref="MetatileKind"/> like <see cref="GraphicsAsset.SortIndex"/>

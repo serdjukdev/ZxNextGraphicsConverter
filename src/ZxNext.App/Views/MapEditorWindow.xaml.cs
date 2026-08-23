@@ -37,10 +37,11 @@ public partial class MapEditorWindow : Window
             {
                 vm.PropertyChanged += MapEditorVm_OnPropertyChanged;
                 vm.SelectedSprites.CollectionChanged += (_, _) => DrawSelectionOverlay();
-                vm.MapResized += () => { DrawGrid(); DrawSelectionOverlay(); };
+                vm.MapResized += () => { DrawGrid(); DrawSelectionOverlay(); DrawLinksOverlay(); };
             }
             DrawGrid();
             DrawSelectionOverlay();
+            DrawLinksOverlay();
         };
     }
 
@@ -54,9 +55,14 @@ public partial class MapEditorWindow : Window
         {
             HoverOverlay.Children.Clear(); // avoid a stale highlight when switching layer/map — the next mouse move redraws it if still applicable
         }
-        if (e.PropertyName is nameof(MapEditorViewModel.SelectedMap) or nameof(MapEditorViewModel.ActiveLayer) or nameof(MapEditorViewModel.GridSelection))
+        if (e.PropertyName is nameof(MapEditorViewModel.SelectedMap) or nameof(MapEditorViewModel.ActiveLayer) or nameof(MapEditorViewModel.GridSelection)
+            or nameof(MapEditorViewModel.LinkSource) or nameof(MapEditorViewModel.IsLinkToolActive))
         {
             DrawSelectionOverlay();
+        }
+        if (e.PropertyName is nameof(MapEditorViewModel.SelectedMap) or nameof(MapEditorViewModel.MapPreview))
+        {
+            DrawLinksOverlay(); // every sprite-layer mutation (paint/erase/move/copy/delete/link/undo) already calls RenderPreview(), which changes MapPreview — piggybacking on that covers every case without a dedicated event
         }
     }
 
@@ -110,6 +116,18 @@ public partial class MapEditorWindow : Window
         }
     }
 
+    private void ManageTypes_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MapEditorViewModel vm) return;
+
+        var typesVm = new ObjectTypesViewModel(vm.Project);
+        var dialog = new ObjectTypesWindow { DataContext = typesVm, Owner = this };
+        dialog.ShowDialog();
+
+        vm.RefreshObjectTypePalette();
+        if (typesVm.HasChanges) vm.MarkChanged();
+    }
+
     private void ResizeMap_OnClick(object sender, RoutedEventArgs e)
     {
         if (DataContext is not MapEditorViewModel vm || vm.SelectedMap is null) return;
@@ -129,6 +147,13 @@ public partial class MapEditorWindow : Window
         var position = e.GetPosition(MapImage);
         var pixelX = (int)position.X;
         var pixelY = (int)position.Y;
+
+        if (vm.IsLinkToolActive)
+        {
+            // Click-click, not drag — takes over the click entirely so normal paint/select never also fires.
+            vm.HandleLinkClick(vm.FindSpriteAt(pixelX, pixelY));
+            return;
+        }
 
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
         {
@@ -280,6 +305,13 @@ public partial class MapEditorWindow : Window
 
         var thickness = 1.0 / MapZoomTransform.ScaleX;
 
+        if (vm.IsLinkToolActive && vm.LinkSource is { } source)
+        {
+            // The Link tool's "waiting for the second click" state — shown regardless of drag mode, since
+            // arming the tool already intercepts clicks before any Alt-drag select/move can start.
+            DrawHighlightRect(source.X, source.Y, MapEditorViewModel.SpritePixelSize, MapEditorViewModel.SpritePixelSize, Brushes.Orange, Color.FromArgb(90, 255, 165, 0));
+        }
+
         if (_selectDragMode == SelectDragMode.Marquee)
         {
             if (vm.ActiveLayer == MapLayerKind.Sprites)
@@ -345,6 +377,68 @@ public partial class MapEditorWindow : Window
         Canvas.SetLeft(rect, x);
         Canvas.SetTop(rect, y);
         SelectionOverlay.Children.Add(rect);
+    }
+
+    /// <summary>Draws one arrowed line per active <see cref="SpritePlacement.LinkedPlacementId"/> on the current map's Sprite layer, center-to-center. A reciprocal pair (A links to B AND B links to A) is offset apart perpendicular to the line so both directions stay visible instead of overlapping into one line.</summary>
+    private void DrawLinksOverlay()
+    {
+        LinksOverlay.Children.Clear();
+        if (DataContext is not MapEditorViewModel vm || vm.SelectedMap is null) return;
+
+        var map = vm.SelectedMap.Map;
+        if (!map.SpriteLayerVisible) return;
+
+        const int half = MapEditorViewModel.SpritePixelSize / 2;
+        var thickness = 1.5 / MapZoomTransform.ScaleX;
+        var placementById = map.SpriteLayer.ToDictionary(p => p.Id);
+
+        foreach (var placement in map.SpriteLayer)
+        {
+            if (placement.LinkedPlacementId is not { } targetId) continue;
+            if (!placementById.TryGetValue(targetId, out var target)) continue; // dangling ref should never happen (delete/resize both clean these up) — never let the overlay crash over it
+
+            var isReciprocal = target.LinkedPlacementId == placement.Id;
+            DrawLinkLine(placement.X + half, placement.Y + half, target.X + half, target.Y + half, isReciprocal, thickness);
+        }
+    }
+
+    private void DrawLinkLine(double x0, double y0, double x1, double y1, bool offsetApart, double thickness)
+    {
+        var dx = x1 - x0;
+        var dy = y1 - y0;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length < 0.001) return; // self-referential after some other edit — nothing meaningful to draw
+
+        var ux = dx / length;
+        var uy = dy / length;
+
+        double offsetX = 0, offsetY = 0;
+        if (offsetApart)
+        {
+            const double reciprocalGap = 3;
+            offsetX = -uy * reciprocalGap;
+            offsetY = ux * reciprocalGap;
+        }
+
+        var startX = x0 + offsetX;
+        var startY = y0 + offsetY;
+        var endX = x1 + offsetX;
+        var endY = y1 + offsetY;
+
+        LinksOverlay.Children.Add(new Line { X1 = startX, Y1 = startY, X2 = endX, Y2 = endY, Stroke = Brushes.Cyan, StrokeThickness = thickness });
+
+        const double arrowLength = 6;
+        const double arrowSpread = 4;
+        var baseX = endX - ux * arrowLength;
+        var baseY = endY - uy * arrowLength;
+        var perpX = -uy * arrowSpread;
+        var perpY = ux * arrowSpread;
+
+        LinksOverlay.Children.Add(new Polygon
+        {
+            Points = new PointCollection { new Point(endX, endY), new Point(baseX + perpX, baseY + perpY), new Point(baseX - perpX, baseY - perpY) },
+            Fill = Brushes.Cyan
+        });
     }
 
     /// <summary>

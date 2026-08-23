@@ -57,7 +57,27 @@ public static class MapResizeCalculator
             }
             // Deliberately NOT dropped for hanging off the bottom/right edge — the Sprite layer has no
             // hard grid/16KB-budget bound (see the original design decisions), only "no negative" is enforced.
-            keptSprites.Add(new SpritePlacement { Id = sprite.Id, SpriteAssetId = sprite.SpriteAssetId, X = newX, Y = newY });
+            keptSprites.Add(new SpritePlacement
+            {
+                Id = sprite.Id,
+                SpriteAssetId = sprite.SpriteAssetId,
+                X = newX,
+                Y = newY,
+                TypeId = sprite.TypeId,
+                LinkedPlacementId = sprite.LinkedPlacementId,
+                UserByte = sprite.UserByte
+            });
+        }
+
+        // A kept sprite's link may point at one that got dropped above — same "no dangling link" rule as
+        // deleting an object outright (MapEditorViewModel.DeleteSelection).
+        var keptIds = keptSprites.Select(s => s.Id).ToHashSet();
+        foreach (var sprite in keptSprites)
+        {
+            if (sprite.LinkedPlacementId is { } linkId && !keptIds.Contains(linkId))
+            {
+                sprite.LinkedPlacementId = null;
+            }
         }
 
         return new MapResizePlan(newWidth, newHeight, newTilemap, new8Bpp, keptSprites, droppedTiles, dropped8Bpp, droppedSprites);

@@ -52,7 +52,7 @@ public partial class MetatileCellViewModel : ObservableObject
 
     public bool HasOverride => PaletteSlotOverride is not null;
     public bool IsEmpty => TileAsset is null;
-    public string NativePaletteSlotLabel => $"Native: {(TileAsset is null ? "-" : TileAsset.PaletteSlotIndex.ToString())}";
+    public string NativePaletteSlotLabel => $"Native palette: {(TileAsset is null ? "-" : TileAsset.PaletteSlotIndex.ToString())}";
 
     /// <summary>
     /// A ComboBox bound directly to the nullable <see cref="PaletteSlotOverride"/> would show BLANK

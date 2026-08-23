@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Media3D;
 using System.Windows.Threading;
 using ZxNext.App.ViewModels;
 using ZxNext.Core.Model;
@@ -246,12 +247,18 @@ public partial class ProjectTreeView : UserControl
         if (!alreadyBulkTarget) SelectSingle(vm, node);
     }
 
+    /// <summary>
+    /// OriginalSource can land on a <see cref="System.Windows.Documents.Run"/> (or other Inline) when a click
+    /// hits rendered text directly — those are logical/content-tree elements, not Visuals, and
+    /// VisualTreeHelper.GetParent throws on them ("'Run' is not a Visual or Visual3D") — so non-Visual nodes
+    /// are walked via LogicalTreeHelper instead until the walk reaches a real Visual again.
+    /// </summary>
     private static T? FindAncestor<T>(DependencyObject? source) where T : DependencyObject
     {
         while (source is not null)
         {
             if (source is T match) return match;
-            source = VisualTreeHelper.GetParent(source);
+            source = source is Visual or Visual3D ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
         }
         return null;
     }
@@ -403,12 +410,13 @@ public partial class ProjectTreeView : UserControl
         return true;
     }
 
+    /// <summary>See <see cref="FindAncestor{T}"/>'s doc comment — same non-Visual OriginalSource hazard.</summary>
     private static T? FindAncestorDataContext<T>(DependencyObject? source) where T : class
     {
         while (source is not null)
         {
             if (source is FrameworkElement { DataContext: T match }) return match;
-            source = VisualTreeHelper.GetParent(source);
+            source = source is Visual or Visual3D ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
         }
         return null;
     }

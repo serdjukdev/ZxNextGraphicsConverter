@@ -42,12 +42,18 @@ public partial class ExportWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>
+    /// OriginalSource can land on a <see cref="System.Windows.Documents.Run"/> (or other Inline) when a click
+    /// hits rendered text directly — those are logical/content-tree elements, not Visuals, and
+    /// VisualTreeHelper.GetParent throws on them ("'Run' is not a Visual or Visual3D") — so non-Visual nodes
+    /// are walked via LogicalTreeHelper instead until the walk reaches a real Visual again.
+    /// </summary>
     private static T? FindAncestor<T>(DependencyObject? source) where T : DependencyObject
     {
         while (source is not null)
         {
             if (source is T match) return match;
-            source = VisualTreeHelper.GetParent(source);
+            source = source is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
         }
         return null;
     }

@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Media3D;
 using ZxNext.App.ViewModels;
 
 namespace ZxNext.App.Views;
@@ -60,12 +61,19 @@ public partial class SourceImagesPanelView : UserControl
         if (DataContext is SourceImagesPanelViewModel vm) vm.RequestDeleteImage(svm.Model.Id);
     }
 
+    /// <summary>
+    /// Walks up from a mouse event's OriginalSource looking for the item's DataContext. OriginalSource can land
+    /// on a <see cref="System.Windows.Documents.Run"/> (or other Inline) when the click hits rendered text
+    /// directly — those are logical/content-tree elements, not Visuals, and VisualTreeHelper.GetParent throws
+    /// on them ("'Run' is not a Visual or Visual3D") — so non-Visual nodes are walked via LogicalTreeHelper
+    /// instead until the walk reaches a real Visual again (e.g. the TextBlock hosting the Run).
+    /// </summary>
     private static T? FindAncestorDataContext<T>(DependencyObject? source) where T : class
     {
         while (source is not null)
         {
             if (source is FrameworkElement { DataContext: T match }) return match;
-            source = VisualTreeHelper.GetParent(source);
+            source = source is Visual or Visual3D ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
         }
         return null;
     }

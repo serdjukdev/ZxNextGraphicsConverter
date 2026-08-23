@@ -588,4 +588,44 @@ public partial class MapEditorWindow : Window
         MapCanvasHost.ReleaseMouseCapture();
         if (DataContext is MapEditorViewModel vm) vm.EndStroke();
     }
+
+    /// <summary>
+    /// GridSplitter's own built-in resize doesn't reliably re-check downstream columns' MinWidth against
+    /// the Grid's CURRENT ActualWidth on every drag tick — none of this window's columns has a MaxWidth,
+    /// so growing one past where everything to its right has already bottomed out at its own MinWidth can
+    /// commit a width that only becomes valid once the window is resized larger again. This window has
+    /// FIVE columns and TWO splitters, so <paramref name="leftCol"/> is neither always the first column
+    /// nor is its immediate right neighbor always the last one — <paramref name="reservedLeft"/> is the
+    /// CURRENT actual width of everything strictly left of leftCol (fixed for this particular drag, since
+    /// only leftCol itself is being resized — read live, not hardcoded, since the OTHER splitter may have
+    /// already changed it), and <paramref name="reservedRight"/> is the total MINIMUM width (every
+    /// splitter column plus every ColumnDefinition.MinWidth) that must remain available to everything
+    /// right of leftCol. Together they give leftCol's true ceiling against the Grid's real current size,
+    /// regardless of where leftCol sits in the row. Handling DragDelta ourselves and marking it Handled
+    /// replaces GridSplitter's own resize logic entirely.
+    /// </summary>
+    private void ClampLeftColumnDrag(ColumnDefinition leftCol, double reservedLeft, double reservedRight, double horizontalChange)
+    {
+        var newWidth = leftCol.ActualWidth + horizontalChange;
+        var maxWidth = RootSplitGrid.ActualWidth - reservedLeft - reservedRight;
+        leftCol.Width = new GridLength(Math.Clamp(newWidth, leftCol.MinWidth, Math.Max(leftCol.MinWidth, maxWidth)));
+    }
+
+    private void MapsSplitter_OnDragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+    {
+        // LeftPaneColumn is a pass-through spectator for THIS drag — dragging MapsSplitter never touches
+        // it, so it stays at its CURRENT ActualWidth, not its MinWidth (only RightPaneColumn, the star
+        // column at the far end, actually absorbs MapsColumn's growth).
+        var reservedRight = 5 + LeftPaneColumn.ActualWidth + 5 + RightPaneColumn.MinWidth;
+        ClampLeftColumnDrag(MapsColumn, reservedLeft: 0, reservedRight, e.HorizontalChange);
+        e.Handled = true;
+    }
+
+    private void MainSplitter_OnDragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+    {
+        var reservedLeft = MapsColumn.ActualWidth + 5;
+        var reservedRight = 5 + RightPaneColumn.MinWidth;
+        ClampLeftColumnDrag(LeftPaneColumn, reservedLeft, reservedRight, e.HorizontalChange);
+        e.Handled = true;
+    }
 }

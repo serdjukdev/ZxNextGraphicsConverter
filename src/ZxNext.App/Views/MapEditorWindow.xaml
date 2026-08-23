@@ -6,7 +6,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008/design"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Map Editor" Height="760" Width="1320" WindowStartupLocation="CenterOwner">
+        Title="Map Editor" Height="760" Width="1320" MinWidth="900" MinHeight="500" WindowStartupLocation="CenterOwner">
     <Window.InputBindings>
         <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
         <KeyBinding Key="Delete" Command="{Binding DeleteSelectionCommand}" />
@@ -44,13 +44,13 @@
             </Style.Triggers>
         </Style>
     </Window.Resources>
-    <Grid Margin="12">
+    <Grid x:Name="RootSplitGrid" Margin="12">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="260" MinWidth="220" />
-            <ColumnDefinition Width="10" />
-            <ColumnDefinition Width="270" MinWidth="240" />
-            <ColumnDefinition Width="10" />
-            <ColumnDefinition Width="*" MinWidth="360" />
+            <ColumnDefinition x:Name="MapsColumn" Width="260" MinWidth="220" />
+            <ColumnDefinition Width="5" />
+            <ColumnDefinition x:Name="LeftPaneColumn" Width="270" MinWidth="240" />
+            <ColumnDefinition Width="5" />
+            <ColumnDefinition x:Name="RightPaneColumn" Width="*" MinWidth="360" />
         </Grid.ColumnDefinitions>
 
         <!-- Column 0: existing maps -->
@@ -96,7 +96,8 @@
             <TextBlock Grid.Row="4" Text="{Binding StatusText}" Style="{StaticResource StatusTextStyle}" TextWrapping="Wrap" MinHeight="16" Margin="0,8,0,0" />
         </Grid>
 
-        <GridSplitter Grid.Column="1" Width="1" HorizontalAlignment="Stretch" Background="#CCC" />
+        <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="#CCC"
+                      DragDelta="MapsSplitter_OnDragDelta" />
 
         <!-- Column 2: layers (selected row = active layer) + tool + palette -->
         <Grid Grid.Column="2">
@@ -218,7 +219,8 @@
             </StackPanel>
         </Grid>
 
-        <GridSplitter Grid.Column="3" Width="1" HorizontalAlignment="Stretch" Background="#CCC" />
+        <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="#CCC"
+                      DragDelta="MainSplitter_OnDragDelta" />
 
         <!-- Column 4: the map canvas -->
         <DockPanel Grid.Column="4">

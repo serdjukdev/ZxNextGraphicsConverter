@@ -6,7 +6,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008/design"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Metatile Editor" Height="700" Width="1000" WindowStartupLocation="CenterOwner">
+        Title="Metatile Editor" Height="700" Width="1000" MinWidth="750" MinHeight="500" WindowStartupLocation="CenterOwner">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <Style x:Key="ThumbnailListBoxItemStyle" TargetType="ListBoxItem">
@@ -30,11 +30,11 @@
             </Style.Triggers>
         </Style>
     </Window.Resources>
-    <Grid Margin="12">
+    <Grid x:Name="RootSplitGrid" Margin="12">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="300" MinWidth="240" />
-            <ColumnDefinition Width="10" />
-            <ColumnDefinition Width="*" MinWidth="440" />
+            <ColumnDefinition x:Name="LeftPaneColumn" Width="300" MinWidth="240" />
+            <ColumnDefinition Width="5" />
+            <ColumnDefinition x:Name="RightPaneColumn" Width="*" MinWidth="440" />
         </Grid.ColumnDefinitions>
 
         <!-- Left: Kind selector, then split into (1) tile palette to paint with, (2) existing metatile library -->
@@ -105,7 +105,8 @@
                     HorizontalAlignment="Left" Width="120" Margin="0,6,0,0" />
         </Grid>
 
-        <GridSplitter Grid.Column="1" Width="1" HorizontalAlignment="Stretch" Background="#CCC" />
+        <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="#CCC"
+                      DragDelta="MainSplitter_OnDragDelta" />
 
         <!-- Right: build a new metatile -->
         <DockPanel Grid.Column="2">

@@ -41,8 +41,16 @@ public partial class PixelEditorView : UserControl
         }
 
         _isPainting = true;
-        CanvasHost.CaptureMouse();
+        // PaintStrokeStarted() must run BEFORE CaptureMouse(): capturing the mouse makes WPF
+        // re-synchronize hit-testing, which can re-enter with a synthetic MouseMove for the same
+        // position before this method continues — if that happens after PaintStrokeStarted() (as it
+        // did previously), that reentrant paint captures the first pixel's undo value correctly, but
+        // the PaintStrokeStarted() call right after wipes it out again, and the repeat TryPaintAt
+        // below then no-ops (pixel already holds the new value) — losing the very first pixel's undo
+        // entry. Reordering means any reentrant call already sees cleared stroke state and records
+        // the original value itself. Same fix as MapEditorWindow.xaml.cs's MouseLeftButtonDown handler.
         PaintStrokeStarted?.Invoke();
+        CanvasHost.CaptureMouse();
         TryPaintAt(position);
     }
 

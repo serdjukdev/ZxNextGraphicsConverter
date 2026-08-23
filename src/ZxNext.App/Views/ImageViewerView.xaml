@@ -12,7 +12,10 @@
                        HorizontalAlignment="Center" FontSize="13" Margin="4" />
             <Image x:Name="PixelImage" Source="{Binding Bitmap}" Stretch="Uniform" MaxWidth="256" MaxHeight="256"
                    RenderOptions.BitmapScalingMode="NearestNeighbor"
-                   MouseLeftButtonDown="PixelImage_OnMouseLeftButtonDown" />
+                   MouseLeftButtonDown="PixelImage_OnMouseLeftButtonDown"
+                   MouseMove="PixelImage_OnMouseMove"
+                   MouseLeftButtonUp="PixelImage_OnMouseLeftButtonUp"
+                   LostMouseCapture="PixelImage_OnLostMouseCapture" />
         </DockPanel>
     </Border>
 </UserControl>

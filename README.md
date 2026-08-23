@@ -1,6 +1,6 @@
 # ZX Next Graphics Converter
 
-A Windows desktop tool (WPF, .NET 9) that converts ordinary images into native [ZX Spectrum Next](https://www.specnext.com/) graphics: sprites, tiles, and full-screen Layer2 bitmaps, with correct palette allocation, optional dithering, manual pixel/palette editing, and a ready-to-assemble Z80 export (binary chunks plus an ASM address map).
+A Windows desktop tool (WPF, .NET 9) that converts ordinary images into native [ZX Spectrum Next](https://www.specnext.com/) graphics — sprites, tiles, full-screen Layer2 bitmaps, and tile-based maps with typed, linkable objects — with correct palette allocation, optional dithering, manual pixel/palette editing, and a ready-to-assemble Z80 export.
 
 > Built with [Claude Code](https://claude.com/claude-code) using the Claude Sonnet 5 model.
 
@@ -28,23 +28,15 @@ Editing a converted sprite: pixel canvas, its own palette highlighted in the fol
 
 - **Colour matching**: pixels are matched against the real Next-512 colour space (3 bits/channel), with a choice of dithering per source image: None, Ordered Bayer 4×4, or Floyd-Steinberg error diffusion (whole-image, so slicing into tiles later never creates dithering seams).
 - **4bpp palette allocation**: a real bucketing algorithm (subset-match an existing slot, then merge into the slot needing fewest new colours, then allocate a new slot, else report overflow), plus an "Optimize bank" pass that repacks everything into as few slots as possible without changing any colour.
-- **Editing**: click-to-paint pixel editor and a genuine 512-colour picker (no snapping surprises: every colour shown is a real, selectable Next colour), palette-bank overview grid, eyedropper (Ctrl+click), single-level undo.
+- **Editing**: click-to-paint pixel editor and a genuine 512-colour picker (no snapping surprises: every colour shown is a real, selectable Next colour), palette-bank overview grid, eyedropper (Ctrl+click in the editable canvas, plain click/drag in the read-only preview above it), a full per-window undo stack.
 - **Project tree**: full-row click selection, Ctrl/Shift-click multi-select, right-click bulk delete/re-quantize on a whole selection.
 - **Bulk operations**: re-quantize a single tile, an entire folder, or the current multi-selection with a different dithering mode; changing dithering on a source image re-quantizes every placement of it immediately.
+- **Metatile Editor**: compose reusable 2×2/3×3/4×4 blocks of tiles, with per-cell mirror/rotate and an optional palette-slot override — the placeable unit on a map's grid layers.
+- **Map Editor**: paint maps across two metatile grid layers (4bpp Tilemap, 8bpp Tile) plus a freeform Sprite object layer, with modifier-driven tools (plain paint, Ctrl-erase, Shift-snap sprite placement, Alt select/move/copy) and Resize/Trim.
+- **Object types & links**: give any placed object a user-defined type (e.g. "portal", "character") and draw a directed link between two objects (e.g. a button that opens a specific door) — shown as an arrow on the canvas, both exported as extra bytes per object.
 - **Projects**: saved as a single `.zxngc` file (a zip of the manifest, source images, and converted asset data); recent-projects list; auto-opens the last project on launch; unsaved-changes tracking with a save-before-closing prompt.
-- **Export for Next**: packs each folder's (or, for Layer2, each image's) assets into binary chunks and emits a matching Z80 ASM address map. The export dialog previews every folder/image as its own row, each with:
-  - a checkbox (checked by default) to include or skip that row in this export run,
-  - a choice of chunk size: 8KB, 16KB, or the whole file as one piece, with the byte/chunk-count preview updating live per row.
-
-  ```asm
-  slot_000: equ 0
-  slot_001: equ 1
-
-  hero_walk_00:
-      db slot_000 ; 8KB bank
-      db 3        ; 4bpp palette index (0-15), 4bpp assets only
-      dw 128      ; byte offset within the bank
-  ```
+- **Export for Next**: every asset folder (or, for Layer2, each image) packs into binary chunks plus a matching Z80 ASM address map, with a per-row choice of chunk size (8KB/16KB/whole file) and, for software-blitted Tile8Bpp assets, row-major vs column-major pixel order. Each map exports separately — grid layers, metatiles, and objects embedded directly as `db` bytes, no chunking — plus one project-wide `object_types.asm` shared by every map. The export dialog previews every row live before you commit.
+- **Help**: an in-app Help screen (Help menu or F1) documenting every button, shortcut, and export byte format.
 
 ## Getting started
 

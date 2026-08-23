@@ -62,7 +62,17 @@ public partial class MetatileEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteMetatileCommand))]
+    [NotifyPropertyChangedFor(nameof(IsEditingExisting))]
+    [NotifyPropertyChangedFor(nameof(CreateOrSaveButtonText))]
+    [NotifyPropertyChangedFor(nameof(CanChangeGridSize))]
     private MetatileListItemViewModel? selectedMetatile;
+
+    /// <summary>True while an existing metatile is loaded into the draft — Kind/GridSize become read-only (Update never changes either, see MetatileService.Update) and Create/Save writes back into this SAME metatile instead of making a new one.</summary>
+    public bool IsEditingExisting => SelectedMetatile is not null;
+
+    public string CreateOrSaveButtonText => IsEditingExisting ? "Save Changes" : "Create Metatile";
+
+    public bool CanChangeGridSize => !IsEditingExisting;
 
     [ObservableProperty]
     private ObservableCollection<MetatileCellViewModel> draftCells = [];
@@ -99,6 +109,27 @@ public partial class MetatileEditorViewModel : ObservableObject
     partial void OnDraftGridSizeChanged(int value) => ResetDraft();
 
     partial void OnDraftNameChanged(string value) => UpdateDraftValidity();
+
+    /// <summary>Loads an existing metatile into the draft for editing — Create/Save then writes back into this SAME metatile (see <see cref="IsEditingExisting"/>). Only fires for a genuine selection (the list itself is already filtered to SelectedKind, so there's never a Kind mismatch to reconcile); deselecting (value null, e.g. via NewMetatile) does NOT touch the draft — the caller is responsible for resetting it if that's what deselecting should mean.</summary>
+    partial void OnSelectedMetatileChanged(MetatileListItemViewModel? value)
+    {
+        if (value is null) return;
+
+        var metatile = value.Metatile;
+        DraftName = metatile.Name;
+        DraftGridSize = metatile.GridSize; // triggers ResetDraft() via OnDraftGridSizeChanged only if this actually changes the value — the loop below always (re)populates every cell regardless, so that's fine either way
+
+        for (var i = 0; i < metatile.Cells.Count && i < DraftCells.Count; i++)
+        {
+            var sourceCell = metatile.Cells[i];
+            var targetCell = DraftCells[i];
+            targetCell.TileAsset = _project.Assets.FirstOrDefault(a => a.Id == sourceCell.TileAssetId);
+            targetCell.MirrorX = sourceCell.MirrorX;
+            targetCell.MirrorY = sourceCell.MirrorY;
+            targetCell.Rotate = sourceCell.Rotate;
+            targetCell.PaletteSlotOverride = sourceCell.PaletteSlotOverride;
+        }
+    }
 
     private void RefreshTilePalette()
     {
@@ -147,26 +178,41 @@ public partial class MetatileEditorViewModel : ObservableObject
             Name = "(preview)",
             Kind = SelectedKind,
             GridSize = DraftGridSize,
-            Cells = DraftCells.Select(c => new MetatileCell
-            {
-                TileAssetId = c.TileAsset!.Id,
-                MirrorX = c.MirrorX,
-                MirrorY = c.MirrorY,
-                Rotate = c.Rotate,
-                PaletteSlotOverride = c.PaletteSlotOverride
-            }).ToList()
+            Cells = BuildCellsFromDraft()
         };
         DraftPreview = TileGridBitmapRenderer.RenderMetatile(draft, _project);
     }
 
+    /// <summary>Only ever called once <see cref="IsDraftValid"/> is confirmed true, so every cell is guaranteed to have a TileAsset.</summary>
+    private List<MetatileCell> BuildCellsFromDraft() =>
+        DraftCells.Select(c => new MetatileCell
+        {
+            TileAssetId = c.TileAsset!.Id,
+            MirrorX = c.MirrorX,
+            MirrorY = c.MirrorY,
+            Rotate = c.Rotate,
+            PaletteSlotOverride = c.PaletteSlotOverride
+        }).ToList();
+
+    /// <summary>Ctrl+click clears a cell back to empty so a mis-painted cell can be corrected before Create/Save (matches the Map Editor's Ctrl=erase convention) — every cell still needs a real tile before the draft is valid to save, this is a drafting convenience, not a way to leave a permanent gap. Otherwise a plain click paints it with the selected palette tile.</summary>
     [RelayCommand]
     private void AssignSelectedTileToCell(MetatileCellViewModel? cell)
     {
-        if (cell is null || SelectedPaletteTile is null) return;
+        if (cell is null) return;
+
+        if (System.Windows.Input.Keyboard.Modifiers.HasFlag(System.Windows.Input.ModifierKeys.Control))
+        {
+            cell.TileAsset = null;
+            cell.PaletteSlotOverride = null;
+            return;
+        }
+
+        if (SelectedPaletteTile is null) return;
         cell.TileAsset = SelectedPaletteTile.Asset;
         cell.PaletteSlotOverride = null; // a newly-assigned tile always starts at its own native slot — an override left over from whatever tile occupied this cell before would very likely point at the wrong colours for the new one
     }
 
+    /// <summary>Creates a new metatile, or — if <see cref="SelectedMetatile"/> is currently loaded into the draft for editing — saves the changes back into that SAME metatile in place instead (see <see cref="MetatileService.Update"/>: Id/Kind/GridSize/SortIndex never change, so every map already placing it just picks up the new cells).</summary>
     [RelayCommand]
     private void CreateMetatile()
     {
@@ -177,14 +223,35 @@ public partial class MetatileEditorViewModel : ObservableObject
             return;
         }
 
-        var cells = DraftCells.Select(c => new MetatileCell
+        var cells = BuildCellsFromDraft();
+
+        if (SelectedMetatile is { } editing)
         {
-            TileAssetId = c.TileAsset!.Id,
-            MirrorX = c.MirrorX,
-            MirrorY = c.MirrorY,
-            Rotate = c.Rotate,
-            PaletteSlotOverride = c.PaletteSlotOverride
-        }).ToList();
+            var updateResult = MetatileService.Update(_project, editing.Metatile, DraftName, cells);
+            if (!updateResult.Success)
+            {
+                StatusText = updateResult.Error;
+                IsStatusError = true;
+                return;
+            }
+
+            var savedName = updateResult.Metatile!.Name;
+            HasChanges = true;
+            RefreshMetatileList();
+            // RefreshMetatileList() rebuilds every MetatileListItemViewModel from scratch, so the OLD
+            // SelectedMetatile instance is no longer present in the new Metatiles collection — if left
+            // as-is, the SelectedItem binding drops it to null on its own, which silently flips
+            // IsEditingExisting to false and leaves the draft's already-edited cells sitting there, so
+            // the very next Create click would create a DUPLICATE of what was just saved instead of
+            // being a no-op. Explicitly finishing the edit (same shape as NewMetatile) makes the
+            // post-save state unambiguous instead of relying on whatever the binding happens to do.
+            SelectedMetatile = null;
+            DraftName = "metatile";
+            ResetDraft();
+            StatusText = $"Saved '{savedName}'.";
+            IsStatusError = false;
+            return;
+        }
 
         var result = MetatileService.Create(_project, DraftName, SelectedKind, DraftGridSize, cells);
         if (!result.Success)
@@ -199,6 +266,15 @@ public partial class MetatileEditorViewModel : ObservableObject
         ResetDraft();
         StatusText = $"Created '{result.Metatile!.Name}'.";
         IsStatusError = false;
+    }
+
+    /// <summary>Deselects whatever's loaded for editing and clears the draft, so the next Create starts a brand-new metatile instead of saving over the one that was selected.</summary>
+    [RelayCommand]
+    private void NewMetatile()
+    {
+        SelectedMetatile = null;
+        DraftName = "metatile";
+        ResetDraft();
     }
 
     [RelayCommand(CanExecute = nameof(CanDeleteMetatile))]
@@ -217,7 +293,12 @@ public partial class MetatileEditorViewModel : ObservableObject
         var deletedName = SelectedMetatile.Metatile.Name;
         MetatileService.Delete(_project, SelectedMetatile.Metatile);
         HasChanges = true;
+        // Selecting a metatile in the library always loads it into the draft (see
+        // OnSelectedMetatileChanged), so whatever's in the draft right now IS the thing just deleted —
+        // leaving it there would let the next Create click recreate a copy of what was just removed.
         SelectedMetatile = null;
+        DraftName = "metatile";
+        ResetDraft();
         RefreshMetatileList();
         StatusText = $"Deleted '{deletedName}'.";
         IsStatusError = false;

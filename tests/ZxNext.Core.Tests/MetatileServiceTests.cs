@@ -190,4 +190,81 @@ public class MetatileServiceTests
         Assert.Equal(0, eightBpp.SortIndex); // never touched — different Kind, different layer
         Assert.Equal(0, map.TileLayer8Bpp.MetatileIndices[0]); // never touched
     }
+
+    [Fact]
+    public void Update_ChangesNameAndCells_ButKeepsIdKindGridSizeSortIndex()
+    {
+        var project = new ProjectState();
+        var metatile = MetatileService.Create(project, "original", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!;
+        var originalId = metatile.Id;
+        var originalSortIndex = metatile.SortIndex;
+        var newCells = MakeCells(2, mirrorX: true);
+
+        var result = MetatileService.Update(project, metatile, "renamed", newCells);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Same(metatile, result.Metatile);
+        Assert.Equal(originalId, metatile.Id);
+        Assert.Equal(MetatileKind.FourBpp, metatile.Kind);
+        Assert.Equal(2, metatile.GridSize);
+        Assert.Equal(originalSortIndex, metatile.SortIndex);
+        Assert.Equal("renamed", metatile.Name);
+        Assert.Same(newCells, metatile.Cells);
+        Assert.All(metatile.Cells, cell => Assert.True(cell.MirrorX));
+    }
+
+    [Fact]
+    public void Update_WrongCellCount_Rejected_LeavesOriginalUntouched()
+    {
+        var project = new ProjectState();
+        var metatile = MetatileService.Create(project, "a", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!;
+
+        var result = MetatileService.Update(project, metatile, "a", MakeCells(2).Concat(MakeCells(2)).ToList()); // 8 cells, needs 4
+
+        Assert.False(result.Success);
+        Assert.Equal(4, metatile.Cells.Count); // untouched
+    }
+
+    [Fact]
+    public void Update_EightBpp_ForcesCellMirrorRotateFalse_EvenIfCallerPassedTrue()
+    {
+        var project = new ProjectState();
+        var metatile = MetatileService.Create(project, "a", MetatileKind.EightBpp, 2, MakeCells(2)).Metatile!;
+        var newCells = MakeCells(2, mirrorX: true, mirrorY: true, rotate: true);
+
+        var result = MetatileService.Update(project, metatile, "a", newCells);
+
+        Assert.True(result.Success, result.Error);
+        Assert.All(metatile.Cells, cell =>
+        {
+            Assert.False(cell.MirrorX);
+            Assert.False(cell.MirrorY);
+            Assert.False(cell.Rotate);
+        });
+    }
+
+    [Fact]
+    public void Update_RenameToNameOfADifferentMetatile_GetsAutoDisambiguated()
+    {
+        var project = new ProjectState();
+        MetatileService.Create(project, "taken", MetatileKind.FourBpp, 2, MakeCells(2));
+        var metatile = MetatileService.Create(project, "original", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!;
+
+        var result = MetatileService.Update(project, metatile, "taken", MakeCells(2));
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("taken_2", metatile.Name);
+    }
+
+    [Fact]
+    public void Update_RenameToItsOwnCurrentName_DoesNotGetDisambiguated()
+    {
+        var project = new ProjectState();
+        var metatile = MetatileService.Create(project, "grass", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!;
+
+        var result = MetatileService.Update(project, metatile, "grass", MakeCells(2));
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("grass", metatile.Name); // comparing against itself shouldn't count as a collision
+    }
 }

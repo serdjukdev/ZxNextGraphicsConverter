@@ -64,6 +64,37 @@ public static class MetatileService
     }
 
     /// <summary>
+    /// Edits an EXISTING metatile in place — its Id, Kind, GridSize and SortIndex never change, so
+    /// every map already placing it (and every OTHER metatile's export-index numbering) is completely
+    /// unaffected; the new Cells (and possibly Name) just take effect immediately wherever it's already
+    /// used. Kind/GridSize are deliberately not editable here — changing either would be a different
+    /// metatile in every sense that matters (different numbering space for Kind, different on-map pixel
+    /// footprint for GridSize), not an edit of this one.
+    /// </summary>
+    public static MetatileCreateResult Update(ProjectState project, Metatile metatile, string name, List<MetatileCell> cells)
+    {
+        if (cells.Count != metatile.GridSize * metatile.GridSize)
+        {
+            return new MetatileCreateResult(false, null,
+                $"Expected {metatile.GridSize * metatile.GridSize} cells for a {metatile.GridSize}x{metatile.GridSize} metatile, got {cells.Count}.");
+        }
+
+        if (metatile.Kind == MetatileKind.EightBpp)
+        {
+            foreach (var cell in cells)
+            {
+                cell.MirrorX = false;
+                cell.MirrorY = false;
+                cell.Rotate = false;
+            }
+        }
+
+        metatile.Name = EnsureUniqueName(project, name, excludeMetatileId: metatile.Id);
+        metatile.Cells = cells;
+        return new MetatileCreateResult(true, metatile, null);
+    }
+
+    /// <summary>
     /// Removes a metatile, compacts the remaining metatiles of the SAME Kind to a dense 0..N-1
     /// SortIndex again, and remaps every map cell (in the layer matching that Kind) that referenced a
     /// survivor whose SortIndex just shifted — mirrors <see cref="Project.ProjectState.CompactPaletteBank"/>'s
@@ -103,9 +134,10 @@ public static class MetatileService
     }
 
     /// <summary>A metatile's name doubles as its ASM export label (like GraphicsAsset.Name — see AssetImporter.EnsureUniqueName, same auto-suffix approach), so it must be unique among metatiles. Scoped to metatiles only, not cross-checked against GraphicsAsset/map names — those live in visually separate tree areas, and a real collision would fail loudly at ASM assembly time rather than silently corrupting anything.</summary>
-    private static string EnsureUniqueName(ProjectState project, string desiredName)
+    private static string EnsureUniqueName(ProjectState project, string desiredName, Guid? excludeMetatileId = null)
     {
-        bool IsTaken(string candidate) => project.Metatiles.Any(m => string.Equals(m.Name, candidate, StringComparison.OrdinalIgnoreCase));
+        bool IsTaken(string candidate) => project.Metatiles.Any(m =>
+            m.Id != excludeMetatileId && string.Equals(m.Name, candidate, StringComparison.OrdinalIgnoreCase));
 
         if (!IsTaken(desiredName)) return desiredName;
 

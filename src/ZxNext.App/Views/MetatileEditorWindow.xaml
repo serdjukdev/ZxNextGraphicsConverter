@@ -110,7 +110,18 @@
 
         <!-- Right: build a new metatile -->
         <DockPanel Grid.Column="2">
-            <TextBlock DockPanel.Dock="Top" Text="New metatile" FontWeight="Bold" Margin="0,0,0,8" />
+            <TextBlock DockPanel.Dock="Top" FontWeight="Bold" Margin="0,0,0,8">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Text" Value="New metatile" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsEditingExisting}" Value="True">
+                                <Setter Property="Text" Value="{Binding SelectedMetatile.Metatile.Name, StringFormat='Editing \'{0}\''}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
 
             <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
@@ -123,12 +134,18 @@
                 <TextBox Grid.Column="1" Text="{Binding DraftName, UpdateSourceTrigger=PropertyChanged}" />
                 <TextBlock Grid.Column="2" Text="Size:" VerticalAlignment="Center" Margin="10,0,6,0" />
                 <ComboBox Grid.Column="3" ItemsSource="{Binding AvailableGridSizes}" DisplayMemberPath="Label"
-                          SelectedValuePath="Value" SelectedValue="{Binding DraftGridSize}" Width="70" />
+                          SelectedValuePath="Value" SelectedValue="{Binding DraftGridSize}" Width="70"
+                          IsEnabled="{Binding CanChangeGridSize}"
+                          ToolTip="Size can't change while editing an existing metatile — click New to start a fresh one instead" />
             </Grid>
 
             <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}" Style="{StaticResource StatusTextStyle}" TextWrapping="Wrap" MinHeight="16" Margin="0,8,0,0" />
-            <Button DockPanel.Dock="Bottom" Content="Create metatile" IsEnabled="{Binding IsDraftValid}"
-                    Command="{Binding CreateMetatileCommand}" HorizontalAlignment="Right" Width="140" Margin="0,8,0,0" />
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                <Button Content="Cancel" Command="{Binding NewMetatileCommand}" Visibility="{Binding IsEditingExisting, Converter={StaticResource BoolToVis}}"
+                        ToolTip="Discard these changes and clear the draft — nothing is saved" Width="70" Margin="0,0,6,0" />
+                <Button Content="{Binding CreateOrSaveButtonText}" IsEnabled="{Binding IsDraftValid}"
+                        Command="{Binding CreateMetatileCommand}" Width="140" />
+            </StackPanel>
 
             <TextBlock DockPanel.Dock="Bottom" Text="Result preview:" FontSize="11" Margin="0,8,0,2" />
             <Border DockPanel.Dock="Bottom" BorderBrush="#999" BorderThickness="1" Width="220" Height="220" HorizontalAlignment="Left" Margin="0,0,0,0">

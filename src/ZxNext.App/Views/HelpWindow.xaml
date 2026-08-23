@@ -163,13 +163,16 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="Which tile category this metatile draws from — 4bpp metatiles feed the hardware Tilemap layer (with real mirror/rotate/palette-slot hardware attributes); 8bpp metatiles feed the software 8bpp Tile layer (index only, no attributes)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Tile palette (left) → click to arm it" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Click a tile thumbnail, then click a cell in the draft grid on the right to stamp that tile into it. An unfilled cell shows a grey '+' placeholder." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Click a tile thumbnail, then click a cell in the draft grid on the right to stamp that tile into it. An unfilled cell shows a grey '+' placeholder. Ctrl+click a cell to clear it back to unfilled, to correct a mistake." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Per-cell controls (4bpp metatiles only)" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Mirror X, Mirror Y, Rotate (transposes the tile — combined with the two mirrors this reaches all 8 possible orientations, since the hardware has no separate 90/180/270° rotation), and an optional palette-slot override (read this cell's tile against a different bank slot than its own, with a '↺' button to reset back to native)." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Name + 'Create metatile' button" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Requires every cell filled first. Names are auto-uniquified (_2, _3...) if already taken. Capped at 255 metatiles per Kind — byte 0xFF is permanently reserved as the Map Editor's 'empty cell' marker." />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Name + 'Create Metatile' / 'Save Changes' button" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Requires every cell filled first — every cell needs a real tile (a transparent one if a gap should show through, since the hardware always draws SOMETHING at each cell). Names are auto-uniquified (_2, _3...) if already taken. Capped at 255 metatiles per Kind — byte 0xFF is permanently reserved as the Map Editor's 'empty cell' marker." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Existing metatiles list (left) → click one to edit it" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Loads it into the draft on the right — the button becomes 'Save Changes' and writes back into that SAME metatile (its Id/Kind/GridSize/export position never change, so every map already placing it just picks up the new cells immediately). Size can't be changed while editing — click 'New' to abandon the edit and start a brand-new metatile instead." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Delete selected' button" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Blocked (shown in red, not a popup) if any map still places this metatile — the message names exactly which map and how many cells. Otherwise deletes it and re-compacts every other metatile of the same Kind to a dense index, remapping every map that used them." />

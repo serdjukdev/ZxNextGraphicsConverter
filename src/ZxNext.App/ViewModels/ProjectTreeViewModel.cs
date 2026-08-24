@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ZxNext.App.Rendering;
 using ZxNext.Core.Model;
+using ZxNext.Core.Project;
 
 namespace ZxNext.App.ViewModels;
 
@@ -91,14 +93,15 @@ public partial class ProjectTreeViewModel : ObservableObject
     }
 
     /// <summary>Tree display order is plain insertion order, NOT SortIndex — a caller that just gave this asset a lower SortIndex than its siblings (e.g. moving a transparent tile to export index 0) needs <paramref name="insertAtFront"/> to actually show that, otherwise it silently lands at the end like any other new node.</summary>
-    public void AddAssetNode(GraphicsAsset asset, bool insertAtFront = false)
+    public void AddAssetNode(GraphicsAsset asset, ProjectState project, bool insertAtFront = false)
     {
         var folder = FindFolderNode(asset.FolderPath) ?? _categoryFolders[asset.Category];
         var node = new TreeNodeViewModel(asset.Name, isFolder: false)
         {
             AssetId = asset.Id,
             FolderPath = asset.FolderPath,
-            Category = asset.Category
+            Category = asset.Category,
+            Thumbnail = NextBitmapRenderer.Render(asset, project)
         };
         if (insertAtFront) folder.Children.Insert(0, node);
         else folder.Children.Add(node);
@@ -132,7 +135,7 @@ public partial class ProjectTreeViewModel : ObservableObject
     /// ancestor — the containing folder — since the old, focused container gets torn down by the
     /// Remove/Insert; ProjectTreeView's SelectedNode-changed handler re-focuses the new container).
     /// </summary>
-    public void ReplaceAssetNode(Guid oldAssetId, GraphicsAsset newAsset)
+    public void ReplaceAssetNode(Guid oldAssetId, GraphicsAsset newAsset, ProjectState project)
     {
         foreach (var folder in AllFolders())
         {
@@ -154,14 +157,15 @@ public partial class ProjectTreeViewModel : ObservableObject
                 AssetId = newAsset.Id,
                 FolderPath = newAsset.FolderPath,
                 Category = newAsset.Category,
-                IsMultiSelected = wasMultiSelected
+                IsMultiSelected = wasMultiSelected,
+                Thumbnail = NextBitmapRenderer.Render(newAsset, project)
             };
             folder.Children.Insert(index, node);
             if (wasSelected) SelectedNode = node;
             return;
         }
 
-        AddAssetNode(newAsset); // old node wasn't found for some reason — don't silently drop the new asset
+        AddAssetNode(newAsset, project); // old node wasn't found for some reason — don't silently drop the new asset
     }
 
     /// <summary>Removes a user-created sub-folder node (and, being an ObservableCollection subtree, every leaf node under it) from its owning category root. No-op for anything that isn't a non-root folder.</summary>

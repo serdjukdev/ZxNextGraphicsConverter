@@ -151,7 +151,7 @@ public partial class MainViewModel : ObservableObject
     {
         foreach (var asset in _project.Assets.Where(a => a.IsReservedBlank))
         {
-            if (Tree.FindLeafNode(asset.Id) is null) Tree.AddAssetNode(asset, insertAtFront: true);
+            if (Tree.FindLeafNode(asset.Id) is null) Tree.AddAssetNode(asset, _project, insertAtFront: true);
         }
     }
 
@@ -163,7 +163,7 @@ public partial class MainViewModel : ObservableObject
 
         if (result.Success)
         {
-            Tree.AddAssetNode(result.Asset!);
+            Tree.AddAssetNode(result.Asset!, _project);
             HasUnsavedChanges = true;
             PixelEditor.StatusText = $"Imported {result.Asset!.Name} into {folderPath} ({category}).";
         }
@@ -207,7 +207,7 @@ public partial class MainViewModel : ObservableObject
 
         if (result.Success)
         {
-            Tree.AddAssetNode(result.Asset!);
+            Tree.AddAssetNode(result.Asset!, _project);
             HasUnsavedChanges = true;
             PixelEditor.StatusText = $"Imported {result.Asset!.Name} into {folderPath} ({category}), {width}x{height}.";
         }
@@ -294,7 +294,7 @@ public partial class MainViewModel : ObservableObject
             // The tree's display order is plain insertion order, not SortIndex (see AddAssetNode's own
             // doc comment) — the transparent asset needs to go in at the front of its folder explicitly,
             // or the SortIndex change above would be invisible in the tree despite being real for export.
-            foreach (var asset in imported) Tree.AddAssetNode(asset, insertAtFront: asset.Id == transparentAssetId);
+            foreach (var asset in imported) Tree.AddAssetNode(asset, _project, insertAtFront: asset.Id == transparentAssetId);
             SyncReservedBlankAssetNodes(); // the category's reserved blank tile may have been auto-created mid-slice (first cell in) and never got a node of its own above
 
             if (imported.Count > 0) HasUnsavedChanges = true;
@@ -356,7 +356,7 @@ public partial class MainViewModel : ObservableObject
 
         result.Asset!.Name = originalName;
         result.Asset.SortIndex = asset.SortIndex; // re-quantize replaces the asset object; keep its original export/tile-index position
-        Tree.ReplaceAssetNode(asset.Id, result.Asset); // keeps its position in the list instead of jumping to the bottom
+        Tree.ReplaceAssetNode(asset.Id, result.Asset, _project); // keeps its position in the list instead of jumping to the bottom
 
         if (asset.Category.UsesPaletteBank())
         {
@@ -442,7 +442,7 @@ public partial class MainViewModel : ObservableObject
                 }
             });
 
-            foreach (var (oldId, newAsset) in replaced) Tree.ReplaceAssetNode(oldId, newAsset);
+            foreach (var (oldId, newAsset) in replaced) Tree.ReplaceAssetNode(oldId, newAsset, _project);
             foreach (var id in removedIds) Tree.RemoveAssetNode(id);
 
             HasUnsavedChanges = true;
@@ -638,7 +638,7 @@ public partial class MainViewModel : ObservableObject
                 }
             });
 
-            foreach (var (oldId, newAsset) in replaced) Tree.ReplaceAssetNode(oldId, newAsset);
+            foreach (var (oldId, newAsset) in replaced) Tree.ReplaceAssetNode(oldId, newAsset, _project);
 
             if (succeeded > 0)
             {
@@ -819,7 +819,7 @@ public partial class MainViewModel : ObservableObject
                 foreach (var asset in removed)
                 {
                     _project.Assets.Add(asset);
-                    Tree.AddAssetNode(asset);
+                    Tree.AddAssetNode(asset, _project);
                 }
             });
             PixelEditor.StatusText = $"Deleted {removed.Count} tile(s)/sprite(s).";
@@ -960,6 +960,8 @@ public partial class MainViewModel : ObservableObject
         var rendered = NextBitmapRenderer.Render(_selectedAsset, _project);
         ImageViewer.Bitmap = rendered;
         PixelEditor.Bitmap = rendered;
+        // Same bitmap, no extra render cost — keeps the tree row's thumbnail in sync with pixel edits.
+        if (Tree.FindLeafNode(_selectedAsset.Id) is { } node) node.Thumbnail = rendered;
     }
 
     [RelayCommand]
@@ -1159,7 +1161,7 @@ public partial class MainViewModel : ObservableObject
         foreach (var asset in _project.Assets) folderPaths.Add(asset.FolderPath);
         foreach (var path in folderPaths.OrderBy(p => p, StringComparer.Ordinal)) Tree.EnsureFolderPath(path);
 
-        foreach (var asset in _project.Assets) Tree.AddAssetNode(asset);
+        foreach (var asset in _project.Assets) Tree.AddAssetNode(asset, _project);
     }
 
     private void ResetEditorsAfterProjectChange()

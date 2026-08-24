@@ -126,6 +126,8 @@
                             <MenuItem Header="Delete folder..." Click="DeleteFolderMenuItem_OnClick" />
                         </ContextMenu>
                     </StackPanel.ContextMenu>
+                    <Image Source="{Binding Thumbnail}" Width="18" Height="18" Margin="0,0,4,0" VerticalAlignment="Center"
+                           Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" SnapsToDevicePixels="True" />
                     <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
                 </StackPanel>
             </HierarchicalDataTemplate>

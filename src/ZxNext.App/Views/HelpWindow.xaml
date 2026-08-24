@@ -77,6 +77,12 @@
                         <TextBlock Style="{StaticResource TermStyle}" Text="Tools → Metatile Editor... / Map Editor..." />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Opens the two dedicated editor windows — see their own sections below." />
 
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Thumbnail &amp; '[N]' prefix" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Every tile/sprite row shows a small thumbnail of its own actual pixels, and its real export index as a '[N]' prefix before the name — the exact same number that ends up in the exported file, category-wide (not per sub-folder). Both update live: the thumbnail whenever that asset's pixels/palette change (including every OTHER tile/sprite sharing a palette slot/folder you just recoloured), the index whenever anything in that category is added/removed/reordered, since one change can shift every sibling's number." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Drag a tile/sprite row onto another to reorder" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Drop on the top/bottom half of the target row to land before/after it — reassigns real export indices to match. Tile4Bpp/Sprite4Bpp (no sub-folders) reorder across the whole category; Tile8Bpp/Sprite8Bpp (each sub-folder is its own flat palette) only within the same folder — moving to a different one would mean re-quantizing against a different palette, not just renumbering, so that's not done by this drag. The reserved 'Blank' tile (see below) can never be dragged, or have anything dropped before it — it always stays first." />
+
                         <TextBlock Style="{StaticResource TermStyle}" Text="Project tree — selecting items" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Click a tile/sprite = select it alone. Ctrl+click = add/remove it from a multi-selection. Shift+click = select the whole range between your last click and this one. Arrow keys always select a single item, same as a plain click. Clicking a folder/category never joins the multi-selection — it just shows that folder's palette overview on the right." />
 
@@ -98,8 +104,8 @@
                         <TextBlock Style="{StaticResource TermStyle}" Text="Right-click a folder" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="'Add sub-folder...' (only on the two 8bpp category roots — sprite/8bpp and tile/8bpp — each sub-folder gets its own flat palette; only one level deep), 'Re-quantize folder...' (disabled if the folder has no tiles/sprites of its own), 'Delete folder...' (only on a user-created sub-folder, never a category root)." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Drag &amp; drop" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Drag image files from Explorer onto the Source Images panel to import them. Drag a row from the Source Images panel onto a category or sub-folder in the tree to place it: an exact-size match imports directly; a Layer2 folder that doesn't match opens a crop/position dialog; anything oversized opens the Atlas Slicer (see below). Any of these can hit a palette-overflow — see the Palette Overflow dialog below." />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Drag &amp; drop — importing" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Drag image files from Explorer onto the Source Images panel to import them. Drag a row from the Source Images panel onto a category or sub-folder in the tree to place it: an exact-size match imports directly; a Layer2 folder that doesn't match opens a crop/position dialog; anything oversized opens the Atlas Slicer (see below). Any of these can hit a palette-overflow — see the Palette Overflow dialog below. (For dragging a tile/sprite row ONTO ANOTHER one to reorder it, see the entry above.)" />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Source Images panel" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Each row shows a thumbnail, filename and size. The small '✕' button (or Delete key on a selected row) removes that source image — and, if it was ever used, every tile/sprite placed from it too, after an explicit confirmation naming the count." />
@@ -178,6 +184,9 @@
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Existing metatiles list (left) → click one to edit it" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Loads it into the draft on the right — the button becomes 'Save Changes' and writes back into that SAME metatile (its Id/Kind/GridSize/export position never change, so every map already placing it just picks up the new cells immediately). Click 'New' to abandon the edit and start a brand-new metatile instead." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Drag a metatile onto another to reorder" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Drop on the left/right half of the target to land before/after it. Reassigns real export indices AND rewrites every map cell that placed one of the affected metatiles under its old index — unlike a tile/sprite's index, a metatile's is the literal byte stored in map data, so every map using it stays correct automatically. The reserved 'Blank' metatile can never be dragged, or have anything dropped before it — it always stays first." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Delete selected' button" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Blocked (shown in red, not a popup) if any map still places this metatile — the message names exactly which map and how many cells. Otherwise deletes it and re-compacts every other metatile of the same Kind to a dense index, remapping every map that used them." />

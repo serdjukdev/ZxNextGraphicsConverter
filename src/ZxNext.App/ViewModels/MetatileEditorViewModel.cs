@@ -161,6 +161,49 @@ public partial class MetatileEditorViewModel : ObservableObject
         Metatiles = new ObservableCollection<MetatileListItemViewModel>(
             _project.Metatiles.Where(m => m.Kind == SelectedKind).OrderBy(m => m.SortIndex).Select(m => new MetatileListItemViewModel(m, _project)));
 
+    /// <summary>
+    /// Drag-and-drop reorder: moves <paramref name="dragged"/> to sit immediately before/after
+    /// <paramref name="target"/> in this Kind's gallery, then reassigns real export indices to match —
+    /// rewriting every map cell that referenced one of the affected metatiles (see
+    /// <see cref="MetatileReorderService"/>, since unlike a tile/sprite's SortIndex a metatile's IS the
+    /// literal exported map-cell byte). Restricted to the SAME GridSize — the project is normally locked
+    /// to one shared GridSize anyway (see ProjectState.MetatileGridSize), so this only ever matters for a
+    /// legacy project migrated in with a genuine pre-existing mix; reordering across GridSizes would be
+    /// numerically harmless but pointless (no map ever compares ranks across GridSizes) and needlessly
+    /// widens what gets touched. Uses ObservableCollection.Move (not Remove+Insert) so WPF repositions the
+    /// existing container instead of tearing it down — same fix as the main tree's own drag-reorder had
+    /// to apply, to avoid the exact same "scroll jumps to the top on every drop" bug.
+    /// </summary>
+    public void ReorderMetatile(Guid draggedMetatileId, Guid targetMetatileId, bool insertAfter)
+    {
+        if (draggedMetatileId == targetMetatileId) return;
+        var draggedItem = Metatiles.FirstOrDefault(m => m.Metatile.Id == draggedMetatileId);
+        var targetItem = Metatiles.FirstOrDefault(m => m.Metatile.Id == targetMetatileId);
+        if (draggedItem is null || targetItem is null) return;
+
+        var dragged = draggedItem.Metatile;
+        var target = targetItem.Metatile;
+        if (dragged.IsReservedBlank) return; // must always stay first
+        if (dragged.GridSize != target.GridSize) return;
+        if (target.IsReservedBlank && !insertAfter) return; // would bump it out of the first slot
+
+        var oldIndex = Metatiles.IndexOf(draggedItem);
+        var targetIndex = Metatiles.IndexOf(targetItem);
+        var targetIndexAfterRemoval = oldIndex < targetIndex ? targetIndex - 1 : targetIndex;
+        var newIndex = insertAfter ? targetIndexAfterRemoval + 1 : targetIndexAfterRemoval;
+        Metatiles.Move(oldIndex, newIndex);
+
+        var sameGroup = Metatiles
+            .Where(m => m.Metatile.GridSize == dragged.GridSize)
+            .Select(m => m.Metatile)
+            .ToList();
+        MetatileReorderService.Reorder(_project, sameGroup);
+
+        HasChanges = true;
+        StatusText = $"Reordered '{dragged.Name}'.";
+        IsStatusError = false;
+    }
+
     private void ResetDraft()
     {
         var isFourBpp = SelectedKind == MetatileKind.FourBpp;

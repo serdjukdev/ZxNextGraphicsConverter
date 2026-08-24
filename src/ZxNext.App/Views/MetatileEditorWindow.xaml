@@ -81,9 +81,12 @@
 
             <TextBlock Grid.Row="6" Text="Existing metatiles" FontSize="11" Margin="0,0,0,2" />
             <Border Grid.Row="7" BorderBrush="#999" BorderThickness="1">
-                <ListBox ItemsSource="{Binding Metatiles}" SelectedItem="{Binding SelectedMetatile}"
+                <ListBox x:Name="MetatileList" ItemsSource="{Binding Metatiles}" SelectedItem="{Binding SelectedMetatile}"
                          BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}">
+                         ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}"
+                         PreviewMouseLeftButtonDown="MetatileList_OnPreviewMouseLeftButtonDown"
+                         PreviewMouseMove="MetatileList_OnPreviewMouseMove"
+                         AllowDrop="True" DragOver="MetatileList_OnDragOver" Drop="MetatileList_OnDrop" DragLeave="MetatileList_OnDragLeave">
                     <ListBox.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel />
@@ -91,12 +94,19 @@
                     </ListBox.ItemsPanel>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding Name}">
-                                <Image Source="{Binding Preview}" Width="56" Height="56" Stretch="Uniform"
-                                       RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                                <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="60" HorizontalAlignment="Center" />
-                                <TextBlock Text="{Binding SizeLabel}" FontSize="8" Foreground="Gray" HorizontalAlignment="Center" />
-                            </StackPanel>
+                            <Grid>
+                                <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding Name}">
+                                    <Image Source="{Binding Preview}" Width="56" Height="56" Stretch="Uniform"
+                                           RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                    <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="60" HorizontalAlignment="Center" />
+                                    <TextBlock Text="{Binding SizeLabel}" FontSize="8" Foreground="Gray" HorizontalAlignment="Center" />
+                                </StackPanel>
+                                <!-- Drag-and-drop reorder feedback (MetatileEditorWindow.xaml.cs) — a thin line showing exactly where a dragged metatile will land. -->
+                                <Border Width="2" HorizontalAlignment="Left" Background="#FF3388FF" IsHitTestVisible="False"
+                                        Visibility="{Binding ShowDropIndicatorLeft, Converter={StaticResource BoolToVis}}" />
+                                <Border Width="2" HorizontalAlignment="Right" Background="#FF3388FF" IsHitTestVisible="False"
+                                        Visibility="{Binding ShowDropIndicatorRight, Converter={StaticResource BoolToVis}}" />
+                            </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>

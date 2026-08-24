@@ -102,7 +102,8 @@ public partial class ProjectTreeViewModel : ObservableObject
             AssetId = asset.Id,
             FolderPath = asset.FolderPath,
             Category = asset.Category,
-            Thumbnail = NextBitmapRenderer.Render(asset, project)
+            Thumbnail = NextBitmapRenderer.Render(asset, project),
+            IsReservedBlank = asset.IsReservedBlank
         };
         if (insertAtFront) folder.Children.Insert(0, node);
         else folder.Children.Add(node);
@@ -152,6 +153,44 @@ public partial class ProjectTreeViewModel : ObservableObject
         AllFolders().SelectMany(f => f.Children).FirstOrDefault(c => c.AssetId == assetId);
 
     /// <summary>
+    /// Drag-and-drop reorder: moves <paramref name="dragged"/> to sit immediately before/after
+    /// <paramref name="target"/> within whichever folder currently holds BOTH of them. The caller (see
+    /// <see cref="MainViewModel.ReorderAsset"/>) is responsible for validating category/folder
+    /// compatibility and the reserved-blank invariant FIRST — this method only knows how to move a node
+    /// that's already confirmed to belong next to the other one; it returns null (no-op) if they don't
+    /// share a parent folder or either wasn't found, rather than guessing. Returns the shared parent so
+    /// the caller can read back the resulting order to recompute SortIndex (see
+    /// <see cref="ZxNext.Core.Conversion.AssetReorderService"/>).
+    ///
+    /// Uses <see cref="ObservableCollection{T}.Move"/>, deliberately NOT Remove+Insert — WPF's TreeView
+    /// reacts to a Move collection-changed action by repositioning the EXISTING TreeViewItem container,
+    /// but to a Remove+Add pair by tearing the old container down and generating a brand-new one (same
+    /// "loses its container" hazard <see cref="ReplaceAssetNode"/>'s own doc comment describes for
+    /// re-quantize). For a drag reorder specifically, that teardown was observed to reset the WHOLE
+    /// TreeView's scroll position back to the top on every single drop (presumably because the dragged
+    /// item's container — likely still focused/selected from the mouse-down that started the drag — gets
+    /// destroyed without SelectedNode itself ever changing VALUE, so nothing re-triggers the tree's
+    /// existing focus-follow logic in ProjectTreeView.OnTreeViewModelPropertyChanged), which is exactly
+    /// the "scroll all the way back down after every move" complaint this fixes.
+    /// </summary>
+    public TreeNodeViewModel? MoveLeafNode(TreeNodeViewModel dragged, TreeNodeViewModel target, bool insertAfter)
+    {
+        if (dragged == target) return null;
+        var parent = AllFolders().FirstOrDefault(f => f.Children.Contains(dragged) && f.Children.Contains(target));
+        if (parent is null) return null;
+
+        var oldIndex = parent.Children.IndexOf(dragged);
+        var targetIndex = parent.Children.IndexOf(target);
+        // ObservableCollection.Move's newIndex is interpreted AFTER oldIndex's item is conceptually
+        // removed — if dragged currently sits before target, target's own position shifts down by one
+        // once dragged is out of the way.
+        var targetIndexAfterRemoval = oldIndex < targetIndex ? targetIndex - 1 : targetIndex;
+        var newIndex = insertAfter ? targetIndexAfterRemoval + 1 : targetIndexAfterRemoval;
+        parent.Children.Move(oldIndex, newIndex);
+        return parent;
+    }
+
+    /// <summary>
     /// Swaps one leaf node for another representing a re-quantized replacement asset, keeping its
     /// position in the list (re-quantize would otherwise always append to the end via
     /// Remove+Add, which is confusing — the tile visibly "jumps" to the bottom for no reason a
@@ -185,7 +224,8 @@ public partial class ProjectTreeViewModel : ObservableObject
                 FolderPath = newAsset.FolderPath,
                 Category = newAsset.Category,
                 IsMultiSelected = wasMultiSelected,
-                Thumbnail = NextBitmapRenderer.Render(newAsset, project)
+                Thumbnail = NextBitmapRenderer.Render(newAsset, project),
+                IsReservedBlank = newAsset.IsReservedBlank
             };
             folder.Children.Insert(index, node);
             if (wasSelected) SelectedNode = node;

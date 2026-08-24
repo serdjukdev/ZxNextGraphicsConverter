@@ -27,6 +27,7 @@ public partial class MainWindow : Window
         DataContext = viewModel;
         _viewModel = viewModel;
         ProjectTreeViewControl.AssetDropRequested += OnAssetDropRequested;
+        ProjectTreeViewControl.AssetReorderRequested += _viewModel.ReorderAsset;
         ProjectTreeViewControl.RenameAssetRequested += OnRenameAssetRequested;
         ProjectTreeViewControl.ReQuantizeContextRequested += _viewModel.RequestReQuantizeById;
         ProjectTreeViewControl.ReQuantizeSelectedRequested += OnReQuantizeSelectedRequested;

@@ -964,6 +964,45 @@ public partial class MainViewModel : ObservableObject
         if (Tree.FindLeafNode(_selectedAsset.Id) is { } node) node.Thumbnail = rendered;
     }
 
+    /// <summary>
+    /// Drag-and-drop reorder from the tree: moves <paramref name="draggedAssetId"/> to sit immediately
+    /// before/after <paramref name="targetAssetId"/>, then renumbers real export indices to match. Only
+    /// ever touches SortIndex/tree position, never FolderPath — an 8bpp category's sub-folders each own a
+    /// separate flat palette, so "moving" a tile to a DIFFERENT folder would mean re-quantizing it, a
+    /// fundamentally different (and riskier) operation this does not attempt; both nodes must already
+    /// share one folder for those categories (4bpp categories have no sub-folders to begin with, so this
+    /// is never a restriction for them). No-op (silently) on any invalid combination — the caller (a
+    /// completed drag) has no user-visible way to report a rejection anyway; DragOver already only offers
+    /// the Move cursor for combinations this will actually accept.
+    /// </summary>
+    public void ReorderAsset(Guid draggedAssetId, Guid targetAssetId, bool insertAfter)
+    {
+        if (draggedAssetId == targetAssetId) return;
+        var dragged = _project.Assets.FirstOrDefault(a => a.Id == draggedAssetId);
+        var target = _project.Assets.FirstOrDefault(a => a.Id == targetAssetId);
+        if (dragged is null || target is null) return;
+        if (dragged.IsReservedBlank) return; // must always stay first
+        if (dragged.Category != target.Category) return;
+        if (!dragged.Category.UsesPaletteBank() && dragged.FolderPath != target.FolderPath) return;
+        if (target.IsReservedBlank && !insertAfter) return; // would bump it out of the first slot
+
+        var draggedNode = Tree.FindLeafNode(draggedAssetId);
+        var targetNode = Tree.FindLeafNode(targetAssetId);
+        if (draggedNode is null || targetNode is null) return;
+
+        var parent = Tree.MoveLeafNode(draggedNode, targetNode, insertAfter);
+        if (parent is null) return;
+
+        var newOrder = parent.Children
+            .Where(c => c.AssetId is not null)
+            .Select(c => _project.Assets.First(a => a.Id == c.AssetId!.Value))
+            .ToList();
+        AssetReorderService.Reorder(newOrder);
+        Tree.RefreshExportIndices(dragged.Category, _project);
+        HasUnsavedChanges = true;
+        PixelEditor.StatusText = $"Reordered {dragged.Name}.";
+    }
+
     [RelayCommand]
     private async Task OpenRecentProject(string path)
     {
@@ -1161,7 +1200,14 @@ public partial class MainViewModel : ObservableObject
         foreach (var asset in _project.Assets) folderPaths.Add(asset.FolderPath);
         foreach (var path in folderPaths.OrderBy(p => p, StringComparer.Ordinal)) Tree.EnsureFolderPath(path);
 
-        foreach (var asset in _project.Assets) Tree.AddAssetNode(asset, _project);
+        // Adding in SortIndex order (not raw list order) is what makes a drag-reordered tree still look
+        // reordered after a save/reload — Reorder only ever touches SortIndex, never _project.Assets'
+        // own list order (see AssetReorderService's own doc comment), and AddAssetNode always just
+        // appends to whichever folder it resolves to, in whatever order it's called.
+        foreach (var asset in _project.Assets.OrderBy(a => a.Category).ThenBy(a => a.SortIndex))
+        {
+            Tree.AddAssetNode(asset, _project);
+        }
     }
 
     private void ResetEditorsAfterProjectChange()

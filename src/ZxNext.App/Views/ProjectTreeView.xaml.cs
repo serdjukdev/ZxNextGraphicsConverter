@@ -14,8 +14,14 @@ namespace ZxNext.App.Views;
 
 public partial class ProjectTreeView : UserControl
 {
+    /// <summary>Drag format for reordering a tile/sprite row within the tree — carries the dragged TreeNodeViewModel itself (distinct from <see cref="SourceImagesPanelView.DragFormat"/>, which carries a SourceImageViewModel and always means "import this").</summary>
+    public const string DragFormat = "ZxNext.TreeAssetReorder";
+
     /// <summary>Raised when a source image is dropped onto a category folder or one of its sub-folders — carries the exact target folder path (not just the category), so 8bpp sub-folders route to their own palette.</summary>
     public event Action<SourceImageViewModel, AssetCategory, string>? AssetDropRequested;
+
+    /// <summary>Raised when a tile/sprite row is dropped onto another one to reorder — see <see cref="MainViewModel.ReorderAsset"/> for what actually happens with it.</summary>
+    public event Action<Guid, Guid, bool>? AssetReorderRequested;
 
     /// <summary>Raised from the right-click "Rename..." menu item.</summary>
     public event Action<Guid>? RenameAssetRequested;
@@ -54,6 +60,18 @@ public partial class ProjectTreeView : UserControl
 
     /// <summary>Coalesces <see cref="OnTreeViewModelPropertyChanged"/>'s deferred re-focus so a burst of SelectedNode changes (e.g. holding an arrow key) schedules only ONE pending action instead of one per change.</summary>
     private bool _focusFollowScheduled;
+
+    /// <summary>Armed in <see cref="Tree_OnPreviewMouseLeftButtonDown"/> when the click landed on a draggable leaf (not a folder, not the reserved blank) — same "record start position, only actually start DoDragDrop once the mouse clears the OS drag threshold" pattern as <see cref="SourceImagesPanelView"/>'s own drag source.</summary>
+    private Point _dragStart;
+    private bool _dragArmed;
+    private TreeNodeViewModel? _dragCandidate;
+
+    /// <summary>The node currently showing a drop-indicator line (see <see cref="TreeNodeViewModel.ShowDropIndicatorAbove"/>/<see cref="TreeNodeViewModel.ShowDropIndicatorBelow"/>) — at most one at a time, cleared via <see cref="ClearDropIndicator"/> whenever the hovered target changes, the drag leaves the tree, or it completes.</summary>
+    private TreeNodeViewModel? _dropIndicatorNode;
+
+    /// <summary>Runs only while a reorder drag from THIS control is in progress (started/stopped around the blocking <see cref="DragDrop.DoDragDrop"/> call in <see cref="Tree_OnPreviewMouseMove"/> — WPF still pumps the dispatcher during that call, so a timer keeps ticking) — scrolls the tree while the mouse hovers near its top/bottom edge, since DragOver alone only fires on mouse movement and a long list needs scrolling even while the mouse sits still near an edge.</summary>
+    private DispatcherTimer? _autoScrollTimer;
+    private Point _lastDragPosition;
 
     public ProjectTreeView()
     {
@@ -171,6 +189,10 @@ public partial class ProjectTreeView : UserControl
         if (FindAncestorDataContext<TreeNodeViewModel>(originalSource) is not { } node) return;
         if (FindAncestor<ToggleButton>(originalSource) is not null) return; // let the expand arrow toggle itself normally
 
+        _dragStart = e.GetPosition(null);
+        _dragCandidate = node;
+        _dragArmed = !node.IsFolder && !node.IsReservedBlank; // the reserved blank must always stay first — never a valid drag source
+
         if (node.IsFolder && e.ClickCount >= 2 && Keyboard.Modifiers == ModifierKeys.None)
         {
             node.IsExpanded = !node.IsExpanded;
@@ -194,6 +216,85 @@ public partial class ProjectTreeView : UserControl
         {
             _suppressNativeSelectionSync = false;
         }
+    }
+
+    /// <summary>Fires continuously while a mouse button is held over the tree — only actually starts a drag once armed (see <see cref="Tree_OnPreviewMouseLeftButtonDown"/>) and past the OS's drag distance threshold, same pattern as <see cref="SourceImagesPanelView"/>'s drag source.</summary>
+    private void Tree_OnPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_dragArmed || e.LeftButton != MouseButtonState.Pressed || _dragCandidate is not { } dragged) return;
+
+        var current = e.GetPosition(null);
+        if (Math.Abs(current.X - _dragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(current.Y - _dragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        _dragArmed = false;
+        StartAutoScroll();
+        try
+        {
+            DragDrop.DoDragDrop(Tree, new DataObject(DragFormat, dragged), DragDropEffects.Move);
+        }
+        finally
+        {
+            StopAutoScroll();
+            ClearDropIndicator();
+        }
+    }
+
+    private void StartAutoScroll()
+    {
+        _autoScrollTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(40) };
+        _autoScrollTimer.Tick += AutoScrollTimer_OnTick;
+        _autoScrollTimer.Start();
+    }
+
+    private void StopAutoScroll()
+    {
+        if (_autoScrollTimer is null) return;
+        _autoScrollTimer.Stop();
+        _autoScrollTimer.Tick -= AutoScrollTimer_OnTick;
+        _autoScrollTimer = null;
+    }
+
+    /// <summary>Scrolls the tree a little whenever the last-known drag position (updated in <see cref="Tree_OnDragOver"/>) sits within a small band of the tree's own top/bottom edge — ticks continuously (see <see cref="_autoScrollTimer"/>'s own doc comment) so hovering near an edge without moving still scrolls.</summary>
+    private void AutoScrollTimer_OnTick(object? sender, EventArgs e)
+    {
+        if (FindVisualChild<ScrollViewer>(Tree) is not { } scrollViewer) return;
+        const double edge = 28;
+        const double step = 14;
+        if (_lastDragPosition.Y < edge) scrollViewer.ScrollToVerticalOffset(Math.Max(0, scrollViewer.VerticalOffset - step));
+        else if (_lastDragPosition.Y > Tree.ActualHeight - edge) scrollViewer.ScrollToVerticalOffset(scrollViewer.VerticalOffset + step);
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match) return match;
+            if (FindVisualChild<T>(child) is { } nested) return nested;
+        }
+        return null;
+    }
+
+    private void ClearDropIndicator()
+    {
+        if (_dropIndicatorNode is null) return;
+        _dropIndicatorNode.ShowDropIndicatorAbove = false;
+        _dropIndicatorNode.ShowDropIndicatorBelow = false;
+        _dropIndicatorNode = null;
+    }
+
+    /// <summary>Which half of the hovered row's container the pointer is over — shared by DragOver (live indicator/cursor feedback) and Drop (the actual decision), so they can never disagree. Defaults to "after" when the container can't be resolved (e.g. a stale/torn-down visual mid-drag) rather than silently doing nothing.</summary>
+    private static bool IsInsertAfter(DependencyObject? originalSource, DragEventArgs e)
+    {
+        if (FindAncestor<TreeViewItem>(originalSource) is { ActualHeight: > 0 } container)
+        {
+            return e.GetPosition(container).Y > container.ActualHeight / 2;
+        }
+        return true;
     }
 
     private void HandleLeafClick(ProjectTreeViewModel vm, TreeNodeViewModel node, ModifierKeys modifiers)
@@ -265,19 +366,77 @@ public partial class ProjectTreeView : UserControl
 
     private void Tree_OnDragOver(object sender, DragEventArgs e)
     {
-        e.Effects = e.Data.GetDataPresent(SourceImagesPanelView.DragFormat) ? DragDropEffects.Copy : DragDropEffects.None;
+        if (e.Data.GetDataPresent(SourceImagesPanelView.DragFormat))
+        {
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Data.GetDataPresent(DragFormat) && e.Data.GetData(DragFormat) is TreeNodeViewModel dragged)
+        {
+            _lastDragPosition = e.GetPosition(Tree);
+            var originalSource = e.OriginalSource as DependencyObject;
+            var target = FindAncestorDataContext<TreeNodeViewModel>(originalSource);
+
+            var insertAfter = IsInsertAfter(originalSource, e);
+            var valid = CanReorder(dragged, target) && !(target!.IsReservedBlank && !insertAfter);
+            if (valid)
+            {
+                if (!ReferenceEquals(_dropIndicatorNode, target))
+                {
+                    ClearDropIndicator();
+                    _dropIndicatorNode = target;
+                }
+                target!.ShowDropIndicatorAbove = !insertAfter;
+                target.ShowDropIndicatorBelow = insertAfter;
+            }
+            else
+            {
+                ClearDropIndicator();
+            }
+
+            e.Effects = valid ? DragDropEffects.Move : DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
+        e.Effects = DragDropEffects.None;
         e.Handled = true;
     }
 
+    private void Tree_OnDragLeave(object sender, DragEventArgs e) => ClearDropIndicator();
+
+    /// <summary>Cheap pre-check shared by DragOver (live cursor feedback) and Drop (before actually raising the request) — same category, and for an 8bpp category (per-folder palette, unlike 4bpp's single shared bank) the same folder too, since crossing folders there would mean re-quantizing, not just reordering. Does NOT check the reserved-blank "never insert before it" rule — that needs the resolved before/after side, only computed at Drop.</summary>
+    private static bool CanReorder(TreeNodeViewModel dragged, TreeNodeViewModel? target) =>
+        target is { IsFolder: false } && target != dragged &&
+        target.Category == dragged.Category &&
+        (dragged.Category!.Value.UsesPaletteBank() || target.FolderPath == dragged.FolderPath);
+
     private void Tree_OnDrop(object sender, DragEventArgs e)
     {
-        if (!e.Data.GetDataPresent(SourceImagesPanelView.DragFormat)) return;
-        if (e.Data.GetData(SourceImagesPanelView.DragFormat) is not SourceImageViewModel sourceVm) return;
-
-        var target = FindAncestorDataContext<TreeNodeViewModel>(e.OriginalSource as DependencyObject);
-        if (target is { Category: { } category, FolderPath: { } folderPath })
+        if (e.Data.GetDataPresent(SourceImagesPanelView.DragFormat) && e.Data.GetData(SourceImagesPanelView.DragFormat) is SourceImageViewModel sourceVm)
         {
-            AssetDropRequested?.Invoke(sourceVm, category, folderPath);
+            var target = FindAncestorDataContext<TreeNodeViewModel>(e.OriginalSource as DependencyObject);
+            if (target is { Category: { } category, FolderPath: { } folderPath })
+            {
+                AssetDropRequested?.Invoke(sourceVm, category, folderPath);
+            }
+            return;
+        }
+
+        if (e.Data.GetDataPresent(DragFormat) && e.Data.GetData(DragFormat) is TreeNodeViewModel dragged)
+        {
+            var originalSource = e.OriginalSource as DependencyObject;
+            var target = FindAncestorDataContext<TreeNodeViewModel>(originalSource);
+            ClearDropIndicator();
+            if (!CanReorder(dragged, target)) return;
+            if (dragged.AssetId is not { } draggedId || target!.AssetId is not { } targetId) return;
+
+            var insertAfter = IsInsertAfter(originalSource, e);
+            if (target.IsReservedBlank && !insertAfter) return; // never allowed to bump it out of the first slot
+
+            AssetReorderRequested?.Invoke(draggedId, targetId, insertAfter);
         }
     }
 

@@ -30,18 +30,24 @@ public class TransparentTileDetectorTests
     [Theory]
     [InlineData(AssetCategory.Tile4Bpp)]
     [InlineData(AssetCategory.Tile8Bpp)]
-    public void CategoryAlreadyHasTransparentTile_FalseUntilAFullyTransparentAssetIsImported(AssetCategory category)
+    public void CategoryAlreadyHasTransparentTile_TrueFromTheFirstImportOnward_BecauseOfTheAutoCreatedReservedBlank(AssetCategory category)
     {
         var project = new ProjectState();
+        Assert.False(TransparentTileDetector.CategoryAlreadyHasTransparentTile(project, category)); // nothing imported yet
+
         var opaque = AssetImporter.Import(project, MakeSource("solid", 8, 8), AllOpaqueRgba(8, 8, (10, 20, 30)), category, "folder", DitherMode.None);
         Assert.True(opaque.Success, opaque.Error);
-        Assert.False(TransparentTileDetector.CategoryAlreadyHasTransparentTile(project, category));
-
-        var transparent = AssetImporter.Import(project, MakeSource("blank", 8, 8), AllTransparentRgba(8, 8), category, "folder", DitherMode.None);
-        Assert.True(transparent.Success, transparent.Error);
+        // ReservedBlankAssetService auto-creates the category's reserved blank tile alongside the very
+        // FIRST real import (see AssetImporter.Import) — so the category "already has a transparent
+        // tile" from here on regardless of whether the user's own import happened to be transparent.
         Assert.True(TransparentTileDetector.CategoryAlreadyHasTransparentTile(project, category));
-        Assert.True(TransparentTileDetector.IsAssetFullyTransparent(project, transparent.Asset!));
         Assert.False(TransparentTileDetector.IsAssetFullyTransparent(project, opaque.Asset!));
+
+        // A NEW fully-transparent import is now rejected outright as redundant with the reserved blank
+        // (see AssetImporter.Import/ReservedBlankAssetService) rather than becoming a second real asset —
+        // so the thing that reads back as "fully transparent" is the reserved blank itself.
+        var reservedBlank = Assert.Single(project.Assets, a => a.Category == category && a.IsReservedBlank);
+        Assert.True(TransparentTileDetector.IsAssetFullyTransparent(project, reservedBlank));
     }
 
     [Fact]

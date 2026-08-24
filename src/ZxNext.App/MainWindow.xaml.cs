@@ -376,6 +376,10 @@ public partial class MainWindow : Window
         var dialog = new MetatileEditorWindow { DataContext = vm, Owner = this };
         dialog.ShowDialog();
         if (vm.HasChanges) _viewModel.HasUnsavedChanges = true;
+        // Creating the very first metatile of some Kind+GridSize can silently auto-create that Kind's
+        // reserved blank TILE too (if this project never had one) — the Metatile Editor's own list
+        // refreshes itself from the project directly, but the main tree does not, on its own.
+        _viewModel.SyncReservedBlankAssetNodes();
     }
 
     private void MapEditor_OnClick(object sender, RoutedEventArgs e)
@@ -384,6 +388,9 @@ public partial class MainWindow : Window
         var dialog = new MapEditorWindow { DataContext = vm, Owner = this };
         dialog.ShowDialog();
         if (vm.HasChanges) _viewModel.HasUnsavedChanges = true;
+        // Creating a brand-new map silently ensures both Kinds' reserved blank metatile for its
+        // GridSize, which can in turn auto-create a reserved blank TILE the main tree doesn't know about yet.
+        _viewModel.SyncReservedBlankAssetNodes();
     }
 
     /// <summary>

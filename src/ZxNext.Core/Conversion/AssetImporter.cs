@@ -13,7 +13,10 @@ public enum ImportFailureReason
     PaletteOverflow,
 
     /// <summary>The flat per-folder palette (8bpp sprite/tile, or any Layer2 category) is already full for its capacity (256, or 16 for 640x256x4).</summary>
-    FlatPaletteFull
+    FlatPaletteFull,
+
+    /// <summary>A brand-new (not re-quantize) Tile4Bpp/Tile8Bpp import whose every pixel is transparent — pixel-identical to that category's reserved blank tile (see <see cref="ReservedBlankAssetService"/>), which already exists at export index 0. Not imported as a redundant duplicate; not a real error either, unlike the other reasons.</summary>
+    RedundantWithReservedBlank
 }
 
 public record ImportResult(bool Success, GraphicsAsset? Asset, string? Error, ImportFailureReason Reason = ImportFailureReason.None);
@@ -66,6 +69,28 @@ public static class AssetImporter
         for (var i = 0; i < pixelCount; i++)
         {
             isTransparent[i] = rgba32[i * 4 + 3] < 128;
+        }
+
+        // Lazily guarantees the category's reserved blank tile exists BEFORE this real import — see
+        // ReservedBlankAssetService's own doc comment for why "first real tile of the category" is one of
+        // its entry points. Only Tile4Bpp/Tile8Bpp have this concept; sprites/Layer2 place individually, no
+        // metatile grid to default an "empty" cell against.
+        if (category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp)
+        {
+            ReservedBlankAssetService.EnsureBlankTile(project, category);
+
+            // A brand-new fully-transparent tile is pixel-identical to the reserved blank that just got
+            // (or already was) guaranteed above — importing it anyway would just be a second tile at a
+            // different SortIndex with the exact same content, defeating the whole point of having ONE
+            // designated blank at a predictable index. Only for genuinely NEW imports — a re-quantize
+            // (excludeAssetIdFromNameCheck set) is replacing a specific EXISTING asset's identity, which
+            // this check has no business vetoing.
+            if (excludeAssetIdFromNameCheck is null && Array.TrueForAll(isTransparent, t => t))
+            {
+                return new ImportResult(false, null,
+                    $"'{source.FileName}' is fully transparent — identical to {category}'s reserved blank tile, already at export index 0. Not imported as a duplicate.",
+                    ImportFailureReason.RedundantWithReservedBlank);
+            }
         }
 
         return category.UsesPaletteBank()

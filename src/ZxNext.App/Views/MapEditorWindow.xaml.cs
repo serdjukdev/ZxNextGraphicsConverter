@@ -132,7 +132,7 @@ public partial class MapEditorWindow : Window
     {
         if (DataContext is not MapEditorViewModel vm || vm.SelectedMap is null) return;
 
-        var resizeVm = new MapResizeViewModel(vm.SelectedMap.Map);
+        var resizeVm = new MapResizeViewModel(vm.Project, vm.SelectedMap.Map);
         var dialog = new MapResizeWindow { DataContext = resizeVm, Owner = this };
         if (dialog.ShowDialog() != true) return;
 

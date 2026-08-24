@@ -8,7 +8,7 @@ namespace ZxNext.Core.Tests;
 
 public class MapExporterTests
 {
-    private static GraphicsAsset FakeTile(string name, int sortIndex, AssetCategory category, int paletteSlot = 0) => new()
+    private static GraphicsAsset FakeTile(string name, int sortIndex, AssetCategory category, int paletteSlot = 0, bool isReservedBlank = false) => new()
     {
         Name = name,
         Category = category,
@@ -17,7 +17,8 @@ public class MapExporterTests
         PackedPixelData = new byte[32],
         FolderPath = category == AssetCategory.Tile4Bpp ? "tile/4bpp/images" : "tile/8bpp/images",
         SortIndex = sortIndex,
-        PaletteSlotIndex = paletteSlot
+        PaletteSlotIndex = paletteSlot,
+        IsReservedBlank = isReservedBlank
     };
 
     private static GraphicsAsset FakeSprite(string name, int sortIndex, AssetCategory category = AssetCategory.Sprite4Bpp) => new()
@@ -40,21 +41,27 @@ public class MapExporterTests
         Cells = tileAssetIds.Select(id => new MetatileCell { TileAssetId = id }).ToList()
     };
 
+    private static Metatile FakeBlankMetatile(MetatileKind kind, int gridSize, int sortIndex, Guid blankTileId) => new()
+    {
+        Name = "Blank",
+        Kind = kind,
+        GridSize = gridSize,
+        SortIndex = sortIndex,
+        Cells = Enumerable.Repeat(blankTileId, gridSize * gridSize).Select(id => new MetatileCell { TileAssetId = id }).ToList(),
+        IsReservedBlank = true
+    };
+
     private static MapAsset FakeMap(string name, int width, int height, int gridSize, byte[]? tilemap = null, byte[]? tile8Bpp = null, List<SpritePlacement>? sprites = null) => new(width, height)
     {
         Name = name,
         MetatileGridSize = gridSize,
-        TilemapLayer = new MapGridLayer { MetatileIndices = tilemap ?? FullOfEmpty(width * height) },
-        TileLayer8Bpp = new MapGridLayer { MetatileIndices = tile8Bpp ?? FullOfEmpty(width * height) },
+        TilemapLayer = new MapGridLayer { MetatileIndices = tilemap ?? FullOfZero(width * height) },
+        TileLayer8Bpp = new MapGridLayer { MetatileIndices = tile8Bpp ?? FullOfZero(width * height) },
         SpriteLayer = sprites ?? []
     };
 
-    private static byte[] FullOfEmpty(int length)
-    {
-        var arr = new byte[length];
-        Array.Fill(arr, MapGridLayer.EmptyCell);
-        return arr;
-    }
+    /// <summary>Arbitrary placeholder fill for tests (ExportObjects/ValidateSize) that never inspect grid-layer content — every real cell now references a real metatile, but which one is irrelevant to those tests.</summary>
+    private static byte[] FullOfZero(int length) => new byte[length];
 
     /// <summary>Parses every `db a,b,c` line following `{label}:` (skipping `;` comment lines, stopping at the first line that's neither) back into a flat byte list — lets tests assert exact byte values without depending on line-wrap boundaries.</summary>
     private static List<byte> ExtractDbBytes(string asmText, string label)
@@ -115,16 +122,23 @@ public class MapExporterTests
     }
 
     [Fact]
-    public void ExportTilemapLayer_NoMetatilesUsed_MetatilesRowIsNull()
+    public void ExportTilemapLayer_AllCellsUntouched_ReferenceReservedBlankAtLocalIndexZero()
     {
+        var blankTile = FakeTile("Blank", -1, AssetCategory.Tile4Bpp, isReservedBlank: true);
         var project = new ProjectState();
-        var map = FakeMap("empty", 2, 2, gridSize: 2);
+        project.Assets.Add(blankTile);
+        var blankMetatile = FakeBlankMetatile(MetatileKind.FourBpp, 2, sortIndex: 0, blankTile.Id);
+        project.Metatiles.Add(blankMetatile);
+
+        // A brand-new/untouched map's cells all default to the reserved blank metatile's SortIndex (0) — see MapService.Create.
+        var map = FakeMap("empty", 2, 2, gridSize: 2, tilemap: [0, 0, 0, 0]);
         project.Maps.Add(map);
 
         var result = MapExporter.ExportTilemapLayer(map, project);
 
-        Assert.Null(result.Metatiles);
-        Assert.All(ExtractDbBytes(result.Grid.AsmText, "empty_tilemap_grid"), b => Assert.Equal(0xFF, b));
+        Assert.NotNull(result.Metatiles);
+        Assert.Contains("empty_tilemap_metatiles_count: equ 1", result.Metatiles!.AsmText);
+        Assert.All(ExtractDbBytes(result.Grid.AsmText, "empty_tilemap_grid"), b => Assert.Equal(0, b));
     }
 
     [Fact]

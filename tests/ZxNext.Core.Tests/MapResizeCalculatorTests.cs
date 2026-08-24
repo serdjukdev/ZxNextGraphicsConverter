@@ -5,6 +5,9 @@ namespace ZxNext.Core.Tests;
 
 public class MapResizeCalculatorTests
 {
+    /// <summary>Stand-in for whatever a Kind+GridSize's reserved blank metatile's SortIndex happens to be — these tests never use 0 as a real content value, so it's always distinguishable.</summary>
+    private const byte Blank = 0;
+
     private static MapAsset MakeMap(int width, int height, int metatileGridSize, byte[]? tilemap = null, byte[]? tile8Bpp = null, List<SpritePlacement>? sprites = null) => new(width, height)
     {
         Name = "fixture",
@@ -17,7 +20,7 @@ public class MapResizeCalculatorTests
     private static byte[] FullOfEmpty(int length)
     {
         var arr = new byte[length];
-        Array.Fill(arr, MapGridLayer.EmptyCell);
+        Array.Fill(arr, Blank);
         return arr;
     }
 
@@ -30,7 +33,7 @@ public class MapResizeCalculatorTests
             tile8Bpp: [20, 21, 22, 23],
             sprites: [new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 5, Y = 5 }]);
 
-        var plan = MapResizeCalculator.Plan(map, newWidth: 4, newHeight: 4, offsetX: 1, offsetY: 1);
+        var plan = MapResizeCalculator.Plan(map, newWidth: 4, newHeight: 4, offsetX: 1, offsetY: 1, Blank, Blank);
 
         Assert.Equal(0, plan.DroppedTileCount);
         Assert.Equal(0, plan.Dropped8BppCount);
@@ -43,7 +46,7 @@ public class MapResizeCalculatorTests
         Assert.Equal(20, plan.NewTileLayer8BppIndices[1 * 4 + 1]);
         Assert.Equal(23, plan.NewTileLayer8BppIndices[2 * 4 + 2]);
         // every other cell of the new, larger grid is the empty sentinel
-        Assert.Equal(12, plan.NewTilemapIndices.Count(b => b == MapGridLayer.EmptyCell));
+        Assert.Equal(12, plan.NewTilemapIndices.Count(b => b == Blank));
 
         // pixel offset = 1 cell * (MetatileGridSize=2 * 8px) = 16px on each axis
         var sprite = Assert.Single(plan.KeptSprites);
@@ -57,7 +60,7 @@ public class MapResizeCalculatorTests
         // 3x3 map, all 9 cells distinct and non-empty, shrunk to top-left 2x2 (offset 0,0) — drops the whole right column and bottom row.
         var map = MakeMap(3, 3, metatileGridSize: 2, tilemap: [1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
-        var plan = MapResizeCalculator.Plan(map, newWidth: 2, newHeight: 2, offsetX: 0, offsetY: 0);
+        var plan = MapResizeCalculator.Plan(map, newWidth: 2, newHeight: 2, offsetX: 0, offsetY: 0, Blank, Blank);
 
         Assert.Equal(5, plan.DroppedTileCount); // values 3, 6, 7, 8, 9
         Assert.Equal([1, 2, 4, 5], plan.NewTilemapIndices);
@@ -73,7 +76,7 @@ public class MapResizeCalculatorTests
         ]);
 
         // cellPixelSize = 1*8 = 8px; offset -2 cells = -16px on each axis
-        var plan = MapResizeCalculator.Plan(map, newWidth: 4, newHeight: 4, offsetX: -2, offsetY: -2);
+        var plan = MapResizeCalculator.Plan(map, newWidth: 4, newHeight: 4, offsetX: -2, offsetY: -2, Blank, Blank);
 
         Assert.Equal(1, plan.DroppedSpriteCount);
         var kept = Assert.Single(plan.KeptSprites);
@@ -91,7 +94,7 @@ public class MapResizeCalculatorTests
         var map = MakeMap(4, 4, metatileGridSize: 1, sprites: [button, door]);
 
         // cellPixelSize = 8px; offset -2 cells = -16px on each axis — same shrink as the negative-position test above.
-        var plan = MapResizeCalculator.Plan(map, newWidth: 4, newHeight: 4, offsetX: -2, offsetY: -2);
+        var plan = MapResizeCalculator.Plan(map, newWidth: 4, newHeight: 4, offsetX: -2, offsetY: -2, Blank, Blank);
 
         Assert.Equal(1, plan.DroppedSpriteCount);
         var kept = Assert.Single(plan.KeptSprites);
@@ -110,7 +113,7 @@ public class MapResizeCalculatorTests
 
         var map = MakeMap(5, 5, metatileGridSize: 1, tilemap: tilemap, tile8Bpp: tile8Bpp);
 
-        var plan = MapResizeCalculator.PlanTrim(map);
+        var plan = MapResizeCalculator.PlanTrim(map, Blank, Blank);
 
         Assert.NotNull(plan);
         Assert.Equal(3, plan!.NewWidth);  // cols 1..3 inclusive
@@ -131,7 +134,7 @@ public class MapResizeCalculatorTests
         ]);
 
         // cellPixelSize = 8px. Footprint pixels 10..25 -> cells floor(10/8)=1 .. floor(25/8)=3 on both axes.
-        var plan = MapResizeCalculator.PlanTrim(map);
+        var plan = MapResizeCalculator.PlanTrim(map, Blank, Blank);
 
         Assert.NotNull(plan);
         Assert.Equal(3, plan!.NewWidth);
@@ -146,14 +149,14 @@ public class MapResizeCalculatorTests
     public void PlanTrim_FullyEmptyMap_ReturnsNull()
     {
         var map = MakeMap(4, 4, metatileGridSize: 2);
-        Assert.Null(MapResizeCalculator.PlanTrim(map));
+        Assert.Null(MapResizeCalculator.PlanTrim(map, Blank, Blank));
     }
 
     [Fact]
     public void ApplyResizePlan_UpdatesMapInPlace()
     {
         var map = MakeMap(2, 2, metatileGridSize: 2, tilemap: [1, 2, 3, 4]);
-        var plan = MapResizeCalculator.Plan(map, newWidth: 3, newHeight: 3, offsetX: 0, offsetY: 0);
+        var plan = MapResizeCalculator.Plan(map, newWidth: 3, newHeight: 3, offsetX: 0, offsetY: 0, Blank, Blank);
 
         map.ApplyResizePlan(plan);
 

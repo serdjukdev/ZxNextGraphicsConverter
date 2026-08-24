@@ -16,6 +16,17 @@ public partial class AtlasSlicerViewModel : ObservableObject
     /// <summary>Fixed for the whole dialog session — whether the target category already has a designated transparent tile doesn't change while slicing/import parameters are being tweaked, only whether the CURRENT slice contains one does (see <see cref="RecomputeCellCount"/>).</summary>
     private readonly bool _categoryAlreadyHasTransparentTile;
 
+    /// <summary>
+    /// Tile4Bpp/Tile8Bpp always have a designated transparent tile now — the auto-generated reserved
+    /// blank (see ReservedBlankAssetService) — and any fully-transparent cell in the slice gets silently
+    /// skipped as a redundant duplicate on import (AssetImporter.Import), never landing in the imported
+    /// list this checkbox's "move to front" logic scans. So for these two categories the checkbox would
+    /// always be offering something that can no longer actually happen; suppress it entirely rather than
+    /// show a control with nothing left to do. Sprite4Bpp/Sprite8Bpp have no such concept and keep the
+    /// checkbox working exactly as before.
+    /// </summary>
+    private readonly bool _categoryHasReservedBlankConcept;
+
     public WriteableBitmap SourcePreview { get; }
     public int SourceWidth { get; }
     public int SourceHeight { get; }
@@ -58,6 +69,7 @@ public partial class AtlasSlicerViewModel : ObservableObject
         _category = category;
         _sourceRgba32 = sourceRgba32;
         _categoryAlreadyHasTransparentTile = TransparentTileDetector.CategoryAlreadyHasTransparentTile(project, category);
+        _categoryHasReservedBlankConcept = category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp;
         RecomputeCellCount();
     }
 
@@ -80,7 +92,7 @@ public partial class AtlasSlicerViewModel : ObservableObject
     {
         var rects = ComputeCellRects();
         CellCount = rects.Count;
-        CanOfferTransparentTileFirst = !_categoryAlreadyHasTransparentTile &&
+        CanOfferTransparentTileFirst = !_categoryHasReservedBlankConcept && !_categoryAlreadyHasTransparentTile &&
             TransparentTileDetector.AnyCellFullyTransparent(_sourceRgba32, SourceWidth, rects);
     }
 }

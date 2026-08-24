@@ -379,4 +379,54 @@ public class AssetImporterTests
         Assert.True(reQuantized.Success, reQuantized.Error);
         Assert.Equal("hero", reQuantized.Asset!.Name);
     }
+
+    private static byte[] AllTransparentRgba(int width, int height) => new byte[width * height * 4]; // all-zero bytes -> alpha 0 everywhere
+
+    [Theory]
+    [InlineData(AssetCategory.Tile4Bpp)]
+    [InlineData(AssetCategory.Tile8Bpp)]
+    public void Import_FullyTransparentNewTile_SkippedAsRedundantWithTheReservedBlank(AssetCategory category)
+    {
+        var project = new ProjectState();
+        var folderPath = category == AssetCategory.Tile4Bpp ? "tile/4bpp/images" : "tile/8bpp/images";
+        var source = MakeSource("gap", 8, 8);
+
+        var result = AssetImporter.Import(project, source, AllTransparentRgba(8, 8), category, folderPath, DitherMode.None);
+
+        Assert.False(result.Success);
+        Assert.Null(result.Asset);
+        Assert.Equal(ImportFailureReason.RedundantWithReservedBlank, result.Reason);
+        // The reserved blank tile itself still gets created (it's what made this one redundant) — just this one wasn't.
+        Assert.Single(project.Assets, a => a.Category == category && a.IsReservedBlank);
+    }
+
+    [Theory]
+    [InlineData(AssetCategory.Sprite4Bpp)]
+    [InlineData(AssetCategory.Sprite8Bpp)]
+    public void Import_FullyTransparentNewSprite_NotSkipped_SpritesHaveNoReservedBlankConcept(AssetCategory category)
+    {
+        var project = new ProjectState();
+        var folderPath = category == AssetCategory.Sprite4Bpp ? "sprite/4bpp/images" : "sprite/8bpp/images";
+        var source = MakeSource("invisible_marker", 16, 16);
+
+        var result = AssetImporter.Import(project, source, AllTransparentRgba(16, 16), category, folderPath, DitherMode.None);
+
+        Assert.True(result.Success, result.Error);
+        Assert.NotNull(result.Asset);
+    }
+
+    [Fact]
+    public void ReQuantize_ResultingInFullyTransparent_NotSkipped_RedundancyCheckOnlyAppliesToBrandNewImports()
+    {
+        var project = new ProjectState();
+        var source = MakeSource("hero", 8, 8);
+        var rgba = SolidColorWithTransparentCorner(8, 8, (1, 2, 3));
+        var original = AssetImporter.Import(project, source, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
+
+        var reQuantized = AssetImporter.Import(project, source, AllTransparentRgba(8, 8), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None,
+            excludeAssetIdFromNameCheck: original.Id);
+
+        Assert.True(reQuantized.Success, reQuantized.Error);
+        Assert.NotNull(reQuantized.Asset);
+    }
 }

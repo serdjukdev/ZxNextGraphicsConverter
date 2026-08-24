@@ -1,7 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ZxNext.Core.Conversion;
 using ZxNext.Core.Export;
 using ZxNext.Core.Model;
+using ZxNext.Core.Project;
 
 namespace ZxNext.App.ViewModels;
 
@@ -22,6 +24,7 @@ public enum ResizeAnchor
 /// </summary>
 public partial class MapResizeViewModel : ObservableObject
 {
+    private readonly ProjectState _project;
     private readonly MapAsset _map;
 
     public int OldWidth => _map.Width;
@@ -46,8 +49,9 @@ public partial class MapResizeViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasDrops))]
     private ResizeAnchor anchor = ResizeAnchor.TopLeft;
 
-    public MapResizeViewModel(MapAsset map)
+    public MapResizeViewModel(ProjectState project, MapAsset map)
     {
+        _project = project;
         _map = map;
         newWidth = map.Width;
         newHeight = map.Height;
@@ -111,6 +115,8 @@ public partial class MapResizeViewModel : ObservableObject
     {
         if (!IsValid) return null;
         var (offsetX, offsetY) = ComputeOffset();
-        return MapResizeCalculator.Plan(_map, NewWidth, NewHeight, offsetX, offsetY);
+        var tilemapBlank = (byte)ReservedBlankAssetService.EnsureBlankMetatile(_project, MetatileKind.FourBpp, _map.MetatileGridSize).SortIndex;
+        var tileLayer8BppBlank = (byte)ReservedBlankAssetService.EnsureBlankMetatile(_project, MetatileKind.EightBpp, _map.MetatileGridSize).SortIndex;
+        return MapResizeCalculator.Plan(_map, NewWidth, NewHeight, offsetX, offsetY, tilemapBlank, tileLayer8BppBlank);
     }
 }

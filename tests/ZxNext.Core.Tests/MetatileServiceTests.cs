@@ -18,7 +18,7 @@ public class MetatileServiceTests
     }
 
     [Fact]
-    public void Create_TwoDifferentKinds_CanShareSortIndexZero()
+    public void Create_FirstOfAKindAndGridSize_AlsoAutoCreatesReservedBlankAtSortIndexZero()
     {
         var project = new ProjectState();
 
@@ -27,20 +27,26 @@ public class MetatileServiceTests
 
         Assert.True(fourBpp.Success, fourBpp.Error);
         Assert.True(eightBpp.Success, eightBpp.Error);
-        Assert.Equal(0, fourBpp.Metatile!.SortIndex);
-        Assert.Equal(0, eightBpp.Metatile!.SortIndex); // same value, different Kind — not a collision, they index different map layers
+        // Index 0 in each Kind is the auto-created reserved blank metatile (see ReservedBlankAssetService)
+        // — the first REAL metatile of a Kind+GridSize lands at 1, not 0.
+        Assert.Equal(1, fourBpp.Metatile!.SortIndex);
+        Assert.Equal(1, eightBpp.Metatile!.SortIndex); // same value, different Kind — not a collision, they index different map layers
+        Assert.Contains(project.Metatiles, m => m.Kind == MetatileKind.FourBpp && m.IsReservedBlank && m.SortIndex == 0);
+        Assert.Contains(project.Metatiles, m => m.Kind == MetatileKind.EightBpp && m.IsReservedBlank && m.SortIndex == 0);
 
         var secondFourBpp = MetatileService.Create(project, "rock_4bpp", MetatileKind.FourBpp, 2, MakeCells(2));
         Assert.True(secondFourBpp.Success, secondFourBpp.Error);
-        Assert.Equal(1, secondFourBpp.Metatile!.SortIndex); // dense, continues within its own Kind regardless of the other Kind's count
+        Assert.Equal(2, secondFourBpp.Metatile!.SortIndex); // dense, continues within its own Kind regardless of the other Kind's count
     }
 
     [Fact]
-    public void Create_255thMetatileInAKind_Succeeds_256thIsRejected()
+    public void Create_UpToCapMinusOneRealMetatiles_Succeeds_OneMoreIsRejected()
     {
         var project = new ProjectState();
 
-        for (var i = 0; i < MetatileService.MaxPerKind; i++)
+        // One slot of MaxPerKind is always the Kind+GridSize's own reserved blank metatile (auto-created
+        // by the very first iteration below) — so only MaxPerKind - 1 REAL metatiles fit.
+        for (var i = 0; i < MetatileService.MaxPerKind - 1; i++)
         {
             var result = MetatileService.Create(project, $"tile_{i}", MetatileKind.FourBpp, 2, MakeCells(2));
             Assert.True(result.Success, $"metatile #{i} unexpectedly failed: {result.Error}");
@@ -126,53 +132,57 @@ public class MetatileServiceTests
     }
 
     [Fact]
-    public void Delete_UnusedMetatile_NoOthers_JustRemovesIt()
+    public void Delete_UnusedMetatile_NoOthers_LeavesOnlyTheReservedBlank()
     {
         var project = new ProjectState();
         var a = MetatileService.Create(project, "a", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!;
 
         MetatileService.Delete(project, a);
 
-        Assert.Empty(project.Metatiles);
+        // The Kind+GridSize's reserved blank (auto-created alongside 'a') is untouched by deleting 'a' —
+        // only ReferenceIntegrityService.CanDeleteMetatile actually blocks deleting IT specifically.
+        var remaining = Assert.Single(project.Metatiles);
+        Assert.True(remaining.IsReservedBlank);
     }
 
     [Fact]
     public void Delete_MiddleMetatile_CompactsRemainingSortIndexes_AndRemapsMapCells()
     {
         var project = new ProjectState();
-        var a = MetatileService.Create(project, "a", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 0
-        var b = MetatileService.Create(project, "b", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 1 — will be deleted
-        var c = MetatileService.Create(project, "c", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 2 -> should become 1
-        Assert.Equal(0, a.SortIndex);
-        Assert.Equal(1, b.SortIndex);
-        Assert.Equal(2, c.SortIndex);
+        // SortIndex 0 is the auto-created reserved blank (see Create's own EnsureBlankMetatile call).
+        var a = MetatileService.Create(project, "a", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 1
+        var b = MetatileService.Create(project, "b", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 2 — will be deleted
+        var c = MetatileService.Create(project, "c", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 3 -> should become 2
+        Assert.Equal(1, a.SortIndex);
+        Assert.Equal(2, b.SortIndex);
+        Assert.Equal(3, c.SortIndex);
 
         var map = new MapAsset(2, 1)
         {
             Name = "level1",
             MetatileGridSize = 2,
-            TilemapLayer = new MapGridLayer { MetatileIndices = [(byte)a.SortIndex, (byte)c.SortIndex] }, // [0, 2]
-            TileLayer8Bpp = new MapGridLayer { MetatileIndices = [MapGridLayer.EmptyCell, MapGridLayer.EmptyCell] }
+            TilemapLayer = new MapGridLayer { MetatileIndices = [(byte)a.SortIndex, (byte)c.SortIndex] }, // [1, 3]
+            TileLayer8Bpp = new MapGridLayer { MetatileIndices = [0, 0] } // unused/unchecked by this test
         };
         project.Maps.Add(map);
 
         MetatileService.Delete(project, b);
 
-        Assert.Equal(2, project.Metatiles.Count);
-        Assert.Equal(0, a.SortIndex); // untouched — was already below the gap
-        Assert.Equal(1, c.SortIndex); // shifted down to fill b's old slot
+        Assert.Equal(3, project.Metatiles.Count); // blank + a + c
+        Assert.Equal(1, a.SortIndex); // untouched — was already below the gap
+        Assert.Equal(2, c.SortIndex); // shifted down to fill b's old slot
 
-        Assert.Equal(0, map.TilemapLayer.MetatileIndices[0]); // still points at 'a', untouched
-        Assert.Equal(1, map.TilemapLayer.MetatileIndices[1]); // was 2 (pointing at 'c'), remapped to c's new SortIndex 1
+        Assert.Equal(1, map.TilemapLayer.MetatileIndices[0]); // still points at 'a', untouched
+        Assert.Equal(2, map.TilemapLayer.MetatileIndices[1]); // was 3 (pointing at 'c'), remapped to c's new SortIndex 2
     }
 
     [Fact]
     public void Delete_DoesNotAffectTheOtherKindsNumberingOrLayer()
     {
         var project = new ProjectState();
-        var fourBppA = MetatileService.Create(project, "4a", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!;
-        var fourBppB = MetatileService.Create(project, "4b", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!;
-        var eightBpp = MetatileService.Create(project, "8a", MetatileKind.EightBpp, 2, MakeCells(2)).Metatile!;
+        var fourBppA = MetatileService.Create(project, "4a", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 1 (0 is the FourBpp reserved blank)
+        var fourBppB = MetatileService.Create(project, "4b", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 2
+        var eightBpp = MetatileService.Create(project, "8a", MetatileKind.EightBpp, 2, MakeCells(2)).Metatile!; // SortIndex 1 (0 is the EightBpp reserved blank)
 
         var map = new MapAsset(1, 1)
         {
@@ -183,12 +193,12 @@ public class MetatileServiceTests
         };
         project.Maps.Add(map);
 
-        MetatileService.Delete(project, fourBppA); // fourBppB (SortIndex 1) should shift to 0
+        MetatileService.Delete(project, fourBppA); // fourBppB (SortIndex 2) should shift to 1
 
-        Assert.Equal(0, fourBppB.SortIndex);
-        Assert.Equal(0, map.TilemapLayer.MetatileIndices[0]);
-        Assert.Equal(0, eightBpp.SortIndex); // never touched — different Kind, different layer
-        Assert.Equal(0, map.TileLayer8Bpp.MetatileIndices[0]); // never touched
+        Assert.Equal(1, fourBppB.SortIndex);
+        Assert.Equal(1, map.TilemapLayer.MetatileIndices[0]);
+        Assert.Equal(1, eightBpp.SortIndex); // never touched — different Kind, different layer
+        Assert.Equal(1, map.TileLayer8Bpp.MetatileIndices[0]); // never touched
     }
 
     [Fact]

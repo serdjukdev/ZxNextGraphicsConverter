@@ -124,7 +124,11 @@ public class ExportServiceTests : IDisposable
         var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
         var packedNames = results[0].Placements.Select(p => p.Name).ToList();
 
-        Assert.Equal(rasterOrderNames, packedNames);
+        // The very first Tile4Bpp import also auto-creates the category's reserved blank tile (see
+        // ReservedBlankAssetService), which always sorts first (lowest SortIndex) — assert it separately,
+        // then check the 4 real tiles still pack in raster/import order right after it.
+        Assert.Equal("Blank", packedNames[0]);
+        Assert.Equal(rasterOrderNames, packedNames.Skip(1));
     }
 
     [Fact]
@@ -219,10 +223,13 @@ public class ExportServiceTests : IDisposable
         var rowMajorResults = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb, _ => PixelExportOrder.RowMajor);
         var columnMajorResults = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb, _ => PixelExportOrder.ColumnMajor);
 
-        // Only the first 64 bytes are this one tile's real data — the rest of the chunk is zero-padding
-        // (BinaryChunker's own concern, already covered by its own tests), so slice it off before comparing.
-        var rowMajorTileBytes = rowMajorResults.Single(r => r.RowKey == "tile/8bpp/images").Chunks[0].Data.Take(64).ToArray();
-        var columnMajorTileBytes = columnMajorResults.Single(r => r.RowKey == "tile/8bpp/images").Chunks[0].Data.Take(64).ToArray();
+        // The very first Tile8Bpp import into this folder also auto-creates the category's reserved
+        // blank tile (see ReservedBlankAssetService), which always sorts first (bytes 0-63, uniformly
+        // the transparent index — reordering that does nothing observable) — this one imported tile is
+        // second, at bytes 64-127. The rest of the chunk beyond that is zero-padding (BinaryChunker's
+        // own concern, already covered by its own tests), so slice out just this tile's real data.
+        var rowMajorTileBytes = rowMajorResults.Single(r => r.RowKey == "tile/8bpp/images").Chunks[0].Data.Skip(64).Take(64).ToArray();
+        var columnMajorTileBytes = columnMajorResults.Single(r => r.RowKey == "tile/8bpp/images").Chunks[0].Data.Skip(64).Take(64).ToArray();
 
         Assert.NotEqual(rowMajorTileBytes, columnMajorTileBytes);
         Assert.Equal(TilePixelReorder.Apply(rowMajorTileBytes, 8, 8, PixelExportOrder.ColumnMajor), columnMajorTileBytes);

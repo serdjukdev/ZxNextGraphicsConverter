@@ -8,7 +8,7 @@ namespace ZxNext.Core.Tests;
 public class MapServiceTests
 {
     [Fact]
-    public void Create_ValidSize_Succeeds_BothLayersFullyEmpty()
+    public void Create_ValidSize_Succeeds_BothLayersDefaultToTheReservedBlankMetatile()
     {
         var project = new ProjectState();
 
@@ -20,8 +20,17 @@ public class MapServiceTests
         Assert.Equal(3, map.Height);
         Assert.Equal(2, map.MetatileGridSize);
         Assert.Equal(12, map.TilemapLayer.MetatileIndices.Length);
-        Assert.All(map.TilemapLayer.MetatileIndices, b => Assert.Equal(MapGridLayer.EmptyCell, b));
-        Assert.All(map.TileLayer8Bpp.MetatileIndices, b => Assert.Equal(MapGridLayer.EmptyCell, b));
+
+        // A brand-new project's very first map: each Kind's reserved blank metatile is created fresh here
+        // (nothing else exists yet for either Kind), so it lands at SortIndex 0 and every cell defaults to it.
+        var tilemapBlank = Assert.Single(project.Metatiles, m => m.Kind == MetatileKind.FourBpp);
+        var tileLayerBlank = Assert.Single(project.Metatiles, m => m.Kind == MetatileKind.EightBpp);
+        Assert.True(tilemapBlank.IsReservedBlank);
+        Assert.True(tileLayerBlank.IsReservedBlank);
+        Assert.Equal(0, tilemapBlank.SortIndex);
+        Assert.Equal(0, tileLayerBlank.SortIndex);
+        Assert.All(map.TilemapLayer.MetatileIndices, b => Assert.Equal(0, b));
+        Assert.All(map.TileLayer8Bpp.MetatileIndices, b => Assert.Equal(0, b));
         Assert.Empty(map.SpriteLayer);
         Assert.True(map.TilemapLayerVisible);
         Assert.True(map.TileLayer8BppVisible);

@@ -46,6 +46,11 @@ public static class ReferenceIntegrityService
     /// <summary>Checks whether a GraphicsAsset (tile or sprite category) can be safely deleted. Non-tile/non-sprite categories (Layer2) have no such reference chain yet and are always deletable by this check.</summary>
     public static DeletionCheck CanDeleteAsset(ProjectState project, GraphicsAsset asset)
     {
+        if (asset.IsReservedBlank)
+        {
+            return new DeletionCheck(false, $"Cannot delete '{asset.Name}': it's the reserved blank tile every map's grid layer relies on.");
+        }
+
         if (asset.Category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp)
         {
             var metatiles = FindMetatilesReferencingTile(project, asset.Id);
@@ -70,6 +75,11 @@ public static class ReferenceIntegrityService
 
     public static DeletionCheck CanDeleteMetatile(ProjectState project, Metatile metatile)
     {
+        if (metatile.IsReservedBlank)
+        {
+            return new DeletionCheck(false, $"Cannot delete '{metatile.Name}': it's the reserved blank metatile every map's grid cells default to.");
+        }
+
         var maps = FindMapsReferencingMetatile(project, metatile);
         if (maps.Count > 0)
         {

@@ -9,10 +9,11 @@ public record MetatileCreateResult(bool Success, Metatile? Metatile, string? Err
 public static class MetatileService
 {
     /// <summary>
-    /// Byte 0xFF (<see cref="MapGridLayer.EmptyCell"/>) is permanently reserved as the map's "empty
-    /// cell" sentinel, so a 256th metatile in one Kind could never be placed on any map — the
-    /// creation-time cap itself is lowered to 255 to keep "created but unplaceable" from ever being a
-    /// real state, rather than surfacing the problem only later at placement/export time.
+    /// One less than the 256 values a single exported byte can address, keeping a one-slot safety margin —
+    /// same shape as <see cref="Export.AssetExportIndexer.MaxAssetsPerCategory"/> elsewhere in the export
+    /// pipeline. One of these slots is always the Kind's own reserved blank metatile(s) — see
+    /// <see cref="ReservedBlankAssetService"/> — so real, user-created metatiles effectively get up to
+    /// MaxPerKind minus however many distinct GridSizes are in use.
     /// </summary>
     public const int MaxPerKind = 255;
 
@@ -29,12 +30,17 @@ public static class MetatileService
                 $"Expected {gridSize * gridSize} cells for a {gridSize}x{gridSize} metatile, got {cells.Count}.");
         }
 
+        // Lazily guarantees this (Kind, GridSize) pair's reserved blank metatile exists BEFORE this real
+        // one — see ReservedBlankAssetService's own doc comment for why "first real metatile of a
+        // Kind+GridSize" is one of its entry points, and why doing this before the SortIndex/cap logic
+        // below is what lets the blank end up first with no renumbering.
+        ReservedBlankAssetService.EnsureBlankMetatile(project, kind, gridSize);
+
         var countInKind = project.Metatiles.Count(m => m.Kind == kind);
         if (countInKind >= MaxPerKind)
         {
             return new MetatileCreateResult(false, null,
-                $"Already at the {MaxPerKind}-metatile limit for {kind} — byte 0xFF is reserved as the map's " +
-                "empty-cell marker, so one more could never be placed on any map. Delete an unused metatile first.");
+                $"Already at the {MaxPerKind}-metatile limit for {kind}. Delete an unused metatile first.");
         }
 
         // EightBpp is a software tile layer with no hardware mirror/rotate capability (Tile8Bpp has
@@ -124,8 +130,7 @@ public static class MetatileService
             var layer = kind == MetatileKind.FourBpp ? map.TilemapLayer : map.TileLayer8Bpp;
             for (var i = 0; i < layer.MetatileIndices.Length; i++)
             {
-                var cell = layer.MetatileIndices[i];
-                if (cell != MapGridLayer.EmptyCell && remap.TryGetValue(cell, out var newValue))
+                if (remap.TryGetValue(layer.MetatileIndices[i], out var newValue))
                 {
                     layer.MetatileIndices[i] = newValue;
                 }

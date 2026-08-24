@@ -26,7 +26,7 @@ public static class MapExporter
             ? (true, null)
             : (false, $"Map '{map.Name}' is {map.Width}x{map.Height} = {map.Width * map.Height} cells, over the {MaxGridCells}-cell-per-layer limit.");
 
-    /// <summary><paramref name="Metatiles"/> is null when this layer places no metatiles at all — an empty definitions row would be pointless.</summary>
+    /// <summary><paramref name="Metatiles"/> is nullable for legacy reasons only — every grid layer now always references at least its Kind+GridSize's reserved blank metatile (see ReservedBlankAssetService), so this is never actually null anymore.</summary>
     public record GridLayerExportResult(FolderExportResult Grid, FolderExportResult? Metatiles);
 
     public static GridLayerExportResult ExportTilemapLayer(MapAsset map, ProjectState project) =>
@@ -45,8 +45,10 @@ public static class MapExporter
     /// </summary>
     private static GridLayerExportResult ExportGridLayer(MapAsset map, MetatileKind kind, MapGridLayer layer, string layerSuffix, ProjectState project)
     {
+        // Every cell always references a real metatile now — including a genuinely "empty-looking" one,
+        // which references the Kind+GridSize's reserved blank metatile (see ReservedBlankAssetService) —
+        // so there is no sentinel byte to filter out here anymore.
         var usedSortIndices = layer.MetatileIndices
-            .Where(b => b != MapGridLayer.EmptyCell)
             .Select(b => (int)b)
             .Distinct()
             .OrderBy(i => i)
@@ -58,15 +60,12 @@ public static class MapExporter
         var remappedGrid = new byte[layer.MetatileIndices.Length];
         for (var i = 0; i < layer.MetatileIndices.Length; i++)
         {
-            var raw = layer.MetatileIndices[i];
-            remappedGrid[i] = raw == MapGridLayer.EmptyCell ? MapGridLayer.EmptyCell : localIndexBySortIndex[raw];
+            remappedGrid[i] = localIndexBySortIndex[layer.MetatileIndices[i]];
         }
 
         var gridRowKey = ExportFileNaming.GridRowKey(map.Name, layerSuffix);
         var gridResult = new FolderExportResult(gridRowKey, $"map/{map.Name}", [], [],
             GenerateGridAsm(gridRowKey, map.Width, map.Height, remappedGrid), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false);
-
-        if (usedSortIndices.Count == 0) return new GridLayerExportResult(gridResult, null);
 
         var metatilesByGlobalSortIndex = project.Metatiles.Where(m => m.Kind == kind).ToDictionary(m => m.SortIndex);
         var orderedMetatiles = new List<Metatile>(usedSortIndices.Count);
@@ -207,7 +206,7 @@ public static class MapExporter
     {
         var sb = new StringBuilder();
         sb.Append("; ").Append(rowKey).Append(" -- map grid data\n");
-        sb.Append("; ").Append(width).Append('x').Append(height).Append(" cells, 1 byte/cell: LOCAL metatile index (see the matching _metatiles.asm file), 0xFF = empty\n");
+        sb.Append("; ").Append(width).Append('x').Append(height).Append(" cells, 1 byte/cell: LOCAL metatile index (see the matching _metatiles.asm file, index 0 = the reserved blank/transparent metatile)\n");
         sb.Append(rowKey).Append("_width: equ ").Append(width).Append('\n');
         sb.Append(rowKey).Append("_height: equ ").Append(height).Append('\n');
         sb.Append('\n');

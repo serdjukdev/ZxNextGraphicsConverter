@@ -67,8 +67,10 @@ public static class TileGridBitmapRenderer
         {
             for (var col = 0; col < widthCells; col++)
             {
+                // Every cell always references a real metatile now, including a genuinely "empty-looking"
+                // one (the reserved blank metatile, whose own tiles are all fully-transparent pixels) — so
+                // this always renders normally; TryGetValue is just defensive, not a real "empty" check.
                 var cellValue = layer.MetatileIndices[row * widthCells + col];
-                if (cellValue == MapGridLayer.EmptyCell) continue;
                 if (!metatilesBySortIndex.TryGetValue(cellValue, out var metatile)) continue;
 
                 var metatileBitmap = RenderMetatile(metatile, project);

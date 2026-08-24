@@ -27,24 +27,31 @@ public static class MapService
                 $"{width}x{height} = {width * height} cells, over the {MapExporter.MaxGridCells}-cell-per-layer limit.");
         }
 
+        // Lazily guarantees both Kinds' reserved blank metatile exists for THIS map's GridSize, BEFORE
+        // its cells default to referencing them — see ReservedBlankAssetService's own doc comment for why
+        // "a brand-new map's default-blank cells" is one of its entry points, even before any real
+        // metatile of that Kind+GridSize exists.
+        var tilemapBlank = ReservedBlankAssetService.EnsureBlankMetatile(project, MetatileKind.FourBpp, metatileGridSize);
+        var tileLayer8BppBlank = ReservedBlankAssetService.EnsureBlankMetatile(project, MetatileKind.EightBpp, metatileGridSize);
+
         var cellCount = width * height;
         var map = new MapAsset(width, height)
         {
             Name = EnsureUniqueName(project, name),
             SortIndex = NextSortIndex(project),
             MetatileGridSize = metatileGridSize,
-            TilemapLayer = new MapGridLayer { MetatileIndices = FullOfEmptyCells(cellCount) },
-            TileLayer8Bpp = new MapGridLayer { MetatileIndices = FullOfEmptyCells(cellCount) }
+            TilemapLayer = new MapGridLayer { MetatileIndices = FullOfValue(cellCount, (byte)tilemapBlank.SortIndex) },
+            TileLayer8Bpp = new MapGridLayer { MetatileIndices = FullOfValue(cellCount, (byte)tileLayer8BppBlank.SortIndex) }
         };
 
         project.Maps.Add(map);
         return new MapCreateResult(true, map, null);
     }
 
-    private static byte[] FullOfEmptyCells(int length)
+    private static byte[] FullOfValue(int length, byte value)
     {
         var indices = new byte[length];
-        Array.Fill(indices, MapGridLayer.EmptyCell);
+        Array.Fill(indices, value);
         return indices;
     }
 

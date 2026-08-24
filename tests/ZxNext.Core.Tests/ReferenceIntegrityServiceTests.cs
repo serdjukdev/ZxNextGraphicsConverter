@@ -20,16 +20,9 @@ public class ReferenceIntegrityServiceTests
     {
         Name = name,
         MetatileGridSize = gridSize,
-        TilemapLayer = new MapGridLayer { MetatileIndices = FullOfEmpty(width * height) },
-        TileLayer8Bpp = new MapGridLayer { MetatileIndices = FullOfEmpty(width * height) }
+        TilemapLayer = new MapGridLayer { MetatileIndices = new byte[width * height] },
+        TileLayer8Bpp = new MapGridLayer { MetatileIndices = new byte[width * height] }
     };
-
-    private static byte[] FullOfEmpty(int length)
-    {
-        var arr = new byte[length];
-        Array.Fill(arr, MapGridLayer.EmptyCell);
-        return arr;
-    }
 
     [Fact]
     public void CanDeleteAsset_TileUsedInMetatile_Blocked()
@@ -137,7 +130,7 @@ public class ReferenceIntegrityServiceTests
         var project = new ProjectState();
         var fourBpp = MetatileServiceCreate(project, ZxNext.Core.Model.MetatileKind.FourBpp);
         var eightBpp = MetatileServiceCreate(project, ZxNext.Core.Model.MetatileKind.EightBpp);
-        Assert.Equal(fourBpp.SortIndex, eightBpp.SortIndex); // both 0 — same raw value, different Kind
+        Assert.Equal(fourBpp.SortIndex, eightBpp.SortIndex); // both 1 (0 is each Kind's own reserved blank) — same raw value, different Kind
 
         var map = FakeMap("level1", width: 1, height: 1);
         map.TileLayer8Bpp.MetatileIndices[0] = (byte)eightBpp.SortIndex; // only the 8bpp layer references it

@@ -67,6 +67,9 @@ public class AssetDto
     public int SourceOffsetY { get; set; }
     public int SourceCropWidth { get; set; }
     public int SourceCropHeight { get; set; }
+
+    /// <summary>False (the correct default) in project files saved before this field existed — <see cref="ProjectService.Load"/>'s reserved-blank migration sweep backfills a proper one for any already-populated Tile4Bpp/Tile8Bpp category regardless.</summary>
+    public bool IsReservedBlank { get; set; }
 }
 
 public class MetatileCellDto
@@ -87,6 +90,9 @@ public class MetatileDto
     public int GridSize { get; set; }
     public List<MetatileCellDto> Cells { get; set; } = [];
     public int SortIndex { get; set; }
+
+    /// <summary>False (the correct default) in project files saved before this field existed — <see cref="ProjectService.Load"/>'s reserved-blank migration sweep backfills a proper one for any already-populated Kind+GridSize regardless.</summary>
+    public bool IsReservedBlank { get; set; }
 }
 
 public class SpritePlacementDto

@@ -70,20 +70,24 @@ public class ProjectStateTests
         var source = new SourceImage { FileName = "src", FilePath = "C:\\fake\\src.png", Width = 8, Height = 8 };
         project.SourceImages.Add(source);
 
-        // Fills slot 0 completely (15/15) so the next tile can't merge into it.
+        // The very first Tile4Bpp import also auto-creates the category's reserved blank tile (see
+        // ReservedBlankAssetService), which piggybacks on slot 0 via an empty-colour subset match — so
+        // "full" (15 real colours, filling the rest of slot 0's 15 usable entries) merges into that same
+        // slot 0, and slot 0 can never become orphaned on its own as long as the reserved blank exists.
         var full = AssetImporter.Import(project, source, DistinctColorsImage(8, 8, 15), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
         // Disjoint colour -> forced into a brand-new slot 1.
         var lonely = AssetImporter.Import(project, source, DistinctColorsImage(8, 8, 1, blueOffset: 7), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
 
         Assert.Equal(2, project.Tile4BppBank.Slots.Count);
+        Assert.Equal(0, full.PaletteSlotIndex);
         Assert.Equal(1, lonely.PaletteSlotIndex);
 
-        // Simulate what a single-tile re-quantize leaves behind: the asset that used slot 0 is gone.
-        project.RemoveAsset(full.Id);
+        // Remove the ONLY asset in slot 1 (slot 0 stays referenced regardless — the reserved blank lives there).
+        project.RemoveAsset(lonely.Id);
         project.CompactPaletteBank(AssetCategory.Tile4Bpp);
 
-        Assert.Single(project.Tile4BppBank.Slots); // the now-unreferenced slot 0 was dropped
-        Assert.Equal(0, lonely.PaletteSlotIndex); // remapped from 1 down to 0
+        Assert.Single(project.Tile4BppBank.Slots); // the now-unreferenced slot 1 was dropped
+        Assert.Equal(0, full.PaletteSlotIndex); // untouched — slot 0 was never orphaned
     }
 
     [Fact]
@@ -110,22 +114,25 @@ public class ProjectStateTests
         var source = new SourceImage { FileName = "src", FilePath = "C:\\fake\\src.png", Width = 8, Height = 8 };
         project.SourceImages.Add(source);
 
-        // Two disjoint 8-colour images sharing one flat folder palette (16/256 used total).
+        // The very first Tile8Bpp import into THIS folder also auto-creates the category's reserved
+        // blank tile there (see ReservedBlankAssetService — its FolderPath is the category root,
+        // "tile/8bpp/images", same folder these tests use), which force-reserves the transparent index
+        // up front — one fewer free slot than the two real images' 16 colours alone would suggest.
         var first = AssetImporter.Import(project, source, DistinctColorsImage(8, 8, 8), AssetCategory.Tile8Bpp, "tile/8bpp/images", DitherMode.None).Asset!;
         AssetImporter.Import(project, source, DistinctColorsImage(8, 8, 8, blueOffset: 4), AssetCategory.Tile8Bpp, "tile/8bpp/images", DitherMode.None);
 
-        Assert.Equal(256 - 16, project.GetOrCreateFolderPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images").FreeSlotCount);
+        Assert.Equal(256 - 16 - 1, project.GetOrCreateFolderPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images").FreeSlotCount);
 
         project.RemoveAsset(first.Id);
         project.CompactFlatPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images");
 
-        // CompactFlatPalette rebuilds the palette as a brand-new object, so it must be re-fetched.
-        // Only the surviving asset's 8 colours should still be reserved.
-        Assert.Equal(256 - 8, project.GetOrCreateFolderPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images").FreeSlotCount);
+        // CompactFlatPalette rebuilds the palette as a brand-new object, so it must be re-fetched. The
+        // surviving real asset's 8 colours plus the still-present reserved blank tile's transparent index.
+        Assert.Equal(256 - 8 - 1, project.GetOrCreateFolderPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images").FreeSlotCount);
     }
 
     [Fact]
-    public void CompactFlatPalette_LastAssetInFolderRemoved_ResetsToAFullyEmptyPalette()
+    public void CompactFlatPalette_LastRealAssetInFolderRemoved_OnlyTheReservedBlanksTransparencyRemains()
     {
         var project = new ProjectState();
         var source = new SourceImage { FileName = "src", FilePath = "C:\\fake\\src.png", Width = 8, Height = 8 };
@@ -136,8 +143,10 @@ public class ProjectStateTests
         project.RemoveAsset(only.Id);
         project.CompactFlatPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images");
 
+        // Not fully empty — the reserved blank tile is still a real asset in this folder, so its
+        // transparent index stays reserved even with no other real content left.
         var palette = project.GetOrCreateFolderPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images");
-        Assert.Equal(256, palette.FreeSlotCount);
+        Assert.Equal(255, palette.FreeSlotCount);
     }
 
     /// <summary>

@@ -136,6 +136,25 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Decodes a source image's pixels — used both to import directly and to feed the atlas slicer preview.</summary>
     public DecodedImage DecodeSource(SourceImageViewModel source) => _decoder.Decode(source.Model.FilePath);
 
+    /// <summary>
+    /// Core (ReservedBlankAssetService) has no UI dependency, so when it silently auto-creates a
+    /// category's reserved blank tile as a side effect of some OTHER operation — a plain import, an
+    /// Atlas Slicer batch, or (via EnsureBlankMetatile) creating the first metatile or map of a given
+    /// Kind+GridSize — nothing ever calls Tree.AddAssetNode for it. Without this, the tile exists in
+    /// ProjectState.Assets (correct for export/save) but has no tree node at all until the next full
+    /// project load, which rebuilds the tree from every asset (see the Load handler's own loop) — a real
+    /// gap this call plugs by adding any missing node (always at the front, matching where the reserved
+    /// blank's SortIndex already puts it for export). Cheap, safe to call after any operation that MIGHT
+    /// have created one, even when it didn't — every already-present node is skipped as a no-op.
+    /// </summary>
+    public void SyncReservedBlankAssetNodes()
+    {
+        foreach (var asset in _project.Assets.Where(a => a.IsReservedBlank))
+        {
+            if (Tree.FindLeafNode(asset.Id) is null) Tree.AddAssetNode(asset, insertAtFront: true);
+        }
+    }
+
     /// <summary>Called by the tree view when a source image dropped onto a category folder (or 8bpp sub-folder) already matches the target cell size exactly.</summary>
     public ImportOutcome ImportIntoCategory(SourceImageViewModel source, AssetCategory category, string folderPath, int? maxColors = null)
     {
@@ -148,11 +167,16 @@ public partial class MainViewModel : ObservableObject
             HasUnsavedChanges = true;
             PixelEditor.StatusText = $"Imported {result.Asset!.Name} into {folderPath} ({category}).";
         }
+        else if (result.Reason == ImportFailureReason.RedundantWithReservedBlank)
+        {
+            PixelEditor.StatusText = result.Error ?? ""; // not a real failure — friendly "already covered" message
+        }
         else
         {
             PixelEditor.StatusText = $"Import failed: {result.Error}";
         }
 
+        SyncReservedBlankAssetNodes();
         return new ImportOutcome(result.Success, result.Reason, category, result.Error);
     }
 
@@ -242,6 +266,7 @@ public partial class MainViewModel : ObservableObject
 
                     var result = AssetImporter.Import(_project, cellSource, cellRgba, category, folderPath, DitherMode.None, null, rect.X, rect.Y);
                     if (result.Success) imported.Add(result.Asset!);
+                    else if (result.Reason == ImportFailureReason.RedundantWithReservedBlank) duplicatesSkipped++; // pixel-identical to the reserved blank tile — same bucket as a same-batch duplicate
                     else failed++;
                 }
             });
@@ -270,6 +295,7 @@ public partial class MainViewModel : ObservableObject
             // doc comment) — the transparent asset needs to go in at the front of its folder explicitly,
             // or the SortIndex change above would be invisible in the tree despite being real for export.
             foreach (var asset in imported) Tree.AddAssetNode(asset, insertAtFront: asset.Id == transparentAssetId);
+            SyncReservedBlankAssetNodes(); // the category's reserved blank tile may have been auto-created mid-slice (first cell in) and never got a node of its own above
 
             if (imported.Count > 0) HasUnsavedChanges = true;
 

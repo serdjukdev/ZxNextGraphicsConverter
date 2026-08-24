@@ -20,4 +20,12 @@ public class Metatile
     public required int GridSize { get; init; }
     public required List<MetatileCell> Cells { get; set; }
     public int SortIndex { get; set; }
+
+    /// <summary>
+    /// True only for the one auto-generated metatile per (Kind, GridSize) pair whose cells all reference
+    /// that Kind's reserved blank tile — see <see cref="Conversion.ReservedBlankAssetService"/>. This is
+    /// what a map grid cell references by default (no more separate "empty cell" sentinel byte).
+    /// Undeletable (<see cref="Project.ReferenceIntegrityService.CanDeleteMetatile"/> blocks it).
+    /// </summary>
+    public bool IsReservedBlank { get; init; }
 }

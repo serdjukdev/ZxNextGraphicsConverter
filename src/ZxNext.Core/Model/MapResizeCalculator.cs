@@ -35,10 +35,10 @@ public static class MapResizeCalculator
     /// survives is guaranteed to land at a non-negative coordinate, by construction: only positions
     /// checked to be within [0, new size) are ever kept.
     /// </summary>
-    public static MapResizePlan Plan(MapAsset map, int newWidth, int newHeight, int offsetX, int offsetY)
+    public static MapResizePlan Plan(MapAsset map, int newWidth, int newHeight, int offsetX, int offsetY, byte tilemapBlankValue, byte tileLayer8BppBlankValue)
     {
-        var (newTilemap, droppedTiles) = RemapGridLayer(map.TilemapLayer, map.Width, map.Height, newWidth, newHeight, offsetX, offsetY);
-        var (new8Bpp, dropped8Bpp) = RemapGridLayer(map.TileLayer8Bpp, map.Width, map.Height, newWidth, newHeight, offsetX, offsetY);
+        var (newTilemap, droppedTiles) = RemapGridLayer(map.TilemapLayer, map.Width, map.Height, newWidth, newHeight, offsetX, offsetY, tilemapBlankValue);
+        var (new8Bpp, dropped8Bpp) = RemapGridLayer(map.TileLayer8Bpp, map.Width, map.Height, newWidth, newHeight, offsetX, offsetY, tileLayer8BppBlankValue);
 
         var cellPixelSize = map.MetatileGridSize * 8;
         var pixelOffsetX = offsetX * cellPixelSize;
@@ -92,7 +92,7 @@ public static class MapResizeCalculator
     /// drops real content (all three Dropped* counts on the returned plan are always zero), unlike a
     /// user-driven <see cref="Plan"/> call, which can genuinely shrink into real content.
     /// </summary>
-    public static MapResizePlan? PlanTrim(MapAsset map)
+    public static MapResizePlan? PlanTrim(MapAsset map, byte tilemapBlankValue, byte tileLayer8BppBlankValue)
     {
         int? minRow = null, maxRow = null, minCol = null, maxCol = null;
 
@@ -109,8 +109,8 @@ public static class MapResizeCalculator
             for (var c = 0; c < map.Width; c++)
             {
                 var idx = r * map.Width + c;
-                if (map.TilemapLayer.MetatileIndices[idx] != MapGridLayer.EmptyCell ||
-                    map.TileLayer8Bpp.MetatileIndices[idx] != MapGridLayer.EmptyCell)
+                if (map.TilemapLayer.MetatileIndices[idx] != tilemapBlankValue ||
+                    map.TileLayer8Bpp.MetatileIndices[idx] != tileLayer8BppBlankValue)
                 {
                     Expand(r, c);
                 }
@@ -131,14 +131,14 @@ public static class MapResizeCalculator
         var newWidth = maxCol!.Value - minCol.Value + 1;
         var newHeight = maxRow!.Value - minRow.Value + 1;
 
-        return Plan(map, newWidth, newHeight, offsetX, offsetY);
+        return Plan(map, newWidth, newHeight, offsetX, offsetY, tilemapBlankValue, tileLayer8BppBlankValue);
     }
 
     private static (byte[] NewIndices, int DroppedCount) RemapGridLayer(
-        MapGridLayer layer, int oldWidth, int oldHeight, int newWidth, int newHeight, int offsetX, int offsetY)
+        MapGridLayer layer, int oldWidth, int oldHeight, int newWidth, int newHeight, int offsetX, int offsetY, byte blankValue)
     {
         var newIndices = new byte[newWidth * newHeight];
-        Array.Fill(newIndices, MapGridLayer.EmptyCell);
+        Array.Fill(newIndices, blankValue);
 
         var dropped = 0;
         for (var r = 0; r < oldHeight; r++)
@@ -153,7 +153,7 @@ public static class MapResizeCalculator
                 {
                     newIndices[newR * newWidth + newC] = oldValue;
                 }
-                else if (oldValue != MapGridLayer.EmptyCell)
+                else if (oldValue != blankValue)
                 {
                     dropped++;
                 }

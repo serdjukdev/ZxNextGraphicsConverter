@@ -45,4 +45,12 @@ public class GraphicsAsset
     /// </summary>
     public int SourceCropWidth { get; init; }
     public int SourceCropHeight { get; init; }
+
+    /// <summary>
+    /// True only for the one auto-generated, fully-transparent tile per Tile4Bpp/Tile8Bpp category — see
+    /// <see cref="Conversion.ReservedBlankAssetService"/>. Undeletable (<see cref="Project.ReferenceIntegrityService.CanDeleteAsset"/>
+    /// blocks it) since every map's grid layer relies on it always existing at whatever <see cref="SortIndex"/>
+    /// it currently has. Never true for Sprite4Bpp/Sprite8Bpp/Layer2 categories, which have no such concept.
+    /// </summary>
+    public bool IsReservedBlank { get; init; }
 }

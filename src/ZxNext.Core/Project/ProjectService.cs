@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ZxNext.Core.Conversion;
 using ZxNext.Core.Editing;
 using ZxNext.Core.Model;
 
@@ -89,7 +90,8 @@ public static class ProjectService
                     SourceOffsetX = asset.SourceOffsetX,
                     SourceOffsetY = asset.SourceOffsetY,
                     SourceCropWidth = asset.SourceCropWidth,
-                    SourceCropHeight = asset.SourceCropHeight
+                    SourceCropHeight = asset.SourceCropHeight,
+                    IsReservedBlank = asset.IsReservedBlank
                 });
             }
 
@@ -109,7 +111,8 @@ public static class ProjectService
                         Rotate = c.Rotate,
                         PaletteSlotOverride = c.PaletteSlotOverride
                     }).ToList(),
-                    SortIndex = metatile.SortIndex
+                    SortIndex = metatile.SortIndex,
+                    IsReservedBlank = metatile.IsReservedBlank
                 });
             }
 
@@ -237,7 +240,8 @@ public static class ProjectService
                 SourceOffsetX = a.SourceOffsetX,
                 SourceOffsetY = a.SourceOffsetY,
                 SourceCropWidth = a.SourceCropWidth > 0 ? a.SourceCropWidth : a.Width, // projects saved before this field existed default to "no padding" (crop == full size)
-                SourceCropHeight = a.SourceCropHeight > 0 ? a.SourceCropHeight : a.Height
+                SourceCropHeight = a.SourceCropHeight > 0 ? a.SourceCropHeight : a.Height,
+                IsReservedBlank = a.IsReservedBlank
             });
         }
 
@@ -257,7 +261,8 @@ public static class ProjectService
                     Rotate = c.Rotate,
                     PaletteSlotOverride = c.PaletteSlotOverride
                 }).ToList(),
-                SortIndex = m.SortIndex
+                SortIndex = m.SortIndex,
+                IsReservedBlank = m.IsReservedBlank
             });
         }
 
@@ -302,7 +307,56 @@ public static class ProjectService
             project.ObjectTypes.Add(new ObjectType { Id = t.Id, Name = t.Name });
         }
 
+        EnsureReservedBlankAssets(project);
+
         return project;
+    }
+
+    /// <summary>
+    /// Backfills the reserved blank tile/metatile invariant (see <see cref="ReservedBlankAssetService"/>)
+    /// for a project saved before this feature existed — every already-populated Tile4Bpp/Tile8Bpp
+    /// category, every (Kind, GridSize) pair any existing metatile already uses, and every existing map
+    /// (whose GridSize needs a blank regardless of whether any metatile of that GridSize exists yet).
+    /// Also replaces any leftover legacy 0xFF "empty cell" byte (the sentinel this feature replaced) with
+    /// the now-guaranteed blank metatile's SortIndex. A no-op, cheap idempotent check, for any project
+    /// already saved under this feature — so it's safe (and simplest) to always run on every load rather
+    /// than branching on the project's save-time format version.
+    /// </summary>
+    private static void EnsureReservedBlankAssets(ProjectState project)
+    {
+        const byte legacyEmptyCellSentinel = 0xFF;
+
+        foreach (var category in new[] { AssetCategory.Tile4Bpp, AssetCategory.Tile8Bpp })
+        {
+            if (project.Assets.Any(a => a.Category == category))
+            {
+                ReservedBlankAssetService.EnsureBlankTile(project, category);
+            }
+        }
+
+        foreach (var kind in Enum.GetValues<MetatileKind>())
+        {
+            foreach (var gridSize in project.Metatiles.Where(m => m.Kind == kind).Select(m => m.GridSize).Distinct().ToList())
+            {
+                ReservedBlankAssetService.EnsureBlankMetatile(project, kind, gridSize);
+            }
+        }
+
+        foreach (var map in project.Maps)
+        {
+            var tilemapBlank = ReservedBlankAssetService.EnsureBlankMetatile(project, MetatileKind.FourBpp, map.MetatileGridSize);
+            var tileLayer8BppBlank = ReservedBlankAssetService.EnsureBlankMetatile(project, MetatileKind.EightBpp, map.MetatileGridSize);
+            ReplaceLegacyEmptyCells(map.TilemapLayer, legacyEmptyCellSentinel, (byte)tilemapBlank.SortIndex);
+            ReplaceLegacyEmptyCells(map.TileLayer8Bpp, legacyEmptyCellSentinel, (byte)tileLayer8BppBlank.SortIndex);
+        }
+    }
+
+    private static void ReplaceLegacyEmptyCells(MapGridLayer layer, byte legacySentinel, byte blankValue)
+    {
+        for (var i = 0; i < layer.MetatileIndices.Length; i++)
+        {
+            if (layer.MetatileIndices[i] == legacySentinel) layer.MetatileIndices[i] = blankValue;
+        }
     }
 
     private static PaletteBankDto ToDto(PaletteBank bank) => new()

@@ -271,7 +271,8 @@ public partial class MapEditorViewModel : ObservableObject
     private void Trim()
     {
         if (SelectedMap is null) return;
-        var plan = MapResizeCalculator.PlanTrim(SelectedMap.Map);
+        var map = SelectedMap.Map;
+        var plan = MapResizeCalculator.PlanTrim(map, BlankValueFor(MetatileKind.FourBpp, map.MetatileGridSize), BlankValueFor(MetatileKind.EightBpp, map.MetatileGridSize));
         if (plan is null)
         {
             StatusText = "Nothing to trim — the map is empty.";
@@ -616,7 +617,7 @@ public partial class MapEditorViewModel : ObservableObject
         }
         else
         {
-            newValue = MapGridLayer.EmptyCell;
+            newValue = BlankValueFor(ActiveLayer == MapLayerKind.Tilemap ? MetatileKind.FourBpp : MetatileKind.EightBpp, map.MetatileGridSize);
         }
 
         SetGridCell(layer, index, newValue);
@@ -631,6 +632,10 @@ public partial class MapEditorViewModel : ObservableObject
     /// RenderPreview() — batch callers (Fill/Delete/Move) render once after their whole loop instead of once
     /// per cell.
     /// </summary>
+    /// <summary>The byte an "erased"/never-painted cell of a grid layer holds — the Kind+GridSize's reserved blank metatile's SortIndex, lazily guaranteed to exist (cheap no-op once it already does; MapService.Create already ensures it for every map it creates, this only matters defensively for a map loaded from a project saved before this feature existed and not yet migrated for some reason).</summary>
+    private byte BlankValueFor(MetatileKind kind, int metatileGridSize) =>
+        (byte)ReservedBlankAssetService.EnsureBlankMetatile(_project, kind, metatileGridSize).SortIndex;
+
     private void SetGridCell(MapGridLayer layer, int index, byte newValue)
     {
         if (layer.MetatileIndices[index] == newValue) return; // skip cells that already hold this value
@@ -768,12 +773,13 @@ public partial class MapEditorViewModel : ObservableObject
         {
             if (GridSelection is not { } rect) return;
             var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
+            var blankValue = BlankValueFor(ActiveLayer == MapLayerKind.Tilemap ? MetatileKind.FourBpp : MetatileKind.EightBpp, map.MetatileGridSize);
             BeginStroke();
             for (var row = rect.Row0; row <= rect.Row1; row++)
             {
                 for (var col = rect.Col0; col <= rect.Col1; col++)
                 {
-                    SetGridCell(layer, row * map.Width + col, MapGridLayer.EmptyCell);
+                    SetGridCell(layer, row * map.Width + col, blankValue);
                 }
             }
             RenderPreview();
@@ -812,11 +818,12 @@ public partial class MapEditorViewModel : ObservableObject
         BeginStroke();
         if (!isCopy)
         {
+            var blankValue = BlankValueFor(ActiveLayer == MapLayerKind.Tilemap ? MetatileKind.FourBpp : MetatileKind.EightBpp, map.MetatileGridSize);
             for (var row = rect.Row0; row <= rect.Row1; row++)
             {
                 for (var col = rect.Col0; col <= rect.Col1; col++)
                 {
-                    SetGridCell(layer, row * map.Width + col, MapGridLayer.EmptyCell);
+                    SetGridCell(layer, row * map.Width + col, blankValue);
                 }
             }
         }

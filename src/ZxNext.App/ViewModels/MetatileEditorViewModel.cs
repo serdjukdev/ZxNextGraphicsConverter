@@ -92,6 +92,7 @@ public partial class MetatileEditorViewModel : ObservableObject
     public MetatileEditorViewModel(ProjectState project)
     {
         _project = project;
+        EnsureBlankForCurrentSelection();
         RefreshTilePalette();
         RefreshMetatileList();
         ResetDraft();
@@ -101,12 +102,33 @@ public partial class MetatileEditorViewModel : ObservableObject
     {
         SelectedPaletteTile = null;
         SelectedMetatile = null;
+        EnsureBlankForCurrentSelection();
         RefreshTilePalette();
         RefreshMetatileList();
         ResetDraft();
     }
 
-    partial void OnDraftGridSizeChanged(int value) => ResetDraft();
+    partial void OnDraftGridSizeChanged(int value)
+    {
+        EnsureBlankForCurrentSelection();
+        RefreshMetatileList(); // the library list mixes every GridSize for this Kind, so a newly-ensured blank for a not-yet-seen GridSize needs to show up here too
+        ResetDraft();
+    }
+
+    /// <summary>
+    /// Opening the editor on an empty Kind+GridSize (or switching to one) shows its reserved blank
+    /// metatile right away, matching the same "always there, index 0" guarantee everywhere else — not
+    /// deferred until the user happens to create their first real metatile of that Kind+GridSize. Cheap,
+    /// idempotent (see ReservedBlankAssetService) — a no-op once it already exists.
+    /// </summary>
+    private void EnsureBlankForCurrentSelection()
+    {
+        var alreadyExists = _project.Metatiles.Any(m => m.Kind == SelectedKind && m.GridSize == DraftGridSize && m.IsReservedBlank);
+        if (alreadyExists) return; // no-op — don't spuriously mark the project dirty just for opening/browsing the editor
+
+        ReservedBlankAssetService.EnsureBlankMetatile(_project, SelectedKind, DraftGridSize);
+        HasChanges = true; // genuinely just created a metatile (and, the very first time, its category's reserved blank tile)
+    }
 
     partial void OnDraftNameChanged(string value) => UpdateDraftValidity();
 

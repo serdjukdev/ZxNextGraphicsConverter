@@ -114,12 +114,14 @@ public class ProjectServiceTests : IDisposable
         var metatileResult = MetatileService.Create(project, "grass", MetatileKind.FourBpp, 2,
             [tile, new MetatileCell { TileAssetId = Guid.NewGuid() }, new MetatileCell { TileAssetId = Guid.NewGuid() }, new MetatileCell { TileAssetId = Guid.NewGuid() }]);
         Assert.True(metatileResult.Success, metatileResult.Error);
+        Assert.Equal(1, metatileResult.Metatile!.SortIndex); // 0 is the auto-created reserved blank for (FourBpp, GridSize 2)
 
         var map = new MapAsset(4, 3)
         {
             Name = "level1",
             MetatileGridSize = 2,
-            TilemapLayer = new MapGridLayer { MetatileIndices = [0, 0xFF, 0xFF, 0, 0xFF, 0, 0, 0xFF, 0, 0xFF, 0xFF, 0] },
+            // 1 = "grass" (its SortIndex), 0 = the reserved blank — no legacy 0xFF sentinel anymore.
+            TilemapLayer = new MapGridLayer { MetatileIndices = [1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1] },
             TileLayer8Bpp = new MapGridLayer { MetatileIndices = new byte[12] },
             SpriteLayer = [new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 32, Y = 16 }],
             TilemapLayerVisible = true,
@@ -131,10 +133,9 @@ public class ProjectServiceTests : IDisposable
         ProjectService.Save(project, _tempProjectFile);
         var loaded = ProjectService.Load(_tempProjectFile);
 
-        var loadedMetatile = Assert.Single(loaded.Metatiles);
-        Assert.Equal("grass", loadedMetatile.Name);
+        var loadedMetatile = Assert.Single(loaded.Metatiles, m => m.Name == "grass");
         Assert.Equal(MetatileKind.FourBpp, loadedMetatile.Kind);
-        Assert.Equal(0, loadedMetatile.SortIndex);
+        Assert.Equal(1, loadedMetatile.SortIndex);
         Assert.True(loadedMetatile.Cells[0].MirrorX);
         Assert.True(loadedMetatile.Cells[0].Rotate);
         Assert.False(loadedMetatile.Cells[0].MirrorY);
@@ -262,5 +263,95 @@ public class ProjectServiceTests : IDisposable
 
         var loadedMap = Assert.Single(loaded.Maps);
         Assert.Equal([MapLayerKind.Sprites, MapLayerKind.TileLayer8Bpp, MapLayerKind.Tilemap], loadedMap.LayerOrder);
+    }
+
+    /// <summary>
+    /// A project saved before the reserved-blank feature existed: one real FourBpp metatile densely at
+    /// SortIndex 0 (no IsReservedBlank key at all — missing bool defaults to false), and a map whose
+    /// Tilemap layer mixes real references to it (byte 0) with the legacy 0xFF "empty cell" sentinel;
+    /// the 8bpp layer is entirely 0xFF (no EightBpp metatile ever existed). Exercises BOTH migration
+    /// paths of <see cref="ProjectService.Load"/>'s reserved-blank sweep at once: the FourBpp
+    /// insert-and-shift (a real metatile already occupies SortIndex 0) and the EightBpp fast path
+    /// (nothing of that Kind exists yet), plus the legacy-0xFF-byte replacement for both layers.
+    /// </summary>
+    [Fact]
+    public void Load_LegacyProjectWithRealMetatileAtSortIndexZero_MigratesReservedBlankIn_ShiftsRealOne_RemapsLegacySentinel()
+    {
+        const string legacyJson = """
+        {
+          "FormatVersion": 1,
+          "SourceImages": [],
+          "Sprite4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Tile4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Sprite8BppFolderPalettes": {},
+          "Tile8BppFolderPalettes": {},
+          "Layer2_256x192FolderPalettes": {},
+          "Layer2_320x256FolderPalettes": {},
+          "Layer2_640x256x4FolderPalettes": {},
+          "Assets": [],
+          "Metatiles": [
+            {
+              "Id": "22222222-2222-2222-2222-222222222222",
+              "Name": "grass",
+              "Kind": "FourBpp",
+              "GridSize": 2,
+              "Cells": [
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false }
+              ],
+              "SortIndex": 0
+            }
+          ],
+          "Maps": [
+            {
+              "Id": "11111111-1111-1111-1111-111111111111",
+              "Name": "old_map",
+              "SortIndex": 0,
+              "Width": 2,
+              "Height": 1,
+              "MetatileGridSize": 2,
+              "TilemapDataFile": "maps/old_tilemap.bin",
+              "TileLayer8BppDataFile": "maps/old_8bpp.bin",
+              "SpriteLayer": [],
+              "TilemapLayerVisible": true,
+              "TileLayer8BppVisible": true,
+              "SpriteLayerVisible": true
+            }
+          ]
+        }
+        """;
+
+        using (var stream = new FileStream(_tempProjectFile, FileMode.Create, FileAccess.Write))
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            using (var entryStream = zip.CreateEntry("project.json", CompressionLevel.Fastest).Open())
+            using (var writer = new StreamWriter(entryStream))
+            {
+                writer.Write(legacyJson);
+            }
+            using (var entryStream = zip.CreateEntry("maps/old_tilemap.bin", CompressionLevel.Fastest).Open())
+            {
+                entryStream.Write([0, 0xFF]); // cell 0 = "grass" (old SortIndex 0), cell 1 = legacy empty sentinel
+            }
+            using (var entryStream = zip.CreateEntry("maps/old_8bpp.bin", CompressionLevel.Fastest).Open())
+            {
+                entryStream.Write([0xFF, 0xFF]); // never touched — no EightBpp metatile ever existed
+            }
+        }
+
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        var grass = Assert.Single(loaded.Metatiles, m => m.Name == "grass");
+        var fourBppBlank = Assert.Single(loaded.Metatiles, m => m.Kind == MetatileKind.FourBpp && m.IsReservedBlank);
+        var eightBppBlank = Assert.Single(loaded.Metatiles, m => m.Kind == MetatileKind.EightBpp && m.IsReservedBlank);
+        Assert.Equal(0, fourBppBlank.SortIndex); // inserted at the front
+        Assert.Equal(1, grass.SortIndex); // shifted up to make room
+        Assert.Equal(0, eightBppBlank.SortIndex); // fast path — nothing else of this Kind existed
+
+        var loadedMap = Assert.Single(loaded.Maps);
+        Assert.Equal([1, 0], loadedMap.TilemapLayer.MetatileIndices); // grass remapped 0->1, legacy 0xFF -> the new blank's SortIndex 0
+        Assert.Equal([0, 0], loadedMap.TileLayer8Bpp.MetatileIndices); // both legacy 0xFF -> the new EightBpp blank's SortIndex 0
     }
 }

@@ -26,10 +26,10 @@ public class ExportServiceMapMetatileTests : IDisposable
         if (Directory.Exists(_outputDir)) Directory.Delete(_outputDir, recursive: true);
     }
 
-    private static byte[] FullOfEmpty(int length)
+    private static byte[] FullOfValue(int length, byte value)
     {
         var arr = new byte[length];
-        Array.Fill(arr, MapGridLayer.EmptyCell);
+        Array.Fill(arr, value);
         return arr;
     }
 
@@ -59,14 +59,17 @@ public class ExportServiceMapMetatileTests : IDisposable
         return result.Metatile!;
     }
 
+    /// <summary>Mirrors what MapService.Create itself does (ensuring both Kinds' reserved blank metatile for this GridSize before defaulting the grid arrays to it) — these tests build a MapAsset by hand, so they must keep the project self-consistent the same way, or MapExporter would throw on a cell referencing a metatile that doesn't exist.</summary>
     private static MapAsset AddMap(ProjectState project, string name, int width = 2, int height = 2, int gridSize = 2, byte[]? tilemap = null)
     {
+        var tilemapBlank = ReservedBlankAssetService.EnsureBlankMetatile(project, MetatileKind.FourBpp, gridSize);
+        var tileLayerBlank = ReservedBlankAssetService.EnsureBlankMetatile(project, MetatileKind.EightBpp, gridSize);
         var map = new MapAsset(width, height)
         {
             Name = name,
             MetatileGridSize = gridSize,
-            TilemapLayer = new MapGridLayer { MetatileIndices = tilemap ?? FullOfEmpty(width * height) },
-            TileLayer8Bpp = new MapGridLayer { MetatileIndices = FullOfEmpty(width * height) }
+            TilemapLayer = new MapGridLayer { MetatileIndices = tilemap ?? FullOfValue(width * height, (byte)tilemapBlank.SortIndex) },
+            TileLayer8Bpp = new MapGridLayer { MetatileIndices = FullOfValue(width * height, (byte)tileLayerBlank.SortIndex) }
         };
         project.Maps.Add(map);
         return map;
@@ -88,19 +91,27 @@ public class ExportServiceMapMetatileTests : IDisposable
     }
 
     [Fact]
-    public void ExportAll_MapPlacingAMetatile_AddsGridAndMetatilesRowsForThatLayerOnly()
+    public void ExportAll_MapPlacingAMetatile_TilemapMetatilesRowHasBothBlankAndRealEntries()
     {
         var project = new ProjectState();
         var tile = ImportOneTile(project, "grass");
-        var metatile = CreateMetatile(project, "grass_block", tile.Id);
-        AddMap(project, "level1", tilemap: [(byte)metatile.SortIndex, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell]);
+        var metatile = CreateMetatile(project, "grass_block", tile.Id); // SortIndex 1 — 0 is the auto-created reserved blank
+        AddMap(project, "level1", tilemap: [(byte)metatile.SortIndex, 0, 0, 0]); // cell 0 = grass_block, the rest untouched -> reserved blank
 
         var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
 
         Assert.Contains(results, r => r.RowKey == "level1_tilemap_grid");
-        Assert.Contains(results, r => r.RowKey == "level1_tilemap_metatiles"); // Tilemap layer actually places one -> row exists
+        Assert.Contains(results, r => r.RowKey == "level1_tilemap_metatiles");
+        var tilemapMetatiles = results.Single(r => r.RowKey == "level1_tilemap_metatiles");
+        Assert.Contains("level1_tilemap_metatiles_count: equ 2", tilemapMetatiles.AsmText); // reserved blank (local 0) + grass_block (local 1)
+
         Assert.Contains(results, r => r.RowKey == "level1_8bpp_grid");
-        Assert.DoesNotContain(results, r => r.RowKey == "level1_8bpp_metatiles"); // 8bpp layer places none -> no row
+        // Every grid layer now always references at least its own Kind's reserved blank metatile —
+        // there is no more "empty cell" sentinel to make a layer's metatiles row genuinely absent.
+        Assert.Contains(results, r => r.RowKey == "level1_8bpp_metatiles");
+        var eightBppMetatiles = results.Single(r => r.RowKey == "level1_8bpp_metatiles");
+        Assert.Contains("level1_8bpp_metatiles_count: equ 1", eightBppMetatiles.AsmText); // just its own reserved blank
+
         Assert.Contains(results, r => r.RowKey == "level1_objects");
         Assert.All(results.Where(r => r.RowKey.StartsWith("level1")), r =>
         {
@@ -111,17 +122,20 @@ public class ExportServiceMapMetatileTests : IDisposable
     }
 
     [Fact]
-    public void ExportAll_MapWithNothingPlacedAnywhere_OnlyGridAndObjectsRows_NoMetatilesRows()
+    public void ExportAll_MapWithNothingElsePlaced_MetatilesRowsStillExist_JustTheReservedBlank()
     {
         var project = new ProjectState();
-        AddMap(project, "level1"); // both grid layers fully empty, per FullOfEmpty default
+        AddMap(project, "level1"); // both grid layers default entirely to their Kind's reserved blank metatile
 
         var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
 
         Assert.Contains(results, r => r.RowKey == "level1_tilemap_grid");
         Assert.Contains(results, r => r.RowKey == "level1_8bpp_grid");
         Assert.Contains(results, r => r.RowKey == "level1_objects");
-        Assert.DoesNotContain(results, r => r.RowKey.Contains("metatiles"));
+        Assert.Contains(results, r => r.RowKey == "level1_tilemap_metatiles");
+        Assert.Contains(results, r => r.RowKey == "level1_8bpp_metatiles");
+        Assert.Contains("level1_tilemap_metatiles_count: equ 1", results.Single(r => r.RowKey == "level1_tilemap_metatiles").AsmText);
+        Assert.Contains("level1_8bpp_metatiles_count: equ 1", results.Single(r => r.RowKey == "level1_8bpp_metatiles").AsmText);
     }
 
     [Fact]
@@ -130,7 +144,7 @@ public class ExportServiceMapMetatileTests : IDisposable
         var project = new ProjectState();
         var tile = ImportOneTile(project, "grass");
         var metatile = CreateMetatile(project, "grass_block", tile.Id);
-        AddMap(project, "level1", tilemap: [(byte)metatile.SortIndex, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell]);
+        AddMap(project, "level1", tilemap: [(byte)metatile.SortIndex, 0, 0, 0]);
 
         var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
 
@@ -160,7 +174,7 @@ public class ExportServiceMapMetatileTests : IDisposable
                                               new() { TileAssetId = Guid.NewGuid() }, new() { TileAssetId = Guid.NewGuid() } };
         var createResult = MetatileService.Create(project, "orphaned", MetatileKind.FourBpp, 2, cells);
         Assert.True(createResult.Success, createResult.Error);
-        AddMap(project, "level1", tilemap: [(byte)createResult.Metatile!.SortIndex, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell]);
+        AddMap(project, "level1", tilemap: [(byte)createResult.Metatile!.SortIndex, 0, 0, 0]);
 
         Assert.Throws<InvalidOperationException>(() => ExportService.ExportAll(project, _ => ExportChunkSize.EightKb));
     }
@@ -180,7 +194,7 @@ public class ExportServiceMapMetatileTests : IDisposable
         var project = new ProjectState();
         var tile = ImportOneTile(project, "grass");
         var metatile = CreateMetatile(project, "grass_block", tile.Id);
-        AddMap(project, "level1", tilemap: [(byte)metatile.SortIndex, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell, MapGridLayer.EmptyCell]);
+        AddMap(project, "level1", tilemap: [(byte)metatile.SortIndex, 0, 0, 0]);
 
         var allResults = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
         var filtered = allResults.Where(r => r.RowKey != "level1_tilemap_grid").ToList(); // simulates unchecking this one row

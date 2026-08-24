@@ -933,7 +933,7 @@ public partial class MainViewModel : ObservableObject
             : $"Deleted source image \"{source.FileName}\" and {affected.Count} tile(s)/sprite(s) placed from it.";
     }
 
-    /// <summary>Called (from code-behind, which owns the picker dialog) after the user confirms a new colour for a palette slot in the Next-colour picker. Mutates the shared palette object in place, so every tile/sprite using it re-renders correctly next time it's shown.</summary>
+    /// <summary>Called (from code-behind, which owns the picker dialog) after the user confirms a new colour for a palette slot in the Next-colour picker — a single, deliberate, infrequent action (not a live-drag callback), never called more than once per dialog confirm. Mutates the shared palette object in place, so re-renders every tile/sprite using it right away, both the big preview and every one of their tree thumbnails (see RefreshThumbnailsSharingPalette) — cheap even for a full 256-asset category (each render is a handful of pixels), so this stays synchronous rather than needing a background pass.</summary>
     public void SetPaletteColor(int index, NextColor newColor)
     {
         if (PaletteStrip.CurrentPalette is not { } palette) return;
@@ -946,10 +946,12 @@ public partial class MainViewModel : ObservableObject
             palette.SetAt(index, previous);
             PaletteStrip.RefreshSwatches();
             RefreshSelectedAssetRender();
+            RefreshThumbnailsSharingPalette();
         });
 
         PaletteStrip.RefreshSwatches();
         RefreshSelectedAssetRender();
+        RefreshThumbnailsSharingPalette();
         HasUnsavedChanges = true;
         PixelEditor.StatusText = $"Palette colour {index} changed — every tile/sprite using this palette updates live.";
     }
@@ -962,6 +964,28 @@ public partial class MainViewModel : ObservableObject
         PixelEditor.Bitmap = rendered;
         // Same bitmap, no extra render cost — keeps the tree row's thumbnail in sync with pixel edits.
         if (Tree.FindLeafNode(_selectedAsset.Id) is { } node) node.Thumbnail = rendered;
+    }
+
+    /// <summary>
+    /// A palette edit (SetPaletteColor) affects every asset sharing that exact palette — the whole 4bpp
+    /// bank SLOT (not just the selected asset's own tile/sprite) or, for a flat category, the whole
+    /// folder — not just <see cref="_selectedAsset"/>. Without this, every OTHER affected asset's tree
+    /// thumbnail silently kept showing its pre-edit colours until something else happened to re-render it
+    /// (selecting it, or a project reload) — much more noticeable now that thumbnails exist at all than
+    /// it ever was for the big preview alone (which only ever showed the one selected asset anyway).
+    /// </summary>
+    private void RefreshThumbnailsSharingPalette()
+    {
+        if (_selectedAsset is not { } reference) return;
+        var category = reference.Category;
+        var affected = category.UsesPaletteBank()
+            ? _project.Assets.Where(a => a.Category == category && a.PaletteSlotIndex == reference.PaletteSlotIndex)
+            : _project.Assets.Where(a => a.Category == category && a.FolderPath == reference.FolderPath);
+
+        foreach (var asset in affected)
+        {
+            if (Tree.FindLeafNode(asset.Id) is { } node) node.Thumbnail = NextBitmapRenderer.Render(asset, _project);
+        }
     }
 
     /// <summary>

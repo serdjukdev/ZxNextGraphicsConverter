@@ -443,7 +443,7 @@ public partial class MainViewModel : ObservableObject
             });
 
             foreach (var (oldId, newAsset) in replaced) Tree.ReplaceAssetNode(oldId, newAsset, _project);
-            foreach (var id in removedIds) Tree.RemoveAssetNode(id);
+            foreach (var id in removedIds) Tree.RemoveAssetNode(id, _project);
 
             HasUnsavedChanges = true;
             PixelEditor.StatusText = failed.Count == 0
@@ -790,7 +790,7 @@ public partial class MainViewModel : ObservableObject
             if (asset is null) continue;
 
             _project.RemoveAsset(id);
-            Tree.RemoveAssetNode(id); // clears SelectedNode (and so the edit panels, via OnSelectionChanged) if this was the selected asset
+            Tree.RemoveAssetNode(id, _project); // clears SelectedNode (and so the edit panels, via OnSelectionChanged) if this was the selected asset
             removed.Add(asset);
             if (!asset.Category.UsesPaletteBank()) affectedFlatFolders.Add((asset.Category, asset.FolderPath));
         }
@@ -903,7 +903,7 @@ public partial class MainViewModel : ObservableObject
         foreach (var asset in affected)
         {
             _project.RemoveAsset(asset.Id);
-            Tree.RemoveAssetNode(asset.Id);
+            Tree.RemoveAssetNode(asset.Id, _project);
             if (asset.Category.UsesPaletteBank()) affectedBankCategories.Add(asset.Category);
             else affectedFlatFolders.Add((asset.Category, asset.FolderPath));
         }

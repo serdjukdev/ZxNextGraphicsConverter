@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added: every tile/sprite row in the main project tree now shows a small thumbnail of its own actual pixels (native size, nearest-neighbor scaled) — stays in sync on import/re-quantize/undo-restore and while live pixel-editing the currently selected one.
+- Added: every tile/sprite row also shows its real export index as a "[N]" prefix — the exact same number `AssetExportIndexer` computes for export, category-wide (not per-folder), so what's shown can never drift from what gets exported. Recomputed for the whole category on any add/remove/replace, since one asset's index changing shifts every sibling that sorts after it.
 - Fixed GridSplitter panes (main window, Map Editor, Metatile Editor) being draggable past the window's actual bounds — could silently store an oversized column width that only became visible on the next full layout pass (e.g. maximizing). All splitters now clamp live against the real current window size on every drag tick.
 - Widened all GridSplitters to 5px (was 1px in Map Editor/Metatile Editor) so they're easier to grab.
 - Added: Metatile Editor can now edit an existing metatile in place (click it in the library to load it into the draft, "Save Changes" writes back into the same metatile — every map already placing it picks it up immediately). Ctrl+click a draft cell to clear it back to unfilled while sketching (every cell still needs a real tile before it can be saved). "Cancel" button discards an in-progress edit.

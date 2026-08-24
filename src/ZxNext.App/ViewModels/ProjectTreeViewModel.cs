@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ZxNext.App.Rendering;
+using ZxNext.Core.Export;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
 
@@ -105,19 +106,45 @@ public partial class ProjectTreeViewModel : ObservableObject
         };
         if (insertAtFront) folder.Children.Insert(0, node);
         else folder.Children.Add(node);
+        RefreshExportIndices(asset.Category, project);
     }
 
     /// <summary>Removes a leaf node by asset id from whichever category folder (or its sub-folder) holds it (no-op if not found).</summary>
-    public void RemoveAssetNode(Guid assetId)
+    public void RemoveAssetNode(Guid assetId, ProjectState project)
     {
         foreach (var folder in AllFolders())
         {
             var node = folder.Children.FirstOrDefault(c => c.AssetId == assetId);
             if (node is null) continue;
 
+            var category = node.Category;
             folder.Children.Remove(node);
             if (SelectedNode == node) SelectedNode = null;
+            if (category is { } removedCategory) RefreshExportIndices(removedCategory, project);
             return;
+        }
+    }
+
+    /// <summary>
+    /// Re-derives every leaf node's <see cref="TreeNodeViewModel.IndexLabel"/> ("[N]") for one category —
+    /// the SAME 0-based rank <see cref="ZxNext.Core.Export.AssetExportIndexer.IndexOf"/> computes for
+    /// export, so what's shown here can never drift from what actually gets exported. This is category-
+    /// WIDE (not per-folder — export numbering doesn't care about sub-folders either) and touches every
+    /// leaf, not just the one that changed, because adding/removing/reordering ONE asset shifts the rank
+    /// of every OTHER asset that sorts after it. Cheap enough to just always re-run in full rather than
+    /// track which specific siblings actually moved.
+    /// </summary>
+    public void RefreshExportIndices(AssetCategory category, ProjectState project)
+    {
+        var categoryAssets = project.Assets.Where(a => a.Category == category).ToList();
+        foreach (var folder in AllFolders().Where(f => f.Category == category))
+        {
+            foreach (var node in folder.Children)
+            {
+                if (node.AssetId is not { } id) continue;
+                var asset = categoryAssets.FirstOrDefault(a => a.Id == id);
+                node.IndexLabel = asset is null ? null : $"[{AssetExportIndexer.IndexOf(asset, categoryAssets)}]";
+            }
         }
     }
 
@@ -162,6 +189,7 @@ public partial class ProjectTreeViewModel : ObservableObject
             };
             folder.Children.Insert(index, node);
             if (wasSelected) SelectedNode = node;
+            RefreshExportIndices(newAsset.Category, project); // a fresh node instance starts with no IndexLabel of its own, even though SortIndex (so rank) is unchanged
             return;
         }
 

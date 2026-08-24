@@ -36,6 +36,10 @@ public partial class TreeNodeViewModel : ObservableObject
     [ObservableProperty]
     private WriteableBitmap? thumbnail;
 
+    /// <summary>"[N]" where N is this asset's real export index — the exact same 0-based rank <c>ZxNext.Core.Export.AssetExportIndexer.IndexOf</c> computes at export time (see <c>ProjectTreeViewModel.RefreshExportIndices</c>). Null for folder nodes. Pre-formatted as a display string (not just the raw int) so nothing in XAML needs a converter/StringFormat to hide it for folders.</summary>
+    [ObservableProperty]
+    private string? indexLabel;
+
     /// <summary>
     /// True while this leaf is part of the mouse-driven (Ctrl/Shift-click) multi-selection, handled
     /// entirely in ProjectTreeView's code-behind since WPF's TreeView has no built-in multi-select.

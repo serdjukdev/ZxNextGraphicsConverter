@@ -30,6 +30,16 @@ public static class MetatileService
                 $"Expected {gridSize * gridSize} cells for a {gridSize}x{gridSize} metatile, got {cells.Count}.");
         }
 
+        // The whole project is locked to one metatile GridSize (see ProjectState.MetatileGridSize's own
+        // doc comment) — the FIRST metatile or map ever created in a project locks it; every one after
+        // that, of either kind, must match.
+        if (project.MetatileGridSize is { } lockedGridSize && lockedGridSize != gridSize)
+        {
+            return new MetatileCreateResult(false, null,
+                $"This project is locked to {lockedGridSize}x{lockedGridSize} metatiles — every metatile and map shares one size.");
+        }
+        project.MetatileGridSize ??= gridSize;
+
         // Lazily guarantees this (Kind, GridSize) pair's reserved blank metatile exists BEFORE this real
         // one — see ReservedBlankAssetService's own doc comment for why "first real metatile of a
         // Kind+GridSize" is one of its entry points, and why doing this before the SortIndex/cap logic

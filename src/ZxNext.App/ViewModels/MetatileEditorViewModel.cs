@@ -10,7 +10,6 @@ using ZxNext.Core.Project;
 namespace ZxNext.App.ViewModels;
 
 public record MetatileKindOption(MetatileKind Kind, string Label);
-public record MetatileGridSizeOption(int Value, string Label);
 
 /// <summary>
 /// Backs the modal Metatile Editor. Left side: a visual tile palette (click a tile, then click a draft
@@ -30,19 +29,21 @@ public partial class MetatileEditorViewModel : ObservableObject
         new(MetatileKind.EightBpp, "8bpp (software Tile layer)")
     ];
 
-    public IReadOnlyList<MetatileGridSizeOption> AvailableGridSizes { get; } =
-    [
-        new(2, "2x2"), new(3, "3x3"), new(4, "4x4")
-    ];
-
     /// <summary>Set true by a successful Create or Delete — read once by the caller (MainWindow) after the dialog closes, to decide whether to mark the project as having unsaved changes.</summary>
     public bool HasChanges { get; private set; }
 
     [ObservableProperty]
     private MetatileKind selectedKind = MetatileKind.FourBpp;
 
-    [ObservableProperty]
-    private int draftGridSize = 2;
+    /// <summary>
+    /// The whole project's fixed metatile size (see <see cref="ProjectState.MetatileGridSize"/>'s own doc
+    /// comment) — no longer a per-metatile choice, so unlike every other Draft* property this is a
+    /// plain read-only value, set once in the constructor. The caller (MainWindow.MetatileEditor_OnClick)
+    /// guarantees <see cref="ProjectState.MetatileGridSize"/> is already locked before this ViewModel is
+    /// ever constructed (via MetatileGridSizeWindow.EnsureChosen), so the fallback here should never
+    /// actually apply — it exists only so this can't null-reference if that guarantee is ever violated.
+    /// </summary>
+    public int DraftGridSize { get; }
 
     [ObservableProperty]
     private string draftName = "metatile";
@@ -64,15 +65,12 @@ public partial class MetatileEditorViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(DeleteMetatileCommand))]
     [NotifyPropertyChangedFor(nameof(IsEditingExisting))]
     [NotifyPropertyChangedFor(nameof(CreateOrSaveButtonText))]
-    [NotifyPropertyChangedFor(nameof(CanChangeGridSize))]
     private MetatileListItemViewModel? selectedMetatile;
 
-    /// <summary>True while an existing metatile is loaded into the draft — Kind/GridSize become read-only (Update never changes either, see MetatileService.Update) and Create/Save writes back into this SAME metatile instead of making a new one.</summary>
+    /// <summary>True while an existing metatile is loaded into the draft — Create/Save writes back into this SAME metatile instead of making a new one (Update never changes its Kind, see MetatileService.Update; changing SelectedKind while editing clears SelectedMetatile via OnSelectedKindChanged, exiting edit mode rather than trying to switch the loaded metatile's Kind in place).</summary>
     public bool IsEditingExisting => SelectedMetatile is not null;
 
     public string CreateOrSaveButtonText => IsEditingExisting ? "Save Changes" : "Create Metatile";
-
-    public bool CanChangeGridSize => !IsEditingExisting;
 
     [ObservableProperty]
     private ObservableCollection<MetatileCellViewModel> draftCells = [];
@@ -92,6 +90,10 @@ public partial class MetatileEditorViewModel : ObservableObject
     public MetatileEditorViewModel(ProjectState project)
     {
         _project = project;
+        // Guaranteed already locked before this ViewModel is ever constructed (MainWindow.MetatileEditor_OnClick
+        // calls MetatileGridSizeWindow.EnsureChosen first) — the fallback is just so this can't null-reference
+        // if that guarantee is ever violated.
+        DraftGridSize = project.MetatileGridSize ?? 2;
         EnsureBlankForCurrentSelection();
         RefreshTilePalette();
         RefreshMetatileList();
@@ -108,17 +110,10 @@ public partial class MetatileEditorViewModel : ObservableObject
         ResetDraft();
     }
 
-    partial void OnDraftGridSizeChanged(int value)
-    {
-        EnsureBlankForCurrentSelection();
-        RefreshMetatileList(); // the library list mixes every GridSize for this Kind, so a newly-ensured blank for a not-yet-seen GridSize needs to show up here too
-        ResetDraft();
-    }
-
     /// <summary>
-    /// Opening the editor on an empty Kind+GridSize (or switching to one) shows its reserved blank
-    /// metatile right away, matching the same "always there, index 0" guarantee everywhere else — not
-    /// deferred until the user happens to create their first real metatile of that Kind+GridSize. Cheap,
+    /// Opening the editor on an empty Kind (for the project's one fixed GridSize) shows its reserved
+    /// blank metatile right away, matching the same "always there, index 0" guarantee everywhere else —
+    /// not deferred until the user happens to create their first real metatile of that Kind. Cheap,
     /// idempotent (see ReservedBlankAssetService) — a no-op once it already exists.
     /// </summary>
     private void EnsureBlankForCurrentSelection()
@@ -139,7 +134,9 @@ public partial class MetatileEditorViewModel : ObservableObject
 
         var metatile = value.Metatile;
         DraftName = metatile.Name;
-        DraftGridSize = metatile.GridSize; // triggers ResetDraft() via OnDraftGridSizeChanged only if this actually changes the value — the loop below always (re)populates every cell regardless, so that's fine either way
+        // metatile.GridSize is always exactly DraftGridSize (the project-wide lock — see MetatileService.Create's
+        // own enforcement), so DraftCells is already the right size from the constructor's ResetDraft() call;
+        // nothing here needs to (or can, DraftGridSize is get-only) trigger another one.
 
         for (var i = 0; i < metatile.Cells.Count && i < DraftCells.Count; i++)
         {

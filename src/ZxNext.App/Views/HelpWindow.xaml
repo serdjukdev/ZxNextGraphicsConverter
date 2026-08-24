@@ -159,7 +159,10 @@
                         <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Metatile Editor (Tools → Metatile Editor...)" />
                     </Expander.Header>
                     <StackPanel Style="{StaticResource SectionContentStyle}">
-                        <TextBlock Style="{StaticResource DescStyle}" Text="A metatile is a small square of individual tiles (2x2, 3x3, or 4x4) treated as one stamp on the Map Editor's grid layers. Every change here writes straight into the project immediately — there's no separate save inside this window, only File → Save Project in the main window later." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="A metatile is a small square of individual tiles treated as one stamp on the Map Editor's grid layers. Every change here writes straight into the project immediately — there's no separate save inside this window, only File → Save Project in the main window later." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Metatile size (2x2 / 3x3 / 4x4)" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="One fixed size for the WHOLE project — every metatile of either Kind, and every map's grid, shares it. Asked once, the first time it's actually needed (opening this editor, or creating the first map) — a small dialog, not shown here since it's not part of this window. Fixed forever afterward; there is no per-metatile or per-map size choice anymore." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Kind: 4bpp / 8bpp" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Which tile category this metatile draws from — 4bpp metatiles feed the hardware Tilemap layer (with real mirror/rotate/palette-slot hardware attributes); 8bpp metatiles feed the software 8bpp Tile layer (index only, no attributes)." />
@@ -171,10 +174,10 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="Mirror X, Mirror Y, Rotate (transposes the tile — combined with the two mirrors this reaches all 8 possible orientations, since the hardware has no separate 90/180/270° rotation), and an optional palette-slot override (read this cell's tile against a different bank slot than its own, with a '↺' button to reset back to native)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Name + 'Create Metatile' / 'Save Changes' button" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Requires every cell filled first — every cell needs a real tile (a transparent one if a gap should show through, since the hardware always draws SOMETHING at each cell). Names are auto-uniquified (_2, _3...) if already taken. Capped at 255 metatiles per Kind — one of those slots is always that Kind+GridSize's own auto-generated, undeletable 'Blank' reserved metatile (see the Map Editor entry below), so real metatiles effectively get up to 255 minus however many distinct GridSizes are in use." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Requires every cell filled first — every cell needs a real tile (a transparent one if a gap should show through, since the hardware always draws SOMETHING at each cell). Names are auto-uniquified (_2, _3...) if already taken. Capped at 255 metatiles per Kind — one of those slots is always that Kind's own auto-generated, undeletable 'Blank' reserved metatile (see the Map Editor entry below), so real metatiles effectively get up to 254." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Existing metatiles list (left) → click one to edit it" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Loads it into the draft on the right — the button becomes 'Save Changes' and writes back into that SAME metatile (its Id/Kind/GridSize/export position never change, so every map already placing it just picks up the new cells immediately). Size can't be changed while editing — click 'New' to abandon the edit and start a brand-new metatile instead." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Loads it into the draft on the right — the button becomes 'Save Changes' and writes back into that SAME metatile (its Id/Kind/GridSize/export position never change, so every map already placing it just picks up the new cells immediately). Click 'New' to abandon the edit and start a brand-new metatile instead." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Delete selected' button" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Blocked (shown in red, not a popup) if any map still places this metatile — the message names exactly which map and how many cells. Otherwise deletes it and re-compacts every other metatile of the same Kind to a dense index, remapping every map that used them." />
@@ -243,7 +246,7 @@
                     </Expander.Header>
                     <StackPanel Style="{StaticResource SectionContentStyle}">
                         <TextBlock Style="{StaticResource TermStyle}" Text="New Map" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Name, Width/Height (with size presets and a live cell-count-vs-limit check), and Metatile grid size (2x2/3x3/4x4) — fixed forever once created, since it's what every cell byte on this map means; Width/Height can be changed later via Resize/Trim." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Name and Width/Height (size presets, a live cell-count-vs-limit check; can be changed later via Resize/Trim). No metatile size choice here anymore — it's the whole project's own fixed size (see the Metatile Editor section)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Rename" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Names must be unique across the whole project (case-insensitive) since they become ASM export labels — validated live as you type." />

@@ -277,4 +277,42 @@ public class MetatileServiceTests
         Assert.True(result.Success, result.Error);
         Assert.Equal("grass", metatile.Name); // comparing against itself shouldn't count as a collision
     }
+
+    [Fact]
+    public void Create_FirstMetatile_LocksTheProjectsMetatileGridSize()
+    {
+        var project = new ProjectState();
+        Assert.Null(project.MetatileGridSize);
+
+        MetatileService.Create(project, "grass", MetatileKind.FourBpp, 4, MakeCells(4));
+
+        Assert.Equal(4, project.MetatileGridSize);
+    }
+
+    [Fact]
+    public void Create_SecondMetatileWithADifferentGridSize_Rejected_EvenAcrossKinds()
+    {
+        var project = new ProjectState();
+        MetatileService.Create(project, "grass_4bpp", MetatileKind.FourBpp, 2, MakeCells(2));
+
+        var result = MetatileService.Create(project, "grass_8bpp", MetatileKind.EightBpp, 3, MakeCells(3));
+
+        Assert.False(result.Success);
+        Assert.Contains("2x2", result.Error);
+        Assert.DoesNotContain(project.Metatiles, m => m.Name == "grass_8bpp");
+        Assert.Equal(2, project.MetatileGridSize); // untouched by the rejected attempt
+    }
+
+    [Fact]
+    public void Create_GridSizeAlreadyLockedByAMap_MatchingMetatileSucceeds_MismatchedRejected()
+    {
+        var project = new ProjectState();
+        MapService.Create(project, "level1", 4, 4, 3); // locks the project to 3x3
+
+        var mismatched = MetatileService.Create(project, "bad", MetatileKind.FourBpp, 2, MakeCells(2));
+        Assert.False(mismatched.Success);
+
+        var matching = MetatileService.Create(project, "ok", MetatileKind.FourBpp, 3, MakeCells(3));
+        Assert.True(matching.Success, matching.Error);
+    }
 }

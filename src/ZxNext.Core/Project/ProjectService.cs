@@ -27,7 +27,8 @@ public static class ProjectService
         var dto = new ProjectManifestDto
         {
             Sprite4BppBank = ToDto(project.Sprite4BppBank),
-            Tile4BppBank = ToDto(project.Tile4BppBank)
+            Tile4BppBank = ToDto(project.Tile4BppBank),
+            MetatileGridSize = project.MetatileGridSize
         };
 
         // Build into a temp file first, then swap it into place, so a failed/interrupted save
@@ -306,6 +307,19 @@ public static class ProjectService
         {
             project.ObjectTypes.Add(new ObjectType { Id = t.Id, Name = t.Name });
         }
+
+        // Projects saved before the project-wide metatile GridSize lock existed have no dto value —
+        // infer it from whichever GridSize is already used most among this project's own metatiles/maps
+        // (there should never realistically be a genuine mix, but if hand-edited or from an even older
+        // pre-lock build, this picks the majority rather than failing to load), leaving it null (still
+        // unlocked) only for a project with neither yet.
+        project.MetatileGridSize = dto.MetatileGridSize ??
+            project.Metatiles.Select(m => m.GridSize)
+                .Concat(project.Maps.Select(m => m.MetatileGridSize))
+                .GroupBy(size => size)
+                .OrderByDescending(g => g.Count())
+                .Select(g => (int?)g.Key)
+                .FirstOrDefault();
 
         EnsureReservedBlankAssets(project);
 

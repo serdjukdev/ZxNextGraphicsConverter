@@ -373,6 +373,10 @@ public partial class MainWindow : Window
 
     private void MetatileEditor_OnClick(object sender, RoutedEventArgs e)
     {
+        var wasAlreadyLocked = _viewModel.Project.MetatileGridSize is not null;
+        if (!MetatileGridSizeWindow.EnsureChosen(_viewModel.Project, this)) return;
+        if (!wasAlreadyLocked) _viewModel.HasUnsavedChanges = true;
+
         var vm = new MetatileEditorViewModel(_viewModel.Project);
         var dialog = new MetatileEditorWindow { DataContext = vm, Owner = this };
         dialog.ShowDialog();

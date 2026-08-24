@@ -28,6 +28,18 @@ public class ProjectState
     public List<Metatile> Metatiles { get; } = [];
     public List<MapAsset> Maps { get; } = [];
 
+    /// <summary>
+    /// The one metatile GridSize (2/3/4) this whole project is locked to, for BOTH MetatileKinds and
+    /// every map — null until the first metatile or map is ever created. There is no realistic reason
+    /// within one game to want different metatile sizes for different maps (a project needing a
+    /// genuinely different size is a different game/project); locking project-wide, once, up front,
+    /// removes an entire axis of per-metatile/per-map choice (and per-map size mismatches) that never
+    /// bought anything. Set (and thereafter enforced) by <see cref="Conversion.MetatileService.Create"/>
+    /// and <see cref="Conversion.MapService.Create"/> — whichever of those runs first for a project locks
+    /// it, the other then validates against the same value.
+    /// </summary>
+    public int? MetatileGridSize { get; set; }
+
     /// <summary>Project-wide list of user-defined map-object categories (e.g. "portal", "character"). See <see cref="ObjectType"/> for why this is project-wide rather than per-map.</summary>
     public List<ObjectType> ObjectTypes { get; } = [];
 

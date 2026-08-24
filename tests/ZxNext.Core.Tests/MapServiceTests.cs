@@ -97,4 +97,43 @@ public class MapServiceTests
         Assert.Equal(0, a.SortIndex);
         Assert.Equal(1, b.SortIndex);
     }
+
+    [Fact]
+    public void Create_FirstMap_LocksTheProjectsMetatileGridSize()
+    {
+        var project = new ProjectState();
+        Assert.Null(project.MetatileGridSize);
+
+        MapService.Create(project, "a", 2, 2, 3);
+
+        Assert.Equal(3, project.MetatileGridSize);
+    }
+
+    [Fact]
+    public void Create_SecondMapWithADifferentGridSize_Rejected()
+    {
+        var project = new ProjectState();
+        MapService.Create(project, "a", 2, 2, 2);
+
+        var result = MapService.Create(project, "b", 2, 2, 4);
+
+        Assert.False(result.Success);
+        Assert.Contains("2x2", result.Error);
+        Assert.DoesNotContain(project.Maps, m => m.Name == "b");
+        Assert.Equal(2, project.MetatileGridSize); // untouched by the rejected attempt
+    }
+
+    [Fact]
+    public void Create_GridSizeAlreadyLockedByAMetatile_MatchingMapSucceeds_MismatchedRejected()
+    {
+        var project = new ProjectState();
+        var cells = new List<MetatileCell> { new() { TileAssetId = Guid.NewGuid() }, new() { TileAssetId = Guid.NewGuid() }, new() { TileAssetId = Guid.NewGuid() }, new() { TileAssetId = Guid.NewGuid() } };
+        MetatileService.Create(project, "mt", MetatileKind.FourBpp, 2, cells); // locks the project to 2x2
+
+        var mismatched = MapService.Create(project, "bad", 2, 2, 4);
+        Assert.False(mismatched.Success);
+
+        var matching = MapService.Create(project, "ok", 2, 2, 2);
+        Assert.True(matching.Success, matching.Error);
+    }
 }

@@ -19,6 +19,9 @@ public class ProjectManifestDto
     public List<MetatileDto> Metatiles { get; set; } = [];
     public List<MapDto> Maps { get; set; } = [];
     public List<ObjectTypeDto> ObjectTypes { get; set; } = [];
+
+    /// <summary>Null in project files saved before this field existed — <see cref="ProjectService.Load"/> infers it from whatever GridSize any already-saved metatile/map happens to use, if any.</summary>
+    public int? MetatileGridSize { get; set; }
 }
 
 public class SourceImageDto

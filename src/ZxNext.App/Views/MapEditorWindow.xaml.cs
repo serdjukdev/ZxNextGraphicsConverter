@@ -106,14 +106,17 @@ public partial class MapEditorWindow : Window
 
     private void NewMap_OnClick(object sender, RoutedEventArgs e)
     {
+        if (DataContext is not MapEditorViewModel vm) return;
+
+        var wasAlreadyLocked = vm.Project.MetatileGridSize is not null;
+        if (!MetatileGridSizeWindow.EnsureChosen(vm.Project, this)) return;
+        if (!wasAlreadyLocked) vm.MarkChanged();
+
         var newMapVm = new NewMapViewModel();
         var dialog = new NewMapWindow { DataContext = newMapVm, Owner = this };
         if (dialog.ShowDialog() != true) return;
 
-        if (DataContext is MapEditorViewModel vm)
-        {
-            vm.CreateMap(newMapVm.Name, newMapVm.Width, newMapVm.Height, newMapVm.MetatileGridSize);
-        }
+        vm.CreateMap(newMapVm.Name, newMapVm.Width, newMapVm.Height, vm.Project.MetatileGridSize!.Value);
     }
 
     private void ManageTypes_OnClick(object sender, RoutedEventArgs e)

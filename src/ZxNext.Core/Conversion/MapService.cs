@@ -27,6 +27,16 @@ public static class MapService
                 $"{width}x{height} = {width * height} cells, over the {MapExporter.MaxGridCells}-cell-per-layer limit.");
         }
 
+        // The whole project is locked to one metatile GridSize (see ProjectState.MetatileGridSize's own
+        // doc comment) — the FIRST metatile or map ever created in a project locks it; every one after
+        // that must match.
+        if (project.MetatileGridSize is { } lockedGridSize && lockedGridSize != metatileGridSize)
+        {
+            return new MapCreateResult(false, null,
+                $"This project is locked to {lockedGridSize}x{lockedGridSize} metatiles — every metatile and map shares one size.");
+        }
+        project.MetatileGridSize ??= metatileGridSize;
+
         // Lazily guarantees both Kinds' reserved blank metatile exists for THIS map's GridSize, BEFORE
         // its cells default to referencing them — see ReservedBlankAssetService's own doc comment for why
         // "a brand-new map's default-blank cells" is one of its entry points, even before any real

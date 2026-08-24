@@ -354,4 +354,108 @@ public class ProjectServiceTests : IDisposable
         Assert.Equal([1, 0], loadedMap.TilemapLayer.MetatileIndices); // grass remapped 0->1, legacy 0xFF -> the new blank's SortIndex 0
         Assert.Equal([0, 0], loadedMap.TileLayer8Bpp.MetatileIndices); // both legacy 0xFF -> the new EightBpp blank's SortIndex 0
     }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsTheProjectsLockedMetatileGridSize()
+    {
+        var project = new ProjectState();
+        MapService.Create(project, "level1", 4, 4, 3);
+        Assert.Equal(3, project.MetatileGridSize);
+
+        ProjectService.Save(project, _tempProjectFile);
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        Assert.Equal(3, loaded.MetatileGridSize);
+    }
+
+    /// <summary>A project saved before the project-wide GridSize lock existed (no "MetatileGridSize" key at all) infers it from whichever GridSize its own already-saved metatiles/maps actually use, rather than leaving it unlocked and letting a later create silently lock to something arbitrary.</summary>
+    [Fact]
+    public void Load_LegacyProjectFileWithNoMetatileGridSizeKey_InfersItFromExistingMetatiles()
+    {
+        const string legacyJson = """
+        {
+          "FormatVersion": 1,
+          "SourceImages": [],
+          "Sprite4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Tile4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Sprite8BppFolderPalettes": {},
+          "Tile8BppFolderPalettes": {},
+          "Layer2_256x192FolderPalettes": {},
+          "Layer2_320x256FolderPalettes": {},
+          "Layer2_640x256x4FolderPalettes": {},
+          "Assets": [],
+          "Metatiles": [
+            {
+              "Id": "22222222-2222-2222-2222-222222222222",
+              "Name": "grass",
+              "Kind": "FourBpp",
+              "GridSize": 4,
+              "Cells": [
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false },
+                { "TileAssetId": "33333333-3333-3333-3333-333333333333", "MirrorX": false, "MirrorY": false, "Rotate": false }
+              ],
+              "SortIndex": 0
+            }
+          ],
+          "Maps": []
+        }
+        """;
+
+        using (var stream = new FileStream(_tempProjectFile, FileMode.Create, FileAccess.Write))
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            using var entryStream = zip.CreateEntry("project.json", CompressionLevel.Fastest).Open();
+            using var writer = new StreamWriter(entryStream);
+            writer.Write(legacyJson);
+        }
+
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        Assert.Equal(4, loaded.MetatileGridSize);
+    }
+
+    [Fact]
+    public void Load_BrandNewLegacyProjectFile_NoMetatilesOrMaps_LeavesGridSizeUnlocked()
+    {
+        const string legacyJson = """
+        {
+          "FormatVersion": 1,
+          "SourceImages": [],
+          "Sprite4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Tile4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Sprite8BppFolderPalettes": {},
+          "Tile8BppFolderPalettes": {},
+          "Layer2_256x192FolderPalettes": {},
+          "Layer2_320x256FolderPalettes": {},
+          "Layer2_640x256x4FolderPalettes": {},
+          "Assets": []
+        }
+        """;
+
+        using (var stream = new FileStream(_tempProjectFile, FileMode.Create, FileAccess.Write))
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            using var entryStream = zip.CreateEntry("project.json", CompressionLevel.Fastest).Open();
+            using var writer = new StreamWriter(entryStream);
+            writer.Write(legacyJson);
+        }
+
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        Assert.Null(loaded.MetatileGridSize);
+    }
 }

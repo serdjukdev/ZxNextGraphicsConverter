@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Changed: a project now uses ONE metatile grid size (2x2/3x3/4x4) for everything — every metatile of either Kind and every map's grid layers. Chosen once, lazily, the first time it's actually needed (opening the Metatile Editor, or creating the first map) via a small one-time dialog; fixed for the rest of the project's life. The Metatile Editor no longer has a per-metatile size picker, and the New Map dialog no longer has a per-map one. Existing projects saved before this infer their locked size from whichever size their own metatiles/maps already use.
 - Added: every tile/sprite row in the main project tree now shows a small thumbnail of its own actual pixels (native size, nearest-neighbor scaled) — stays in sync on import/re-quantize/undo-restore and while live pixel-editing the currently selected one.
 - Fixed: a drag-reordered tile/sprite tree reverted to its original (pre-reorder) visual order after saving and reloading the project — reordering only ever changed each asset's SortIndex, never `ProjectState.Assets`' own list order, and the tree was rebuilt from that raw list order on load instead of from SortIndex. The tree now always rebuilds in SortIndex order.
 - Added: a thin blue line shows exactly where a dragged tile/sprite row will land while dragging, and the tree auto-scrolls while the mouse hovers near its top/bottom edge.

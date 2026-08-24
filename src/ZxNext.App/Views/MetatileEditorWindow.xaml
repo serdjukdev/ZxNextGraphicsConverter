@@ -127,16 +127,9 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="Name:" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <TextBox Grid.Column="1" Text="{Binding DraftName, UpdateSourceTrigger=PropertyChanged}" />
-                <TextBlock Grid.Column="2" Text="Size:" VerticalAlignment="Center" Margin="10,0,6,0" />
-                <ComboBox Grid.Column="3" ItemsSource="{Binding AvailableGridSizes}" DisplayMemberPath="Label"
-                          SelectedValuePath="Value" SelectedValue="{Binding DraftGridSize}" Width="70"
-                          IsEnabled="{Binding CanChangeGridSize}"
-                          ToolTip="Size can't change while editing an existing metatile — click New to start a fresh one instead" />
             </Grid>
 
             <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}" Style="{StaticResource StatusTextStyle}" TextWrapping="Wrap" MinHeight="16" Margin="0,8,0,0" />

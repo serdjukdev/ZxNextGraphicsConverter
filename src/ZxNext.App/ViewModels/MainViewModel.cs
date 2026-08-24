@@ -431,6 +431,7 @@ public partial class MainViewModel : ObservableObject
                     {
                         result.Asset!.Name = asset.Name;
                         result.Asset.SortIndex = asset.SortIndex; // full category rebuild replaces every asset; keep original relative order
+                        _project.RemapMetatileTileReferences(asset.Id, result.Asset.Id);
                         replaced.Add((asset.Id, result.Asset));
                         succeeded++;
                     }

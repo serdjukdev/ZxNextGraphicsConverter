@@ -309,7 +309,11 @@ public class ProjectState
             CompactPaletteBankSlot(category, oldSlotIndex);
 
             var bankResult = importReplacement();
-            if (bankResult.Success) return bankResult;
+            if (bankResult.Success)
+            {
+                RemapMetatileTileReferences(oldAsset.Id, bankResult.Asset!.Id);
+                return bankResult;
+            }
 
             // Roll back: restore the old slot object and every sibling's remapped pixel data, and re-add the old asset.
             bank.Slots[oldSlotIndex] = oldSlotSnapshot;
@@ -331,7 +335,11 @@ public class ProjectState
         CompactFlatPalette(category, folderPath);
 
         var result = importReplacement();
-        if (result.Success) return result;
+        if (result.Success)
+        {
+            RemapMetatileTileReferences(oldAsset.Id, result.Asset!.Id);
+            return result;
+        }
 
         // Roll back: restore the palette, every sibling's remapped pixel data, and the old asset.
         if (originalPalette is not null) palettes[folderPath] = originalPalette;
@@ -340,5 +348,26 @@ public class ProjectState
         Assets.Add(oldAsset);
 
         return result;
+    }
+
+    /// <summary>
+    /// Every re-quantize path replaces a Tile4Bpp/Tile8Bpp asset with a brand-new <see cref="GraphicsAsset"/>
+    /// instance (a new <see cref="GraphicsAsset.Id"/>) rather than mutating the old one in place — so any
+    /// <see cref="MetatileCell.TileAssetId"/> still pointing at the old id would otherwise go dangling, making
+    /// every metatile cell that placed that tile silently render/export as empty. Called after every
+    /// successful asset replacement (from <see cref="ReplaceFlatPaletteAsset"/> and the bulk 4bpp category
+    /// rebuild in the App layer) so no re-quantize path can leave this dangling. A no-op for Sprite/Layer2
+    /// categories, since nothing there is ever referenced by a <see cref="MetatileCell"/>.
+    /// </summary>
+    public void RemapMetatileTileReferences(Guid oldTileAssetId, Guid newTileAssetId)
+    {
+        if (oldTileAssetId == newTileAssetId) return;
+        foreach (var metatile in Metatiles)
+        {
+            foreach (var cell in metatile.Cells)
+            {
+                if (cell.TileAssetId == oldTileAssetId) cell.TileAssetId = newTileAssetId;
+            }
+        }
     }
 }

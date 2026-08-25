@@ -201,10 +201,15 @@ public partial class MapEditorViewModel : ObservableObject
 
     /// <summary>True while the Link tool is armed (Sprites layer only) — first canvas click on a sprite sets <see cref="LinkSource"/>, second click on a DIFFERENT sprite commits the link and deactivates. See <see cref="ToggleLinkTool"/>/<see cref="HandleLinkClick"/>.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LinkButtonText))]
     private bool isLinkToolActive;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LinkButtonText))]
     private SpritePlacement? linkSource;
+
+    /// <summary>Drives the Link button's label through its three states: idle, armed waiting for the first click (object A), armed waiting for the second click (object B) — computed here rather than via XAML DataTrigger, since a MultiDataTrigger/DataTrigger mix on the same property previously resolved by trigger-type precedence instead of declaration order (see the Object Types/Linking hardening pass, 2026-08-23).</summary>
+    public string LinkButtonText => !IsLinkToolActive ? "Link" : LinkSource is null ? "Click A" : "Click B";
 
     public MapEditorViewModel(ProjectState project)
     {

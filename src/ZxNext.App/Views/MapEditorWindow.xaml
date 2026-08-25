@@ -202,13 +202,11 @@
             <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,8,0,0">
                 <Button Content="Fill Selection" Command="{Binding FillSelectionCommand}" IsEnabled="{Binding CanFillSelection}" Width="100" Margin="0,0,6,0" />
                 <Button Content="Delete Selection" Command="{Binding DeleteSelectionCommand}" IsEnabled="{Binding HasSelection}" Width="110" Margin="0,0,6,0" />
-                <Button Command="{Binding ToggleLinkToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}" Width="70" Margin="0,0,6,0" ToolTip="Link two objects: click one, then click the other.">
+                <Button Content="{Binding LinkButtonText}" Command="{Binding ToggleLinkToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}" Width="80" Margin="0,0,6,0" ToolTip="Link two objects: click one, then click the other.">
                     <Button.Style>
                         <Style TargetType="Button">
-                            <Setter Property="Content" Value="Link" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsLinkToolActive}" Value="True">
-                                    <Setter Property="Content" Value="Link (click B)" />
                                     <Setter Property="Background" Value="Orange" />
                                 </DataTrigger>
                             </Style.Triggers>
@@ -262,6 +260,7 @@
                         <Image x:Name="MapImage" Source="{Binding MapPreview}" Stretch="None" RenderOptions.BitmapScalingMode="NearestNeighbor" />
                         <Canvas x:Name="GridOverlay" IsHitTestVisible="False" />
                         <Canvas x:Name="LinksOverlay" IsHitTestVisible="False" />
+                        <Canvas x:Name="LinkToolOverlay" IsHitTestVisible="False" />
                         <Canvas x:Name="HoverOverlay" IsHitTestVisible="False" />
                         <Canvas x:Name="SelectionOverlay" IsHitTestVisible="False" />
                     </Grid>

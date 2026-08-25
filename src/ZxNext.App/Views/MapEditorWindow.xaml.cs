@@ -37,11 +37,12 @@ public partial class MapEditorWindow : Window
             {
                 vm.PropertyChanged += MapEditorVm_OnPropertyChanged;
                 vm.SelectedSprites.CollectionChanged += (_, _) => DrawSelectionOverlay();
-                vm.MapResized += () => { DrawGrid(); DrawSelectionOverlay(); DrawLinksOverlay(); };
+                vm.MapResized += () => { DrawGrid(); DrawSelectionOverlay(); DrawLinksOverlay(); DrawLinkToolOverlay(); };
             }
             DrawGrid();
             DrawSelectionOverlay();
             DrawLinksOverlay();
+            DrawLinkToolOverlay();
         };
     }
 
@@ -55,14 +56,18 @@ public partial class MapEditorWindow : Window
         {
             HoverOverlay.Children.Clear(); // avoid a stale highlight when switching layer/map — the next mouse move redraws it if still applicable
         }
-        if (e.PropertyName is nameof(MapEditorViewModel.SelectedMap) or nameof(MapEditorViewModel.ActiveLayer) or nameof(MapEditorViewModel.GridSelection)
-            or nameof(MapEditorViewModel.LinkSource) or nameof(MapEditorViewModel.IsLinkToolActive))
+        if (e.PropertyName is nameof(MapEditorViewModel.SelectedMap) or nameof(MapEditorViewModel.ActiveLayer) or nameof(MapEditorViewModel.GridSelection))
         {
             DrawSelectionOverlay();
         }
         if (e.PropertyName is nameof(MapEditorViewModel.SelectedMap) or nameof(MapEditorViewModel.MapPreview))
         {
             DrawLinksOverlay(); // every sprite-layer mutation (paint/erase/move/copy/delete/link/undo) already calls RenderPreview(), which changes MapPreview — piggybacking on that covers every case without a dedicated event
+            DrawLinkToolOverlay(); // same piggyback: the object list this draws from only changes together with MapPreview
+        }
+        if (e.PropertyName is nameof(MapEditorViewModel.LinkSource) or nameof(MapEditorViewModel.IsLinkToolActive))
+        {
+            DrawLinkToolOverlay();
         }
     }
 
@@ -308,13 +313,6 @@ public partial class MapEditorWindow : Window
 
         var thickness = 1.0 / MapZoomTransform.ScaleX;
 
-        if (vm.IsLinkToolActive && vm.LinkSource is { } source)
-        {
-            // The Link tool's "waiting for the second click" state — shown regardless of drag mode, since
-            // arming the tool already intercepts clicks before any Alt-drag select/move can start.
-            DrawHighlightRect(source.X, source.Y, MapEditorViewModel.SpritePixelSize, MapEditorViewModel.SpritePixelSize, Brushes.Orange, Color.FromArgb(90, 255, 165, 0));
-        }
-
         if (_selectDragMode == SelectDragMode.Marquee)
         {
             if (vm.ActiveLayer == MapLayerKind.Sprites)
@@ -380,6 +378,47 @@ public partial class MapEditorWindow : Window
         Canvas.SetLeft(rect, x);
         Canvas.SetTop(rect, y);
         SelectionOverlay.Children.Add(rect);
+    }
+
+    /// <summary>
+    /// Draws the Link tool's own candidate-highlight overlay: while armed, every object on the Sprite layer
+    /// gets a gray bounding box (they're all clickable), and once the first click has picked object A, its
+    /// box is redrawn green on top. Deliberately a separate canvas from <see cref="HoverOverlay"/> (which
+    /// MapCanvasHost_OnMouseMove's UpdateHoverHighlight clears unconditionally on every mouse move) and from
+    /// <see cref="SelectionOverlay"/> (the ordinary Alt-drag marquee/move selection, which Link never uses —
+    /// clicks are intercepted before that path even runs) so the A highlight doesn't flicker away as the
+    /// user moves the mouse toward object B.
+    /// </summary>
+    private void DrawLinkToolOverlay()
+    {
+        LinkToolOverlay.Children.Clear();
+        if (DataContext is not MapEditorViewModel vm || vm.SelectedMap is null || !vm.IsLinkToolActive) return;
+        if (!vm.SelectedMap.Map.SpriteLayerVisible) return;
+
+        foreach (var sprite in vm.SelectedMap.Map.SpriteLayer)
+        {
+            DrawLinkOverlayRect(sprite.X, sprite.Y, Brushes.Gray, Color.FromArgb(50, 128, 128, 128));
+        }
+
+        if (vm.LinkSource is { } source)
+        {
+            DrawLinkOverlayRect(source.X, source.Y, Brushes.LimeGreen, Color.FromArgb(90, 0, 255, 0));
+        }
+    }
+
+    private void DrawLinkOverlayRect(int x, int y, Brush stroke, Color fill)
+    {
+        var rect = new Rectangle
+        {
+            Width = MapEditorViewModel.SpritePixelSize,
+            Height = MapEditorViewModel.SpritePixelSize,
+            Stroke = stroke,
+            StrokeThickness = 1.0 / MapZoomTransform.ScaleX,
+            Fill = new SolidColorBrush(fill)
+        };
+        Canvas.SetLeft(rect, x);
+        Canvas.SetTop(rect, y);
+        LinkToolOverlay.Children.Add(rect);
     }
 
     /// <summary>Draws one arrowed line per active <see cref="SpritePlacement.LinkedPlacementId"/> on the current map's Sprite layer, center-to-center. A reciprocal pair (A links to B AND B links to A) is offset apart perpendicular to the line so both directions stay visible instead of overlapping into one line.</summary>

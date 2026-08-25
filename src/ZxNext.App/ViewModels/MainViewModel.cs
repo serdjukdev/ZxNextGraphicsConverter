@@ -383,9 +383,16 @@ public partial class MainViewModel : ObservableObject
     /// Rebuilds an entire 4bpp category's palette bank from scratch, re-quantizing every asset in
     /// it down to at most <paramref name="maxColorsPerTile"/> colours each. Not undoable (the undo
     /// stack is cleared) — a bulk structural change like this can't be safely snapshotted with the
-    /// current single-level undo model. Any tile that still doesn't fit even after reduction is
-    /// removed from the project rather than left with a now-invalid palette slot reference; the
-    /// user is told which ones need to be re-imported by hand.
+    /// current single-level undo model. Any tile that still doesn't fit even after reduction, or
+    /// that lost its source image, is removed from the project rather than left with a now-invalid
+    /// palette slot reference; the user is told which ones need to be re-imported by hand. Every
+    /// removed/replaced tile's <see cref="MetatileCell.TileAssetId"/> references are kept valid
+    /// (remapped to the replacement, or to the category's reserved blank if there's no
+    /// replacement) — see <see cref="ProjectState.RemapMetatileTileReferences"/> for why this
+    /// matters. The category's own reserved blank tile is never fed through re-quantization itself
+    /// (it has no source image, so it would always hit the "no source" removal branch) — instead
+    /// it's explicitly recreated fresh in the rebuilt bank up front, and every metatile cell that
+    /// referenced the old one is remapped to the new one.
     /// </summary>
     public async Task ReQuantizeCategoryAsync(AssetCategory category, int maxColorsPerTile)
     {
@@ -395,13 +402,28 @@ public partial class MainViewModel : ObservableObject
         {
             _undoStack.Clear();
 
-            var assetsInCategory = _project.Assets.Where(a => a.Category == category).OrderBy(a => a.SortIndex).ToList();
+            var hasReservedBlank = category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp;
+            var assetsInCategory = _project.Assets.Where(a => a.Category == category && !a.IsReservedBlank).OrderBy(a => a.SortIndex).ToList();
+            var oldBlank = hasReservedBlank ? _project.Assets.FirstOrDefault(a => a.Category == category && a.IsReservedBlank) : null;
             _project.BankFor(category).Clear();
+            if (oldBlank is not null) _project.Assets.Remove(oldBlank);
+
+            // Recreate the reserved blank first, in the now-empty bank, so every tile that can't be
+            // carried forward (overflow or missing source) has somewhere safe to redirect its
+            // metatile cells to instead of going dangling. Sprite4Bpp (the only other bank category)
+            // has no reserved-blank concept at all, so this is skipped entirely for it.
+            var newBlank = hasReservedBlank ? ReservedBlankAssetService.EnsureBlankTile(_project, category) : null;
 
             var succeeded = 0;
             var failed = new List<string>();
             var replaced = new List<(Guid OldId, GraphicsAsset New)>();
             var removedIds = new List<Guid>();
+
+            if (oldBlank is not null && newBlank is not null)
+            {
+                _project.RemapMetatileTileReferences(oldBlank.Id, newBlank.Id);
+                replaced.Add((oldBlank.Id, newBlank));
+            }
 
             await Task.Run(() =>
             {
@@ -414,6 +436,7 @@ public partial class MainViewModel : ObservableObject
                         _project.SourceImages.FirstOrDefault(s => s.Id == sourceId) is not { } source)
                     {
                         _project.Assets.Remove(asset);
+                        if (newBlank is not null) _project.RemapMetatileTileReferences(asset.Id, newBlank.Id);
                         removedIds.Add(asset.Id);
                         failed.Add(asset.Name);
                         continue;
@@ -437,6 +460,7 @@ public partial class MainViewModel : ObservableObject
                     }
                     else
                     {
+                        if (newBlank is not null) _project.RemapMetatileTileReferences(asset.Id, newBlank.Id);
                         removedIds.Add(asset.Id);
                         failed.Add(asset.Name);
                     }

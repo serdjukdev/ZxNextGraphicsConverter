@@ -264,7 +264,7 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="Pick a dithering mode (None / Ordered 4x4 Bayer / Floyd-Steinberg) and re-convert from the original source region." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Palette Overflow" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Shown when an import/re-quantize can't fit its colours. 'Reduce this tile' caps the colour count and retries just this one. 'Re-quantize category' (4bpp only) rebuilds the ENTIRE category's palette bank from scratch at the reduced count — anything that still doesn't fit afterward is removed from the project, named in the status message so you can re-import it by hand." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Shown when an import/re-quantize can't fit its colours. 'Reduce this tile' caps the colour count and retries just this one. 'Re-quantize category' (4bpp only) rebuilds the ENTIRE category's palette bank from scratch at the reduced count — anything that still doesn't fit afterward is removed from the project, named in the status message so you can re-import it by hand. Any metatile cell that placed a re-quantized or removed tile is kept safe automatically (redirected to the replacement, or to the reserved blank tile if there's no replacement) — it never ends up pointing at a tile that no longer exists." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="New Sub-folder" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Just a name — creates an 8bpp sub-folder with its own flat palette." />

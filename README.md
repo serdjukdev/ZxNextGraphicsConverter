@@ -14,6 +14,10 @@ Editing a converted sprite: pixel canvas, its own palette highlighted in the fol
 
 ![Pixel/palette editor with an auto-sliced sprite sheet](docs/screenshot-editor.png)
 
+## Demo
+
+[ZxNextStudio-TechDemo](https://github.com/serdjukdev/ZxNextStudio-TechDemo) is a small ZX Spectrum Next tech demo built entirely from data exported here: all three layer types (Tilemap, Layer2, Sprites) rendered at once, animated player movement, wall collision, and a portal that teleports the player via an object link.
+
 ## Features
 
 - **Import**: drag-and-drop a source image onto a category folder, or `File → Import Images...`. An image larger than the target cell size opens an atlas-slicer dialog (grid overlay, offset/spacing controls, duplicate-cell skipping) instead of failing.

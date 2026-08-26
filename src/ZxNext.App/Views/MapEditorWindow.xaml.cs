@@ -68,7 +68,8 @@ public partial class MapEditorWindow : Window
             DrawLinksOverlay(); // every sprite-layer mutation (paint/erase/move/copy/delete/link/undo) already calls RenderPreview(), which changes MapPreview — piggybacking on that covers every case without a dedicated event
             DrawObjectToolOverlay(); // same piggyback: the object list this draws from only changes together with MapPreview
         }
-        if (e.PropertyName is nameof(MapEditorViewModel.LinkSource) or nameof(MapEditorViewModel.IsLinkToolActive) or nameof(MapEditorViewModel.IsSetTypeToolActive))
+        if (e.PropertyName is nameof(MapEditorViewModel.LinkSource) or nameof(MapEditorViewModel.IsLinkToolActive)
+            or nameof(MapEditorViewModel.IsSetTypeToolActive) or nameof(MapEditorViewModel.IsSetUserByteToolActive))
         {
             DrawObjectToolOverlay();
         }
@@ -174,6 +175,19 @@ public partial class MapEditorWindow : Window
             // this same click's pending MouseUp to evaluate, and dismisses unless that release happens to
             // land back inside the popup's bounds. Waiting for Up means the click gesture that identifies
             // the target object is already fully finished before the popup exists at all.
+            return;
+        }
+
+        if (vm.IsSetUserByteToolActive)
+        {
+            // A real modal dialog (ShowDialog blocks) doesn't have the Popup StaysOpen dismiss-on-release
+            // issue Set Type ran into, so this can open right from MouseDown like Link does.
+            var hit = vm.FindSpriteAt(pixelX, pixelY);
+            if (hit is not null)
+            {
+                var dialog = new UserByteWindow(hit.UserByte) { Owner = this };
+                if (dialog.ShowDialog() == true) vm.ApplyUserByte(hit, dialog.Value);
+            }
             return;
         }
 
@@ -406,20 +420,20 @@ public partial class MapEditorWindow : Window
     }
 
     /// <summary>
-    /// Draws the shared candidate-highlight overlay for both the Link and Set Type tools: while either is
-    /// armed, every object on the Sprite layer gets a gray bounding box (they're all clickable), and, for
-    /// Link only, once the first click has picked object A, its box is redrawn green on top (Set Type has no
-    /// equivalent "half-done" state since each click is independent). Deliberately a separate canvas from
-    /// <see cref="HoverOverlay"/> (which MapCanvasHost_OnMouseMove's UpdateHoverHighlight clears
-    /// unconditionally on every mouse move) and from <see cref="SelectionOverlay"/> (the ordinary Alt-drag
-    /// marquee/move selection, which neither tool uses, clicks are intercepted before that path even runs)
-    /// so a highlight doesn't flicker away as the mouse moves.
+    /// Draws the shared candidate-highlight overlay for the Link, Set Type, and Set User Byte tools: while
+    /// any of them is armed, every object on the Sprite layer gets a gray bounding box (they're all
+    /// clickable), and, for Link only, once the first click has picked object A, its box is redrawn green on
+    /// top (the other two tools have no equivalent "half-done" state since each click is independent).
+    /// Deliberately a separate canvas from <see cref="HoverOverlay"/> (which MapCanvasHost_OnMouseMove's
+    /// UpdateHoverHighlight clears unconditionally on every mouse move) and from <see cref="SelectionOverlay"/>
+    /// (the ordinary Alt-drag marquee/move selection, which none of these tools use, clicks are intercepted
+    /// before that path even runs) so a highlight doesn't flicker away as the mouse moves.
     /// </summary>
     private void DrawObjectToolOverlay()
     {
         ObjectToolOverlay.Children.Clear();
         if (DataContext is not MapEditorViewModel vm || vm.SelectedMap is null) return;
-        if (!vm.IsLinkToolActive && !vm.IsSetTypeToolActive) return;
+        if (!vm.IsLinkToolActive && !vm.IsSetTypeToolActive && !vm.IsSetUserByteToolActive) return;
         if (!vm.SelectedMap.Map.SpriteLayerVisible) return;
 
         foreach (var sprite in vm.SelectedMap.Map.SpriteLayer)

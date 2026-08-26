@@ -219,6 +219,17 @@
                     </Button>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
+                    <Button Content="Set User Byte" Command="{Binding ToggleSetUserByteToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}" Width="105" Margin="0,0,6,0" ToolTip="Click objects one after another to edit each one's raw user byte.">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSetUserByteToolActive}" Value="True">
+                                        <Setter Property="Background" Value="Orange" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
                     <Button Content="Undo (Ctrl+Z)" Command="{Binding UndoCommand}" Width="110" />
                 </StackPanel>
             </StackPanel>

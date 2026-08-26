@@ -243,6 +243,9 @@
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Set Type' button (Sprite layer)" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Click the button (requires at least one object type to already exist): every object on the map gets a gray outline. Click any object: a small popup lists the available types, click one to apply it and close the popup. The tool stays armed, so you can keep clicking through several objects in a row; click the button again to stop." />
 
+                        <TextBlock Style="{StaticResource TermStyle}" Text="'Set User Byte' button (Sprite layer)" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Click the button: every object on the map gets a gray outline. Click any object: a small dialog opens with its raw user byte (0-255, exported as the object's 8th byte), shown as both a number and its 8 individual bits, either one edits the other. OK applies and closes the dialog, Cancel discards. The tool stays armed, so you can keep clicking through several objects in a row; click the button again to stop." />
+
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Link' button (Sprite layer)" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Click the button (now labeled 'Click A') — every object on the map gets a gray outline to show it's clickable. Click the first object: it turns green and the button switches to 'Click B'. Click a different object: a cyan arrow (pointing at the second object) records that the first links to the second, e.g. a button that opens a specific door, and all outlines clear. Deleting either object removes the link. If two objects link to each other, both arrows are drawn slightly apart so both stay visible." />
 

@@ -218,6 +218,10 @@ public partial class MapEditorViewModel : ObservableObject
     [ObservableProperty]
     private bool isSetTypeToolActive;
 
+    /// <summary>True while the Set User Byte tool is armed (Sprites layer only) — every canvas click on an object opens a small dialog to edit its raw <see cref="SpritePlacement.UserByte"/> (0-255, exported as the object's 8th byte). Same "stays armed for the next object" behavior as Set Type, for the same batch-tagging reason. See <see cref="ToggleSetUserByteTool"/>/<see cref="ApplyUserByte"/>.</summary>
+    [ObservableProperty]
+    private bool isSetUserByteToolActive;
+
     public MapEditorViewModel(ProjectState project)
     {
         _project = project;
@@ -383,6 +387,7 @@ public partial class MapEditorViewModel : ObservableObject
         ClearSelection();
         CancelLinkTool(); // LinkSource points at a placement on the map we're leaving
         CancelSetTypeTool();
+        CancelSetUserByteTool();
         RefreshMetatilePalette();
         RefreshSpritePalette();
         RenderPreview();
@@ -393,6 +398,7 @@ public partial class MapEditorViewModel : ObservableObject
         ClearSelection(); // GridSelection/SelectedSprites are each meaningful for only one kind of layer — never valid across a layer switch
         CancelLinkTool(); // the Link tool only makes sense on the Sprites layer
         CancelSetTypeTool(); // ditto for Set Type
+        CancelSetUserByteTool(); // ditto for Set User Byte
         RefreshMetatilePalette();
     }
 
@@ -413,6 +419,7 @@ public partial class MapEditorViewModel : ObservableObject
         if (!IsSpritesLayerActive) return;
 
         CancelSetTypeTool(); // only one canvas-click-intercepting tool armed at a time
+        CancelSetUserByteTool();
         ClearSelection();
         LinkSource = null;
         IsLinkToolActive = true;
@@ -441,6 +448,7 @@ public partial class MapEditorViewModel : ObservableObject
         }
 
         CancelLinkTool(); // only one canvas-click-intercepting tool armed at a time
+        CancelSetUserByteTool();
         ClearSelection();
         IsSetTypeToolActive = true;
     }
@@ -448,6 +456,44 @@ public partial class MapEditorViewModel : ObservableObject
     private void CancelSetTypeTool()
     {
         IsSetTypeToolActive = false;
+    }
+
+    [RelayCommand]
+    private void ToggleSetUserByteTool()
+    {
+        if (IsSetUserByteToolActive)
+        {
+            CancelSetUserByteTool();
+            return;
+        }
+        if (!IsSpritesLayerActive) return;
+
+        CancelLinkTool(); // only one canvas-click-intercepting tool armed at a time
+        CancelSetTypeTool();
+        ClearSelection();
+        IsSetUserByteToolActive = true;
+    }
+
+    private void CancelSetUserByteTool()
+    {
+        IsSetUserByteToolActive = false;
+    }
+
+    /// <summary>Applies a raw byte to exactly one placement's <see cref="SpritePlacement.UserByte"/>, the Set User Byte tool's click target. Called by the View once the user confirms the value in the picker dialog.</summary>
+    public void ApplyUserByte(SpritePlacement sprite, byte value)
+    {
+        if (sprite.UserByte == value) return;
+
+        var previous = sprite.UserByte;
+        sprite.UserByte = value;
+        _undoStack.Push(() =>
+        {
+            sprite.UserByte = previous;
+            RenderPreview();
+        });
+
+        HasChanges = true;
+        RenderPreview();
     }
 
     /// <summary>Applies a type to exactly one placement, the Set Type tool's click target. Called by the View once the user picks an entry from the type-picker popup.</summary>

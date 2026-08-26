@@ -31,6 +31,9 @@ public partial class MapEditorWindow : Window
     /// <summary>Which object the Set Type popup is currently open for — set right before opening <see cref="SetTypePopup"/>, read by <see cref="SetTypePopupItem_OnClick"/> once the user picks a type from it.</summary>
     private SpritePlacement? _setTypePopupTarget;
 
+    /// <summary>Which object <see cref="ObjectActionPopup"/> (the right-click Set User Byte/Link/Set Type menu) is currently open for — set right before opening it, read by whichever of its three Click handlers fires.</summary>
+    private SpritePlacement? _objectActionPopupTarget;
+
     public MapEditorWindow()
     {
         InitializeComponent();
@@ -183,11 +186,7 @@ public partial class MapEditorWindow : Window
             // A real modal dialog (ShowDialog blocks) doesn't have the Popup StaysOpen dismiss-on-release
             // issue Set Type ran into, so this can open right from MouseDown like Link does.
             var hit = vm.FindSpriteAt(pixelX, pixelY);
-            if (hit is not null)
-            {
-                var dialog = new UserByteWindow(hit.UserByte) { Owner = this };
-                if (dialog.ShowDialog() == true) vm.ApplyUserByte(hit, dialog.Value);
-            }
+            if (hit is not null) OpenSetUserByteDialogFor(vm, hit);
             return;
         }
 
@@ -586,12 +585,8 @@ public partial class MapEditorWindow : Window
         if (DataContext is MapEditorViewModel vm && vm.IsSetTypeToolActive)
         {
             var position = e.GetPosition(MapImage);
-            _setTypePopupTarget = vm.FindSpriteAt((int)position.X, (int)position.Y);
-            if (_setTypePopupTarget is not null)
-            {
-                vm.BuildSetTypePopupItems(_setTypePopupTarget);
-                SetTypePopup.IsOpen = true;
-            }
+            var hit = vm.FindSpriteAt((int)position.X, (int)position.Y);
+            if (hit is not null) OpenSetTypePopupFor(vm, hit);
             return;
         }
 
@@ -601,6 +596,77 @@ public partial class MapEditorWindow : Window
     private void MapCanvasHost_OnLostMouseCapture(object sender, MouseEventArgs e)
     {
         if (_isDrawing || _selectDragMode != SelectDragMode.None) EndDrawing();
+    }
+
+    /// <summary>
+    /// Right-click-on-an-object popup (Set User Byte / Link / Set Type) for the Sprites layer — a
+    /// one-shot alternative to arming a tool via its toolbar button and clicking. Only offered when no
+    /// tool is already armed (an armed tool already owns left-click handling for this purpose; right-click
+    /// deliberately stays out of its way rather than opening on top of it) and the click actually lands on
+    /// an object. Opened from Up, not Down — see <see cref="ObjectActionPopup"/>'s own XAML comment for why.
+    /// </summary>
+    private void MapCanvasHost_OnMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    private void MapCanvasHost_OnMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is not MapEditorViewModel vm || vm.SelectedMap is null) return;
+        if (vm.ActiveLayer != MapLayerKind.Sprites) return;
+        if (vm.IsLinkToolActive || vm.IsSetTypeToolActive || vm.IsSetUserByteToolActive) return;
+
+        var position = e.GetPosition(MapImage);
+        _objectActionPopupTarget = vm.FindSpriteAt((int)position.X, (int)position.Y);
+        if (_objectActionPopupTarget is null) return;
+
+        ObjectActionPopup.IsOpen = true;
+    }
+
+    private void ObjectActionPopup_SetUserByte_OnClick(object sender, RoutedEventArgs e)
+    {
+        ObjectActionPopup.IsOpen = false;
+        if (DataContext is not MapEditorViewModel vm || _objectActionPopupTarget is null) return;
+        OpenSetUserByteDialogFor(vm, _objectActionPopupTarget);
+        _objectActionPopupTarget = null;
+    }
+
+    private void ObjectActionPopup_Link_OnClick(object sender, RoutedEventArgs e)
+    {
+        ObjectActionPopup.IsOpen = false;
+        if (DataContext is not MapEditorViewModel vm || _objectActionPopupTarget is null) return;
+
+        // Pre-selects the right-clicked object as the Link source, same as a first left-click after
+        // arming the Link button would — HandleLinkClick already deactivates the tool again once the
+        // second object is clicked, so this never lingers as a persistent "mode" the toolbar button's
+        // own batch flow does; it's just the same one required "waiting for object B" step.
+        vm.ClearSelection();
+        vm.IsLinkToolActive = true;
+        vm.LinkSource = _objectActionPopupTarget;
+        _objectActionPopupTarget = null;
+    }
+
+    private void ObjectActionPopup_SetType_OnClick(object sender, RoutedEventArgs e)
+    {
+        ObjectActionPopup.IsOpen = false;
+        if (DataContext is not MapEditorViewModel vm || _objectActionPopupTarget is null) return;
+        OpenSetTypePopupFor(vm, _objectActionPopupTarget);
+        _objectActionPopupTarget = null;
+    }
+
+    /// <summary>Shared by the Set User Byte tool's normal armed-click flow and the right-click one-shot popup — deliberately does NOT touch <see cref="MapEditorViewModel.IsSetUserByteToolActive"/> itself, so calling this from the right-click path never arms/leaves the toolbar button's batch mode active.</summary>
+    private void OpenSetUserByteDialogFor(MapEditorViewModel vm, SpritePlacement target)
+    {
+        var dialog = new UserByteWindow(target.UserByte) { Owner = this };
+        if (dialog.ShowDialog() == true) vm.ApplyUserByte(target, dialog.Value);
+    }
+
+    /// <summary>Shared by the Set Type tool's normal armed-click flow and the right-click one-shot popup — same "doesn't touch IsSetTypeToolActive" reasoning as <see cref="OpenSetUserByteDialogFor"/>.</summary>
+    private void OpenSetTypePopupFor(MapEditorViewModel vm, SpritePlacement target)
+    {
+        _setTypePopupTarget = target;
+        vm.BuildSetTypePopupItems(target);
+        SetTypePopup.IsOpen = true;
     }
 
     /// <summary>

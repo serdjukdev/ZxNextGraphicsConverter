@@ -271,6 +271,8 @@
                           MouseLeftButtonDown="MapCanvasHost_OnMouseLeftButtonDown"
                           MouseMove="MapCanvasHost_OnMouseMove"
                           MouseLeftButtonUp="MapCanvasHost_OnMouseLeftButtonUp"
+                          MouseRightButtonDown="MapCanvasHost_OnMouseRightButtonDown"
+                          MouseRightButtonUp="MapCanvasHost_OnMouseRightButtonUp"
                           LostMouseCapture="MapCanvasHost_OnLostMouseCapture">
                         <Grid.LayoutTransform>
                             <ScaleTransform x:Name="MapZoomTransform" ScaleX="1" ScaleY="1" />
@@ -313,6 +315,22 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
+            </Border>
+        </Popup>
+
+        <!-- Same "outside the zoomed subtree, Placement=Mouse" fix as SetTypePopup above, and the same
+             "StaysOpen=False dismisses itself on the triggering gesture's own pending mouse-up" gotcha —
+             opened from MouseRightButtonUp (not Down), see MapCanvasHost_OnMouseRightButtonDown/Up. -->
+        <Popup x:Name="ObjectActionPopup" Placement="Mouse" StaysOpen="False" AllowsTransparency="True">
+            <Border Background="White" BorderBrush="#666" BorderThickness="1" Padding="2">
+                <StackPanel>
+                    <Button Content="Set User Byte" Click="ObjectActionPopup_SetUserByte_OnClick"
+                            HorizontalContentAlignment="Left" Padding="8,3" Margin="0,1" MinWidth="110" />
+                    <Button Content="Link" Click="ObjectActionPopup_Link_OnClick"
+                            HorizontalContentAlignment="Left" Padding="8,3" Margin="0,1" MinWidth="110" />
+                    <Button Content="Set Type" Click="ObjectActionPopup_SetType_OnClick"
+                            HorizontalContentAlignment="Left" Padding="8,3" Margin="0,1" MinWidth="110" />
+                </StackPanel>
             </Border>
         </Popup>
     </Grid>

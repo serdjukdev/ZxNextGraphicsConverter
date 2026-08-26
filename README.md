@@ -75,4 +75,4 @@ If you find this useful, you can support its development on [Patreon](https://ww
 
 ## License
 
-[MIT](LICENSE)
+[PolyForm Noncommercial 1.0.0](LICENSE) — free to use, modify, and share for noncommercial purposes; commercial use (including selling this software or a derivative of it) is not permitted without a separate agreement with the author.

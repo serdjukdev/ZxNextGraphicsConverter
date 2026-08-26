@@ -37,7 +37,7 @@ Editing a converted sprite: pixel canvas, its own palette highlighted in the fol
 - **Bulk operations**: re-quantize a single tile, an entire folder, or the current multi-selection with a different dithering mode; changing dithering on a source image re-quantizes every placement of it immediately.
 - **Metatile Editor**: compose reusable blocks of tiles (2×2/3×3/4×4 — one fixed size per project, chosen once), with per-cell mirror/rotate and an optional palette-slot override — the placeable unit on a map's grid layers. Drag one metatile onto another to reorder it; every map placing an affected metatile is rewritten to match automatically. A "Blank" tile and metatile are auto-generated and always sit at export index 0, undeletable — a real tile pattern for an unpainted/erased map cell to reference, so hardware code never reads past the end of the metatile table or leaves stale VRAM content behind.
 - **Map Editor**: paint maps across two metatile grid layers (4bpp Tilemap, 8bpp Tile) plus a freeform Sprite object layer, with modifier-driven tools (plain paint, Ctrl-erase, Shift-snap sprite placement, Alt select/move/copy) and Resize/Trim.
-- **Object types & links**: give any placed object a user-defined type (e.g. "portal", "character") and draw a directed link between two objects (e.g. a button that opens a specific door) — shown as an arrow on the canvas, both exported as extra bytes per object.
+- **Object types, links & user byte**: give any placed object a user-defined type (e.g. "portal", "character"), draw a directed link between two objects (e.g. a button that opens a specific door, shown as an arrow on the canvas), and set a free-form 0-255 user byte (edited as a number or its 8 individual bits, either one updates the other) for whatever a game's own code needs it for. All three are exported as extra bytes per object.
 - **Projects**: saved as a single `.zxngc` file (a zip of the manifest, source images, and converted asset data); recent-projects list; auto-opens the last project on launch; unsaved-changes tracking with a save-before-closing prompt.
 - **Export for Next**: every asset folder (or, for Layer2, each image) packs into binary chunks plus a matching Z80 ASM address map, with a per-row choice of chunk size (8KB/16KB/whole file) and, for software-blitted Tile8Bpp assets, row-major vs column-major pixel order. Each map exports separately — grid layers, metatiles, and objects embedded directly as `db` bytes, no chunking — plus one project-wide `object_types.asm` shared by every map. The export dialog previews every row live before you commit.
 - **Help**: an in-app Help screen (Help menu or F1) documenting every button, shortcut, and export byte format.
@@ -45,6 +45,8 @@ Editing a converted sprite: pixel canvas, its own palette highlighted in the fol
 ## Getting started
 
 Requirements: Windows, [.NET 9 SDK](https://dotnet.microsoft.com/download).
+
+Prefer not to build from source? The [Releases](https://github.com/serdjukdev/ZxNextGraphicsConverter/releases) page has ready-to-run Windows builds plus a sample `.zxngc` project you can open right away.
 
 ```powershell
 # Build everything

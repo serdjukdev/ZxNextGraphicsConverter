@@ -4,7 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         mc:Ignorable="d"
-        Title="Help — Shortcuts &amp; Controls" Height="760" Width="820" WindowStartupLocation="CenterOwner">
+        Title="Help: Shortcuts &amp; Controls" Height="760" Width="820" WindowStartupLocation="CenterOwner">
     <Window.Resources>
         <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
             <Setter Property="FontWeight" Value="Bold" />
@@ -59,56 +59,56 @@
                         <TextBlock Style="{StaticResource TermStyle}" Text="File → Recent Projects" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="The last projects you opened or saved, most recent first." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+S — File → Save Project" />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+S: File → Save Project" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Saves in place. If the project has no location yet (shouldn't normally happen), use Save Project As... first." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="File → Save Project As..." />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Saves a copy at a new name/location directly (unlike New Project, this does NOT create a wrapping subfolder — you're relocating/renaming an existing project, not starting fresh)." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Saves a copy at a new name/location directly (unlike New Project, this does NOT create a wrapping subfolder: you're relocating/renaming an existing project, not starting fresh)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="File → Import Images..." />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Opens a multi-select file picker and adds the chosen images to the Source Images panel. You can also just drag image files from Windows Explorer onto that panel." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="File → Export for Next..." />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens the Export dialog — see the 'Export — what actually gets written' section below for the full data format." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens the Export dialog: see the 'Export: what actually gets written' section below for the full data format." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+Z — Undo" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="One shared undo stack for pixel painting and palette colour edits in the main window (a whole paint stroke — mouse-down to mouse-up — undoes as a single step, not one step per pixel). Cleared automatically after any operation that can remap a whole palette bank (re-quantize category/folder, Optimize bank, a delete that compacts slots) — those aren't undoable, and always ask to confirm first." />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+Z: Undo" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="One shared undo stack for pixel painting and palette colour edits in the main window (a whole paint stroke: mouse-down to mouse-up: undoes as a single step, not one step per pixel). Cleared automatically after any operation that can remap a whole palette bank (re-quantize category/folder, Optimize bank, a delete that compacts slots): those aren't undoable, and always ask to confirm first." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Tools → Metatile Editor... / Map Editor..." />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens the two dedicated editor windows — see their own sections below." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens the two dedicated editor windows: see their own sections below." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Thumbnail &amp; '[N]' prefix" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Every tile/sprite row shows a small thumbnail of its own actual pixels, and its real export index as a '[N]' prefix before the name — the exact same number that ends up in the exported file, category-wide (not per sub-folder). Both update live: the thumbnail whenever that asset's pixels/palette change (including every OTHER tile/sprite sharing a palette slot/folder you just recoloured), the index whenever anything in that category is added/removed/reordered, since one change can shift every sibling's number." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Every tile/sprite row shows a small thumbnail of its own actual pixels, and its real export index as a '[N]' prefix before the name: the exact same number that ends up in the exported file, category-wide (not per sub-folder). Both update live: the thumbnail whenever that asset's pixels/palette change (including every OTHER tile/sprite sharing a palette slot/folder you just recoloured), the index whenever anything in that category is added/removed/reordered, since one change can shift every sibling's number." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Drag a tile/sprite row onto another to reorder" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Drop on the top/bottom half of the target row to land before/after it — reassigns real export indices to match. Tile4Bpp/Sprite4Bpp (no sub-folders) reorder across the whole category; Tile8Bpp/Sprite8Bpp (each sub-folder is its own flat palette) only within the same folder — moving to a different one would mean re-quantizing against a different palette, not just renumbering, so that's not done by this drag. The reserved 'Blank' tile (see below) can never be dragged, or have anything dropped before it — it always stays first." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Drop on the top/bottom half of the target row to land before/after it: reassigns real export indices to match. Tile4Bpp/Sprite4Bpp (no sub-folders) reorder across the whole category; Tile8Bpp/Sprite8Bpp (each sub-folder is its own flat palette) only within the same folder: moving to a different one would mean re-quantizing against a different palette, not just renumbering, so that's not done by this drag. The reserved 'Blank' tile (see below) can never be dragged, or have anything dropped before it: it always stays first." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Project tree — selecting items" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Click a tile/sprite = select it alone. Ctrl+click = add/remove it from a multi-selection. Shift+click = select the whole range between your last click and this one. Arrow keys always select a single item, same as a plain click. Clicking a folder/category never joins the multi-selection — it just shows that folder's palette overview on the right." />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Project tree: selecting items" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Click a tile/sprite = select it alone. Ctrl+click = add/remove it from a multi-selection. Shift+click = select the whole range between your last click and this one. Arrow keys always select a single item, same as a plain click. Clicking a folder/category never joins the multi-selection: it just shows that folder's palette overview on the right." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Double-click a folder" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Expands/collapses it. (Double-clicking a leaf tile/sprite does nothing special — every leaf click, single or rapid, is handled the same way, so quick Ctrl-clicking never gets mistaken for a double-click.)" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Expands/collapses it. (Double-clicking a leaf tile/sprite does nothing special: every leaf click, single or rapid, is handled the same way, so quick Ctrl-clicking never gets mistaken for a double-click.)" />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Expand all' / 'Collapse all' buttons" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Above the tree — expands or collapses every folder at once." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Above the tree: expands or collapses every folder at once." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Delete key (tree)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Deletes whatever's selected — a single tile/sprite, a whole checked multi-selection, or (if a user-created 8bpp sub-folder is selected) the folder and everything in it. Always confirms first; a folder/source-image delete explicitly warns how many placed tiles/sprites will go with it. A tile used in a metatile, or a sprite placed on a map, is no longer blocked outright — the confirmation instead spells out everything that goes with it (metatiles containing the tile, how many map cells will become the Blank tile, how many sprite placements will be removed) so you can decide. That cascade is not undoable; a plain delete with nothing else attached still is." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Deletes whatever's selected: a single tile/sprite, a whole checked multi-selection, or (if a user-created 8bpp sub-folder is selected) the folder and everything in it. Always confirms first; a folder/source-image delete explicitly warns how many placed tiles/sprites will go with it. A tile used in a metatile, or a sprite placed on a map, is no longer blocked outright: the confirmation instead spells out everything that goes with it (metatiles containing the tile, how many map cells will become the Blank tile, how many sprite placements will be removed) so you can decide. That cascade is not undoable; a plain delete with nothing else attached still is." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+R (tree)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Re-quantizes the selected tile/sprite — opens the Re-quantize dialog (choose a dithering mode) and re-converts it from its original source region." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Re-quantizes the selected tile/sprite: opens the Re-quantize dialog (choose a dithering mode) and re-converts it from its original source region." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Right-click a tile/sprite" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Rename..., Re-quantize... (Ctrl+R), Delete — all apply to the whole multi-selection if more than one is checked (Re-quantize is disabled for a mixed-category/folder selection)." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Rename..., Re-quantize... (Ctrl+R), Delete: all apply to the whole multi-selection if more than one is checked (Re-quantize is disabled for a mixed-category/folder selection)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Right-click a folder" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="'Add sub-folder...' (only on the two 8bpp category roots — sprite/8bpp and tile/8bpp — each sub-folder gets its own flat palette; only one level deep), 'Re-quantize folder...' (disabled if the folder has no tiles/sprites of its own), 'Delete folder...' (only on a user-created sub-folder, never a category root)." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="'Add sub-folder...' (only on the two 8bpp category roots: sprite/8bpp and tile/8bpp: each sub-folder gets its own flat palette; only one level deep), 'Re-quantize folder...' (disabled if the folder has no tiles/sprites of its own), 'Delete folder...' (only on a user-created sub-folder, never a category root)." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Drag &amp; drop — importing" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Drag image files from Explorer onto the Source Images panel to import them. Drag a row from the Source Images panel onto a category or sub-folder in the tree to place it: an exact-size match imports directly; a Layer2 folder that doesn't match opens a crop/position dialog; anything oversized opens the Atlas Slicer (see below). Any of these can hit a palette-overflow — see the Palette Overflow dialog below. (For dragging a tile/sprite row ONTO ANOTHER one to reorder it, see the entry above.)" />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Drag &amp; drop: importing" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Drag image files from Explorer onto the Source Images panel to import them. Drag a row from the Source Images panel onto a category or sub-folder in the tree to place it: an exact-size match imports directly; a Layer2 folder that doesn't match opens a crop/position dialog; anything oversized opens the Atlas Slicer (see below). Any of these can hit a palette-overflow: see the Palette Overflow dialog below. (For dragging a tile/sprite row ONTO ANOTHER one to reorder it, see the entry above.)" />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Source Images panel" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Each row shows a thumbnail, filename and size. The small '✕' button (or Delete key on a selected row) removes that source image — and, if it was ever used, every tile/sprite placed from it too, after an explicit confirmation naming the count." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Each row shows a thumbnail, filename and size. The small '✕' button (or Delete key on a selected row) removes that source image: and, if it was ever used, every tile/sprite placed from it too, after an explicit confirmation naming the count." />
                     </StackPanel>
                 </Expander>
 
@@ -119,25 +119,25 @@
                     </Expander.Header>
                     <StackPanel Style="{StaticResource SectionContentStyle}">
                         <TextBlock Style="{StaticResource TermStyle}" Text="Click / drag to paint" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Pick a palette colour first (click a swatch below) — painting is disabled with a reminder message until you do. The pixel editor renders at a fixed 16x zoom. A whole click-drag-release stroke is one undo step." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Pick a palette colour first (click a swatch below): painting is disabled with a reminder message until you do. The pixel editor renders at a fixed 16x zoom. A whole click-drag-release stroke is one undo step." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+click/drag (bottom) or plain click/drag (top) — eyedropper" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="In the editable pixel editor (bottom), Ctrl is required since a plain click there paints. In the read-only preview (top), nothing else happens on click, so no modifier is needed — click or drag across it to sweep the eyedropper. Either way it picks the colour under the cursor and selects/highlights that palette swatch." />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+click/drag (bottom) or plain click/drag (top): eyedropper" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="In the editable pixel editor (bottom), Ctrl is required since a plain click there paints. In the read-only preview (top), nothing else happens on click, so no modifier is needed: click or drag across it to sweep the eyedropper. Either way it picks the colour under the cursor and selects/highlights that palette swatch." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Palette strip — click a swatch" />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Palette strip: click a swatch" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Selects it as the current paint colour." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Palette strip — double-click a swatch" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens the colour picker (the real, complete 512-colour Next palette — 8 blocks of 8x8 swatches — so you can never pick an invalid colour). Changes that slot's colour everywhere it's used, live, and pushes one undo step. Blocked on the transparent-index slot (nothing to recolour there)." />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Palette strip: double-click a swatch" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens the colour picker (the real, complete 512-colour Next palette: 8 blocks of 8x8 swatches: so you can never pick an invalid colour). Changes that slot's colour everywhere it's used, live, and pushes one undo step. Blocked on the transparent-index slot (nothing to recolour there)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="4bpp palette-bank overview (16 rows)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Selecting a 4bpp tile/sprite shows all 16 bank slots at once, with your item's own slot highlighted and clickable (the others are read-only previews — clicking them does nothing, so you can't accidentally repaint a different tile's colours). Selecting a 4bpp category root itself shows all 16 with none highlighted, plus a usage summary." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Selecting a 4bpp tile/sprite shows all 16 bank slots at once, with your item's own slot highlighted and clickable (the others are read-only previews: clicking them does nothing, so you can't accidentally repaint a different tile's colours). Selecting a 4bpp category root itself shows all 16 with none highlighted, plus a usage summary." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Optimize bank...' button (4bpp only)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Repacks the whole palette bank to use as few of the 16 slots as possible by regrouping tiles/sprites that share (or nearly share) a colour set — colours themselves never change, only which slot each tile/sprite reads from. All-or-nothing (nothing changes if any tile can't be placed) and NOT undoable — confirms first." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Repacks the whole palette bank to use as few of the 16 slots as possible by regrouping tiles/sprites that share (or nearly share) a colour set: colours themselves never change, only which slot each tile/sprite reads from. All-or-nothing (nothing changes if any tile can't be placed) and NOT undoable: confirms first." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Status line" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Shows the selected colour's RGB hex, its 9-bit Next value (decimal and binary), and — for a 4bpp tile/sprite — which palette number and slot it is." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Shows the selected colour's RGB hex, its 9-bit Next value (decimal and binary), and: for a 4bpp tile/sprite: which palette number and slot it is." />
                     </StackPanel>
                 </Expander>
 
@@ -147,21 +147,21 @@
                         <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Atlas Slicer" />
                     </Expander.Header>
                     <StackPanel Style="{StaticResource SectionContentStyle}">
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens automatically when you place an image that's larger than one cell (and isn't a Layer2 image) — it needs to be cut into individual tiles/sprites first." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens automatically when you place an image that's larger than one cell (and isn't a Layer2 image): it needs to be cut into individual tiles/sprites first." />
                         <TextBlock Style="{StaticResource TermStyle}" Text="Offset left / Offset top / Spacing" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Where the grid of cells starts and how many pixels sit between cells — the red-line preview and the 'Cells found: N' count update live as you type." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Where the grid of cells starts and how many pixels sit between cells: the red-line preview and the 'Cells found: N' count update live as you type." />
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Skip duplicate cells' checkbox (on by default)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Cells with byte-identical raw pixels (checked before any colour conversion) are imported only once — the final status line reports how many were skipped." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Cells with byte-identical raw pixels (checked before any colour conversion) are imported only once: the final status line reports how many were skipped." />
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Slice into metatile blocks' checkbox (Tile4Bpp/Tile8Bpp only)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Cuts the atlas into NxN-tile blocks (N = this project's fixed metatile size — 16x16/24x24/32x32 pixels) instead of individual 8x8 tiles. Each block is split into its own 8x8 tiles (duplicates within this same slicing pass are reused, same as 'Skip duplicate cells'), and a metatile is auto-created from the result — one metatile per block. If the project's metatile size isn't fixed yet, checking this asks you to choose it (2x2/3x3/4x4) right away, same one-time choice as the Metatile Editor. A block where any of its tiles fails to import (e.g. palette overflow) is skipped entirely rather than creating a metatile with a missing cell." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Cuts the atlas into NxN-tile blocks (N = this project's fixed metatile size: 16x16/24x24/32x32 pixels) instead of individual 8x8 tiles. Each block is split into its own 8x8 tiles (duplicates within this same slicing pass are reused, same as 'Skip duplicate cells'), and a metatile is auto-created from the result: one metatile per block. If the project's metatile size isn't fixed yet, checking this asks you to choose it (2x2/3x3/4x4) right away, same one-time choice as the Metatile Editor. A block where any of its tiles fails to import (e.g. palette overflow) is skipped entirely rather than creating a metatile with a missing cell." />
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Place the transparent tile first' checkbox" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Only shown when this slice includes a fully transparent cell AND the target category doesn't already have one — moves that tile to the front of the category's export order (index 0) so a game programmer can find it without paging through the rest, e.g. as a 'walk-through' tile. Off screen (not shown) if either condition doesn't hold." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Only shown when this slice includes a fully transparent cell AND the target category doesn't already have one: moves that tile to the front of the category's export order (index 0) so a game programmer can find it without paging through the rest, e.g. as a 'walk-through' tile. Off screen (not shown) if either condition doesn't hold." />
                         <TextBlock Style="{StaticResource TermStyle}" Text="Click a cell/block in the preview" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Toggles it in or out of the conversion — green means it'll be converted, red (with a dimmed wash) means it won't. Always available, for every category, even when nothing is close to any limit. Excluding everything is fine — Slice &amp; Import then just converts nothing." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Toggles it in or out of the conversion: green means it'll be converted, red (with a dimmed wash) means it won't. Always available, for every category, even when nothing is close to any limit. Excluding everything is fine: Slice &amp; Import then just converts nothing." />
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Select all that fit' / 'Clear selection' buttons" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="'Select all that fit' keeps whatever you've already picked and fills in the rest, top to bottom, up to whatever capacity remains. 'Clear selection' turns everything off." />
                         <TextBlock Style="{StaticResource TermStyle}" Text="Tile4Bpp's 256-tile limit and the 255-metatile-per-Kind limit" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Tile4Bpp is hard-capped at 256 tiles total in the category — the real hardware tilemap's 8-bit tile index (Tile8Bpp, a software layer, has no such cap). In 'Slice into metatile blocks' mode, a separate 255-per-Kind metatile cap also applies, to both Tile4Bpp and Tile8Bpp. Whenever a limit is actually in play, the default selection fills top-down within it (a status line under the preview shows how many slots are left), and clicking a cell/block ON is refused — with an explanation, not silently — if it would push either count over the limit; turning one off always works. Fully transparent cells/blocks never count against either limit (they reuse the project's single reserved Blank tile/metatile instead of creating a new one) and are never auto-selected by default, but can still be clicked on by hand for free." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Tile4Bpp is hard-capped at 256 tiles total in the category: the real hardware tilemap's 8-bit tile index (Tile8Bpp, a software layer, has no such cap). In 'Slice into metatile blocks' mode, a separate 255-per-Kind metatile cap also applies, to both Tile4Bpp and Tile8Bpp. Whenever a limit is actually in play, the default selection fills top-down within it (a status line under the preview shows how many slots are left), and clicking a cell/block ON is refused: with an explanation, not silently: if it would push either count over the limit; turning one off always works. Fully transparent cells/blocks never count against either limit (they reuse the project's single reserved Blank tile/metatile instead of creating a new one) and are never auto-selected by default, but can still be clicked on by hand for free." />
                         <TextBlock Style="{StaticResource TermStyle}" Text="Slice &amp; Import" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Converts every INCLUDED cell/block through the normal import pipeline (runs in the background with a progress bar); reports how many imported, failed (palette overflow), skipped as duplicates, and excluded by selection." />
                     </StackPanel>
@@ -173,31 +173,31 @@
                         <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Metatile Editor (Tools → Metatile Editor...)" />
                     </Expander.Header>
                     <StackPanel Style="{StaticResource SectionContentStyle}">
-                        <TextBlock Style="{StaticResource DescStyle}" Text="A metatile is a small square of individual tiles treated as one stamp on the Map Editor's grid layers. Every change here writes straight into the project immediately — there's no separate save inside this window, only File → Save Project in the main window later." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="A metatile is a small square of individual tiles treated as one stamp on the Map Editor's grid layers. Every change here writes straight into the project immediately: there's no separate save inside this window, only File → Save Project in the main window later." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Metatile size (2x2 / 3x3 / 4x4)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="One fixed size for the WHOLE project — every metatile of either Kind, and every map's grid, shares it. Asked once, the first time it's actually needed (opening this editor, or creating the first map) — a small dialog, not shown here since it's not part of this window. Fixed forever afterward; there is no per-metatile or per-map size choice anymore." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="One fixed size for the WHOLE project: every metatile of either Kind, and every map's grid, shares it. Asked once, the first time it's actually needed (opening this editor, or creating the first map): a small dialog, not shown here since it's not part of this window. Fixed forever afterward; there is no per-metatile or per-map size choice anymore." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Kind: 4bpp / 8bpp" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Which tile category this metatile draws from — 4bpp metatiles feed the hardware Tilemap layer (with real mirror/rotate/palette-slot hardware attributes); 8bpp metatiles feed the software 8bpp Tile layer (index only, no attributes)." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Which tile category this metatile draws from: 4bpp metatiles feed the hardware Tilemap layer (with real mirror/rotate/palette-slot hardware attributes); 8bpp metatiles feed the software 8bpp Tile layer (index only, no attributes)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Tile palette (left) → click to arm it" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Click a tile thumbnail, then click a cell in the draft grid on the right to stamp that tile into it. An unfilled cell shows a grey '+' placeholder. Ctrl+click a cell to clear it back to unfilled, to correct a mistake." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Per-cell controls (4bpp metatiles only)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Mirror X, Mirror Y, Rotate (transposes the tile — combined with the two mirrors this reaches all 8 possible orientations, since the hardware has no separate 90/180/270° rotation), and an optional palette-slot override (read this cell's tile against a different bank slot than its own, with a '↺' button to reset back to native)." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Mirror X, Mirror Y, Rotate (transposes the tile: combined with the two mirrors this reaches all 8 possible orientations, since the hardware has no separate 90/180/270° rotation), and an optional palette-slot override (read this cell's tile against a different bank slot than its own, with a '↺' button to reset back to native)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Name + 'Create Metatile' / 'Save Changes' button" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Requires every cell filled first — every cell needs a real tile (a transparent one if a gap should show through, since the hardware always draws SOMETHING at each cell). Names are auto-uniquified (_2, _3...) if already taken. Capped at 255 metatiles per Kind — one of those slots is always that Kind's own auto-generated, undeletable 'Blank' reserved metatile (see the Map Editor entry below), so real metatiles effectively get up to 254." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Requires every cell filled first: every cell needs a real tile (a transparent one if a gap should show through, since the hardware always draws SOMETHING at each cell). Names are auto-uniquified (_2, _3...) if already taken. Capped at 255 metatiles per Kind: one of those slots is always that Kind's own auto-generated, undeletable 'Blank' reserved metatile (see the Map Editor entry below), so real metatiles effectively get up to 254." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Existing metatiles list (left) → click one to edit it" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Loads it into the draft on the right — the button becomes 'Save Changes' and writes back into that SAME metatile (its Id/Kind/GridSize/export position never change, so every map already placing it just picks up the new cells immediately). Click 'New' to abandon the edit and start a brand-new metatile instead." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Loads it into the draft on the right: the button becomes 'Save Changes' and writes back into that SAME metatile (its Id/Kind/GridSize/export position never change, so every map already placing it just picks up the new cells immediately). Click 'New' to abandon the edit and start a brand-new metatile instead." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Drag a metatile onto another to reorder" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Drop on the left/right half of the target to land before/after it. Reassigns real export indices AND rewrites every map cell that placed one of the affected metatiles under its old index — unlike a tile/sprite's index, a metatile's is the literal byte stored in map data, so every map using it stays correct automatically. The reserved 'Blank' metatile can never be dragged, or have anything dropped before it — it always stays first." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Drop on the left/right half of the target to land before/after it. Reassigns real export indices AND rewrites every map cell that placed one of the affected metatiles under its old index: unlike a tile/sprite's index, a metatile's is the literal byte stored in map data, so every map using it stays correct automatically. The reserved 'Blank' metatile can never be dragged, or have anything dropped before it: it always stays first." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Delete selected' button" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="If any map still places this metatile, asks to confirm first — naming exactly which map and how many cells will become the Blank tile — instead of blocking outright; that confirmation is not undoable. Deletes it and re-compacts every other metatile of the same Kind to a dense index, remapping every map that used them. The reserved 'Blank' metatile itself is still always undeletable." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="If any map still places this metatile, asks to confirm first: naming exactly which map and how many cells will become the Blank tile: instead of blocking outright; that confirmation is not undoable. Deletes it and re-compacts every other metatile of the same Kind to a dense index, remapping every map that used them. The reserved 'Blank' metatile itself is still always undeletable." />
                     </StackPanel>
                 </Expander>
 
@@ -207,28 +207,28 @@
                         <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Map Editor (Tools → Map Editor...)" />
                     </Expander.Header>
                     <StackPanel Style="{StaticResource SectionContentStyle}">
-                        <TextBlock Style="{StaticResource DescStyle}" Text="A map has 3 layers sharing the same size: a 4bpp Tilemap grid, an 8bpp Tile grid, and a freeform Sprite layer — painted with metatiles/sprites from the side palette. The selected row in the Layers list is both the front-to-back display order AND which layer painting/selection targets." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="A map has 3 layers sharing the same size: a 4bpp Tilemap grid, an 8bpp Tile grid, and a freeform Sprite layer: painted with metatiles/sprites from the side palette. The selected row in the Layers list is both the front-to-back display order AND which layer painting/selection targets." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Plain click/drag on the canvas" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Paints with whichever metatile/sprite is selected in the palette. Sprite placement is click-only (no drag-stamping)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+click/drag" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Force-erases on the active layer — works no matter what else you're doing, including mid-drag." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Force-erases on the active layer: works no matter what else you're doing, including mid-drag." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Shift (placing a sprite)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Snaps the new sprite's position to the faint 8x8 tile grid — a green preview box follows the cursor while held." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Snaps the new sprite's position to the faint 8x8 tile grid: a green preview box follows the cursor while held." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Alt+drag — select / move" />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Alt+drag: select / move" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Painting is fully suppressed. Drag on empty space (or outside the current selection) to draw a new selection box (cell-rectangle on a grid layer, or every sprite whose box touches yours on the Sprite layer). Drag from INSIDE the current selection instead to move it." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Alt+Shift+drag (from inside a selection)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Copies instead of moving — decided at the moment you release the mouse, so you can change your mind mid-drag." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Copies instead of moving: decided at the moment you release the mouse, so you can change your mind mid-drag." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Any plain click" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Always clears whatever selection existed first, then paints/erases normally." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Delete key / 'Delete Selection' button" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Clears the current selection's contents — grid cells become empty, selected sprites are removed." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Clears the current selection's contents: grid cells become empty, selected sprites are removed." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Fill Selection' button" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Stamps the currently-selected palette metatile across every cell of the grid selection, as one undo step." />
@@ -240,27 +240,27 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="Toggles a faint 8x8 tile grid plus a brighter metatile-size grid, shared by all layers. This is a per-session preference, not saved with the map or project." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Resize...' button" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens a dialog: new Width/Height plus a 3x3 anchor (which corner/edge of the current content stays put) — shows exactly how many tilemap cells, 8bpp cells, and sprites would be dropped before you apply." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens a dialog: new Width/Height plus a 3x3 anchor (which corner/edge of the current content stays put): shows exactly how many tilemap cells, 8bpp cells, and sprites would be dropped before you apply." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Trim' button" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Auto-crops the map to the tightest box containing any real content, considering BOTH grid layers together plus every sprite's footprint (never just whichever layer happens to be selected) — never drops anything by construction. No-ops with a message if the map is completely empty." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Auto-crops the map to the tightest box containing any real content, considering BOTH grid layers together plus every sprite's footprint (never just whichever layer happens to be selected): never drops anything by construction. No-ops with a message if the map is completely empty." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Manage Types...' button (Sprite layer)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Object types are project-wide categories (e.g. 'portal', 'character') for map objects — not visual, just an ID a game's own code can check. Adds/renames/deletes them (delete is blocked while any object still uses that type). To assign a type to an object, use the 'Set Type' button below." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Object types are project-wide categories (e.g. 'portal', 'character') for map objects: not visual, just an ID a game's own code can check. Adds/renames/deletes them (delete is blocked while any object still uses that type). To assign a type to an object, use the 'Set Type' button below." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Set Type' button (Sprite layer)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Click the button (requires at least one object type to already exist): every object on the map gets a gray outline. Click any object: a small popup lists the available types, click one to apply it and close the popup. The tool stays armed, so you can keep clicking through several objects in a row; click the button again to stop. Right-click an object directly for the same effect on just that one object, without arming the tool from the toolbar — a one-time action, nothing stays armed afterward." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Click the button (requires at least one object type to already exist): every object on the map gets a gray outline. Click any object: a small popup lists the available types, click one to apply it and close the popup. The tool stays armed, so you can keep clicking through several objects in a row; click the button again to stop. Right-click an object directly for the same effect on just that one object, without arming the tool from the toolbar: a one-time action, nothing stays armed afterward." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Set User Byte' button (Sprite layer)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Click the button: every object on the map gets a gray outline. Click any object: a small dialog opens with its raw user byte (0-255, exported as the object's 8th byte), shown as both a number and its 8 individual bits, either one edits the other. OK applies and closes the dialog, Cancel discards. The tool stays armed, so you can keep clicking through several objects in a row; click the button again to stop. Right-click an object directly for the same effect on just that one object, without arming the tool from the toolbar — a one-time action, nothing stays armed afterward." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Click the button: every object on the map gets a gray outline. Click any object: a small dialog opens with its raw user byte (0-255, exported as the object's 8th byte), shown as both a number and its 8 individual bits, either one edits the other. OK applies and closes the dialog, Cancel discards. The tool stays armed, so you can keep clicking through several objects in a row; click the button again to stop. Right-click an object directly for the same effect on just that one object, without arming the tool from the toolbar: a one-time action, nothing stays armed afterward." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Link' button (Sprite layer)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Click the button (now labeled 'Click A') — every object on the map gets a gray outline to show it's clickable. Click the first object: it turns green and the button switches to 'Click B'. Click a different object: a cyan arrow (pointing at the second object) records that the first links to the second, e.g. a button that opens a specific door, and all outlines clear. Deleting either object removes the link. If two objects link to each other, both arrows are drawn slightly apart so both stay visible. Right-clicking an object jumps straight to 'Click B' for it (pre-selects it as the first object, skipping a separate arm-then-click step) — still needs one more click on a different object to finish, exactly as above." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Click the button (now labeled 'Click A'): every object on the map gets a gray outline to show it's clickable. Click the first object: it turns green and the button switches to 'Click B'. Click a different object: a cyan arrow (pointing at the second object) records that the first links to the second, e.g. a button that opens a specific door, and all outlines clear. Deleting either object removes the link. If two objects link to each other, both arrows are drawn slightly apart so both stay visible. Right-clicking an object jumps straight to 'Click B' for it (pre-selects it as the first object, skipping a separate arm-then-click step): still needs one more click on a different object to finish, exactly as above." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Right-click an object (Sprite layer)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Shows a small menu — Set User Byte / Link / Set Type — for whichever object you right-clicked, without needing to arm anything from the toolbar first. Only offered when no tool is currently armed (an armed tool already owns left-click for this) and when you actually click on an object. See the three entries above for what each one does." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Shows a small menu: Set User Byte / Link / Set Type: for whichever object you right-clicked, without needing to arm anything from the toolbar first. Only offered when no tool is currently armed (an armed tool already owns left-click for this) and when you actually click on an object. See the three entries above for what each one does." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+Z — Undo" />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+Z: Undo" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="A local undo stack for this window: paint/erase strokes, Fill/Delete Selection, Move/Copy, Link, type assignment, and Resize/Trim each undo as one step." />
                     </StackPanel>
                 </Expander>
@@ -272,61 +272,61 @@
                     </Expander.Header>
                     <StackPanel Style="{StaticResource SectionContentStyle}">
                         <TextBlock Style="{StaticResource TermStyle}" Text="New Map" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Name and Width/Height (size presets, a live cell-count-vs-limit check; can be changed later via Resize/Trim). No metatile size choice here anymore — it's the whole project's own fixed size (see the Metatile Editor section)." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Name and Width/Height (size presets, a live cell-count-vs-limit check; can be changed later via Resize/Trim). No metatile size choice here anymore: it's the whole project's own fixed size (see the Metatile Editor section)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Rename" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Names must be unique across the whole project (case-insensitive) since they become ASM export labels — validated live as you type." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Names must be unique across the whole project (case-insensitive) since they become ASM export labels: validated live as you type." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Re-quantize" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Pick a dithering mode (None / Ordered 4x4 Bayer / Floyd-Steinberg) and re-convert from the original source region." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Palette Overflow" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Shown when an import/re-quantize can't fit its colours. 'Reduce this tile' caps the colour count and retries just this one. 'Re-quantize category' (4bpp only) rebuilds the ENTIRE category's palette bank from scratch at the reduced count — anything that still doesn't fit afterward is removed from the project, named in the status message so you can re-import it by hand. Any metatile cell that placed a re-quantized or removed tile is kept safe automatically (redirected to the replacement, or to the reserved blank tile if there's no replacement) — it never ends up pointing at a tile that no longer exists." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Shown when an import/re-quantize can't fit its colours. 'Reduce this tile' caps the colour count and retries just this one. 'Re-quantize category' (4bpp only) rebuilds the ENTIRE category's palette bank from scratch at the reduced count: anything that still doesn't fit afterward is removed from the project, named in the status message so you can re-import it by hand. Any metatile cell that placed a re-quantized or removed tile is kept safe automatically (redirected to the replacement, or to the reserved blank tile if there's no replacement): it never ends up pointing at a tile that no longer exists." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="New Sub-folder" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Just a name — creates an 8bpp sub-folder with its own flat palette." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Just a name: creates an 8bpp sub-folder with its own flat palette." />
                     </StackPanel>
                 </Expander>
 
                 <!-- ================= 7. EXPORT ================= -->
                 <Expander Style="{StaticResource SectionExpanderStyle}" IsExpanded="False">
                     <Expander.Header>
-                        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Export — What Actually Gets Written" />
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Export: What Actually Gets Written" />
                     </Expander.Header>
                     <StackPanel Style="{StaticResource SectionContentStyle}">
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Every asset-folder/Layer2 row produces one or more chunked .bin files plus a matching .asm address file, plus a .pal file (always exactly 512 bytes). Every map row (grid/metatiles/objects) instead embeds its data directly as `db` bytes in one plain .asm file — no .bin, no .pal, no chunk size to pick, since there's no colour data or chunking involved." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Every asset-folder/Layer2 row produces one or more chunked .bin files plus a matching .asm address file, plus a .pal file (always exactly 512 bytes). Every map row (grid/metatiles/objects) instead embeds its data directly as `db` bytes in one plain .asm file: no .bin, no .pal, no chunk size to pick, since there's no colour data or chunking involved." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Export dialog" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="One row per asset folder, per Layer2 image, and per map (up to 5 rows — see the Map export section below). Every asset-folder/Layer2 row has its own Export checkbox and chunk-size choice (8 KB / 16 KB / Whole file); a Tile8Bpp row ALSO gets a Pixel order choice (see below). The 'What's this row?' column shows exactly which piece you're looking at — several rows can share the same folder (a map's 5 rows all live under 'map/MapName', for instance), so this is the column that actually tells them apart." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="One row per asset folder, per Layer2 image, and per map (up to 5 rows: see the Map export section below). Every asset-folder/Layer2 row has its own Export checkbox and chunk-size choice (8 KB / 16 KB / Whole file); a Tile8Bpp row ALSO gets a Pixel order choice (see below). The 'What's this row?' column shows exactly which piece you're looking at: several rows can share the same folder (a map's 5 rows all live under 'map/MapName', for instance), so this is the column that actually tells them apart." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Chunking rule" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="A single asset is NEVER split across two chunk files — if the next asset wouldn't fit in the current chunk, a new chunk starts instead. One chunk → Name.ext; several → Name_001.ext, Name_002.ext, ... 'Whole file' just means one chunk sized to fit everything." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="A single asset is NEVER split across two chunk files: if the next asset wouldn't fit in the current chunk, a new chunk starts instead. One chunk → Name.ext; several → Name_001.ext, Name_002.ext, ... 'Whole file' just means one chunk sized to fit everything." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Pixel order (Tile8Bpp only)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Row-major (default) or Column-major, per Tile8Bpp folder row. Tile8Bpp tiles are rendered by your own game code (there's no hardware tilemap for 8bpp), typically by blitting them into real Layer2 SRAM — whose hardware addressing is row-major for Layer2_256x192 but column-major for Layer2_320x256/640x256x4. Matching your target Layer2 mode's order here lets that blit be a plain sequential copy instead of per-pixel address math — pick whichever your game actually uses." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Row-major (default) or Column-major, per Tile8Bpp folder row. Tile8Bpp tiles are rendered by your own game code (there's no hardware tilemap for 8bpp), typically by blitting them into real Layer2 SRAM: whose hardware addressing is row-major for Layer2_256x192 but column-major for Layer2_320x256/640x256x4. Matching your target Layer2 mode's order here lets that blit be a plain sequential copy instead of per-pixel address math: pick whichever your game actually uses." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="File naming — a normal tile/sprite/Layer2 folder" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="{}{FolderPath}_gfx.{ext} for the binary/asm/palette (e.g. sprite/4bpp/images → sprite_4bpp_images_gfx.spr/.asm/.pal) — the '_gfx' marks these as graphics-data files, matching the self-describing names the map exports already use (_tilemap_grid, _objects, etc.)." />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="File naming: a normal tile/sprite/Layer2 folder" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="{}{FolderPath}_gfx.{ext} for the binary/asm/palette (e.g. sprite/4bpp/images → sprite_4bpp_images_gfx.spr/.asm/.pal): the '_gfx' marks these as graphics-data files, matching the self-describing names the map exports already use (_tilemap_grid, _objects, etc.)." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text=".asm format — a normal tile/sprite folder" />
-                        <TextBlock Style="{StaticResource CodeBlockStyle}" Text="slot_000: equ 0&#10;slot_001: equ 1&#10;...&#10;&#10;AssetName:&#10;    db slot_000 ; 8KB bank&#10;    db 3        ; 4bpp palette index (0-15) — 4bpp only&#10;    dw 128      ; byte offset within the bank" />
+                        <TextBlock Style="{StaticResource TermStyle}" Text=".asm format: a normal tile/sprite folder" />
+                        <TextBlock Style="{StaticResource CodeBlockStyle}" Text="slot_000: equ 0&#10;slot_001: equ 1&#10;...&#10;&#10;AssetName:&#10;    db slot_000 ; 8KB bank&#10;    db 3        ; 4bpp palette index (0-15): 4bpp only&#10;    dw 128      ; byte offset within the bank" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Field order is always bank byte, then (4bpp only) the palette-slot byte, then the 2-byte little-endian offset word. 8bpp assets have no palette line (colour comes from the whole folder's one flat palette instead)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="The 'index' byte for a tile/sprite reference" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Is NOT its position in your project tree — it's its 0-based rank within its own category, ordered by creation order, after any deletions. (Max 256 assets per category — export is blocked with a clear message if you go over.)" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Is NOT its position in your project tree: it's its 0-based rank within its own category, ordered by creation order, after any deletions. (Max 256 assets per category: export is blocked with a clear message if you go over.)" />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Map export — per map, per layer, no separate .bin files" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Each map produces up to 5 asm files (each with an explanatory comment header), all with the data embedded directly as `db n,n,n,...` lines — no matching .bin/.pal file for any of them, and no chunk-size choice in the Export dialog (there's nothing to chunk)." />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Map export: per map, per layer, no separate .bin files" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Each map produces up to 5 asm files (each with an explanatory comment header), all with the data embedded directly as `db n,n,n,...` lines: no matching .bin/.pal file for any of them, and no chunk-size choice in the Export dialog (there's nothing to chunk)." />
                         <TextBlock Style="{StaticResource TermStyle}" Text="{}{MapName}_tilemap_grid.asm / {MapName}_8bpp_grid.asm" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="1 byte per cell: Width/Height are emitted as `equ` constants, and each byte is a metatile index LOCAL to this map+layer's own metatile-definitions file below — NOT that metatile's project-wide creation order. There is no 'empty' sentinel: an unpainted/erased cell just references index 0, that Kind+GridSize's auto-generated 'Blank' reserved metatile (all-transparent tiles), which every map's local table always includes." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="1 byte per cell: Width/Height are emitted as `equ` constants, and each byte is a metatile index LOCAL to this map+layer's own metatile-definitions file below: NOT that metatile's project-wide creation order. There is no 'empty' sentinel: an unpainted/erased cell just references index 0, that Kind+GridSize's auto-generated 'Blank' reserved metatile (all-transparent tiles), which every map's local table always includes." />
                         <TextBlock Style="{StaticResource TermStyle}" Text="{}{MapName}_tilemap_metatiles.asm / {MapName}_8bpp_metatiles.asm" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Only produced if that layer actually places any metatiles. Lists, in order, every distinct metatile that layer uses — index 0, 1, 2... in this file IS the local index the grid file above references. Tilemap (4bpp): 2 bytes/tile — tile-index byte, then an attribute byte (bits 7-4 = palette slot 0-15, bit 3 = Mirror X, bit 2 = Mirror Y, bit 1 = Rotate). 8bpp: 1 byte/tile (index only, no attribute). The metatile size (2x2/3x3/4x4) is stated once in the file's header comment/constants — a map only ever uses one size. There is no project-wide metatile library any more: if two maps share a metatile, each map's own file gets an independent full copy of its data." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Only produced if that layer actually places any metatiles. Lists, in order, every distinct metatile that layer uses: index 0, 1, 2... in this file IS the local index the grid file above references. Tilemap (4bpp): 2 bytes/tile: tile-index byte, then an attribute byte (bits 7-4 = palette slot 0-15, bit 3 = Mirror X, bit 2 = Mirror Y, bit 1 = Rotate). 8bpp: 1 byte/tile (index only, no attribute). The metatile size (2x2/3x3/4x4) is stated once in the file's header comment/constants: a map only ever uses one size. There is no project-wide metatile library any more: if two maps share a metatile, each map's own file gets an independent full copy of its data." />
                         <TextBlock Style="{StaticResource TermStyle}" Text="{}{MapName}_objects.asm" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="The Sprite layer's placements (called 'objects' in export, since these are map placements, not the sprite assets themselves) — ONE `db` line per object (never wrapped at 16 bytes like the grid/metatile files — 8 doesn't divide evenly, so keeping one clean record per line matters more here for a programmer reading the file), each preceded by a comment naming the sprite, its position, its type (if any), and its link target (if any). The count is only written as an ASM constant (e.g. MyMap_objects_count: equ 12)." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="The Sprite layer's placements (called 'objects' in export, since these are map placements, not the sprite assets themselves): ONE `db` line per object (never wrapped at 16 bytes like the grid/metatile files: 8 doesn't divide evenly, so keeping one clean record per line matters more here for a programmer reading the file), each preceded by a comment naming the sprite, its position, its type (if any), and its link target (if any). The count is only written as an ASM constant (e.g. MyMap_objects_count: equ 12)." />
                         <TextBlock Style="{StaticResource CodeBlockStyle}" Text="Object record (8 bytes):&#10;  byte 0    spriteIndex&#10;  bytes 1-2 X  (int16, little-endian)&#10;  bytes 3-4 Y  (int16, little-endian)&#10;  byte 5    type    (obj_&lt;name&gt; index from object_types.asm, 0xFF = no type)&#10;  byte 6    connect (index of the linked object in THIS file, 0xFF = no link)&#10;  byte 7    userByte (reserved, always 0 for now)" />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="object_types.asm" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="One project-wide file (not per-map), only written if the project has any Object Types defined — see the Map Editor's 'Manage Types...' dialog. One `obj_&lt;name&gt;: equ &lt;index&gt;` line per type, in list order; that index is exactly what every map's _objects.asm writes as the `type` byte, so it's consistent across every map in the export." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="One project-wide file (not per-map), only written if the project has any Object Types defined: see the Map Editor's 'Manage Types...' dialog. One `obj_&lt;name&gt;: equ &lt;index&gt;` line per type, in list order; that index is exactly what every map's _objects.asm writes as the `type` byte, so it's consistent across every map in the export." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Layer2 export" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="One image = one blob spanning consecutive chunks, byte order depends on resolution: 256x192 is plain row-major; 320x256 is column-major (top-to-bottom, then next column); 640x256x4 is column-major AND packs 2 adjacent pixels per byte (high nibble = left pixel)." />

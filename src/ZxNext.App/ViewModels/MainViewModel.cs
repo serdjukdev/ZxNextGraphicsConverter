@@ -308,6 +308,114 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Slices an atlas into gridSize*gridSize-tile blocks (e.g. 16x16 for gridSize=2) for Tile4Bpp/Tile8Bpp
+    /// only — each block is split into its 8x8 tiles (<see cref="AtlasSliceParameters.ComputeSubCellRects"/>),
+    /// every tile imported exactly like <see cref="ImportSlicedAsync"/> does, and a <see cref="Metatile"/> is
+    /// auto-built from the resulting tile ids and added to the project's metatile library. Duplicate-tile
+    /// detection is scoped to THIS one slicing pass only (raw-pixel signatures of every sub-tile cut so
+    /// far in this atlas) — deliberately not project-wide, since palettes differ across the project and a
+    /// cross-project pixel match wouldn't mean anything (confirmed with the user). If any sub-tile of a
+    /// block fails to import (palette overflow etc.), the whole block is skipped — no partially-built
+    /// metatile with a missing cell is ever created.
+    /// </summary>
+    public async Task ImportSlicedAsMetatilesAsync(SourceImageViewModel source, AssetCategory category, string folderPath,
+        AtlasSliceParameters blockParameters, int gridSize, bool skipDuplicateCells)
+    {
+        var decoded = DecodeSource(source);
+        var blocks = blockParameters.ComputeCellRects(decoded.Width, decoded.Height);
+        var kind = category == AssetCategory.Tile4Bpp ? MetatileKind.FourBpp : MetatileKind.EightBpp;
+
+        await RunBusyAsync($"Slicing {source.Model.FileName} into metatiles...", async progress =>
+        {
+            var seenTileSignatures = new Dictionary<string, Guid>();
+            var newlyImported = new List<GraphicsAsset>();
+            var metatilesCreated = 0;
+            var tilesReused = 0;
+            var blocksFailed = 0;
+            var reportStep = Math.Max(1, blocks.Count / 100);
+
+            await Task.Run(() =>
+            {
+                for (var b = 0; b < blocks.Count; b++)
+                {
+                    var block = blocks[b];
+                    if (b % reportStep == 0 || b == blocks.Count - 1)
+                    {
+                        progress.Report(new BusyProgress($"Slicing {source.Model.FileName}: block {b + 1}/{blocks.Count}...", b + 1, blocks.Count));
+                    }
+
+                    var subRects = AtlasSliceParameters.ComputeSubCellRects(block, gridSize);
+                    var cells = new List<MetatileCell>(subRects.Count);
+                    var blockOk = true;
+
+                    foreach (var subRect in subRects)
+                    {
+                        var subRgba = PixelRectExtractor.Extract(decoded.Rgba32, decoded.Width, subRect);
+                        var signature = skipDuplicateCells ? Convert.ToBase64String(subRgba) : null;
+
+                        if (signature is not null && seenTileSignatures.TryGetValue(signature, out var existingId))
+                        {
+                            tilesReused++;
+                            cells.Add(new MetatileCell { TileAssetId = existingId });
+                            continue;
+                        }
+
+                        var subSource = new SourceImage
+                        {
+                            Id = source.Model.Id,
+                            FileName = $"{source.Model.FileName}_{subRect.X}_{subRect.Y}",
+                            FilePath = source.Model.FilePath,
+                            Width = subRect.Width,
+                            Height = subRect.Height
+                        };
+
+                        var result = AssetImporter.Import(_project, subSource, subRgba, category, folderPath, DitherMode.None, null, subRect.X, subRect.Y);
+                        Guid tileId;
+                        if (result.Success)
+                        {
+                            newlyImported.Add(result.Asset!);
+                            tileId = result.Asset!.Id;
+                        }
+                        else if (result.Reason == ImportFailureReason.RedundantWithReservedBlank)
+                        {
+                            tileId = ReservedBlankAssetService.EnsureBlankTile(_project, category).Id;
+                            tilesReused++;
+                        }
+                        else
+                        {
+                            blockOk = false;
+                            break;
+                        }
+
+                        if (signature is not null) seenTileSignatures[signature] = tileId;
+                        cells.Add(new MetatileCell { TileAssetId = tileId });
+                    }
+
+                    if (!blockOk)
+                    {
+                        blocksFailed++;
+                        continue;
+                    }
+
+                    var autoName = $"{source.Model.FileName}_{block.X}_{block.Y}";
+                    var metatileResult = MetatileService.Create(_project, autoName, kind, gridSize, cells);
+                    if (metatileResult.Success) metatilesCreated++;
+                    else blocksFailed++;
+                }
+            });
+
+            foreach (var asset in newlyImported) Tree.AddAssetNode(asset, _project);
+            SyncReservedBlankAssetNodes();
+
+            if (newlyImported.Count > 0 || metatilesCreated > 0) HasUnsavedChanges = true;
+
+            var message = $"Sliced {source.Model.FileName}: {metatilesCreated} metatile(s) created, {newlyImported.Count} tile(s) imported, {tilesReused} tile(s) reused.";
+            if (blocksFailed > 0) message += $" {blocksFailed} block(s) skipped (likely palette overflow — reduce colours before slicing).";
+            PixelEditor.StatusText = message;
+        });
+    }
+
+    /// <summary>
     /// Re-crops an asset's own source region, correctly reproducing a Layer2 placement's padding
     /// (a padded canvas is bigger than what was actually read from the source — naively re-cropping
     /// a canvas-sized rectangle would run off the end of the source) as well as an ordinary tile's

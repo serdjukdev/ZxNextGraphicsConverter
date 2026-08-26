@@ -40,4 +40,33 @@ public class AtlasSliceParametersTests
 
         Assert.Empty(rects);
     }
+
+    [Fact]
+    public void ComputeSubCellRects_GridSize2_ProducesFour8x8RectsInRasterOrder()
+    {
+        var block = new PixelRect(32, 16, 16, 16);
+
+        var rects = AtlasSliceParameters.ComputeSubCellRects(block, 2);
+
+        Assert.Equal(4, rects.Count);
+        Assert.Equal(new PixelRect(32, 16, 8, 8), rects[0]);
+        Assert.Equal(new PixelRect(40, 16, 8, 8), rects[1]);
+        Assert.Equal(new PixelRect(32, 24, 8, 8), rects[2]);
+        Assert.Equal(new PixelRect(40, 24, 8, 8), rects[3]);
+    }
+
+    [Fact]
+    public void ComputeSubCellRects_GridSize3_ProducesNine8x8RectsInRasterOrder()
+    {
+        var block = new PixelRect(0, 0, 24, 24);
+
+        var rects = AtlasSliceParameters.ComputeSubCellRects(block, 3);
+
+        Assert.Equal(9, rects.Count);
+        Assert.Equal(new PixelRect(0, 0, 8, 8), rects[0]);
+        Assert.Equal(new PixelRect(8, 0, 8, 8), rects[1]);
+        Assert.Equal(new PixelRect(16, 0, 8, 8), rects[2]);
+        Assert.Equal(new PixelRect(0, 8, 8, 8), rects[3]);
+        Assert.Equal(new PixelRect(16, 16, 8, 8), rects[8]);
+    }
 }

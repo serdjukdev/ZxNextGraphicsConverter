@@ -178,8 +178,15 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog() == true)
         {
-            var placeTransparentFirst = slicerVm.CanOfferTransparentTileFirst && slicerVm.PlaceTransparentTileFirst;
-            await _viewModel.ImportSlicedAsync(source, category, folderPath, slicerVm.BuildParameters(), slicerVm.SkipDuplicateCells, placeTransparentFirst);
+            if (slicerVm.SliceIntoMetatileBlocks && slicerVm.ResolvedGridSize is { } gridSize)
+            {
+                await _viewModel.ImportSlicedAsMetatilesAsync(source, category, folderPath, slicerVm.BuildParameters(), gridSize, slicerVm.SkipDuplicateCells);
+            }
+            else
+            {
+                var placeTransparentFirst = slicerVm.CanOfferTransparentTileFirst && slicerVm.PlaceTransparentTileFirst;
+                await _viewModel.ImportSlicedAsync(source, category, folderPath, slicerVm.BuildParameters(), slicerVm.SkipDuplicateCells, placeTransparentFirst);
+            }
         }
     }
 

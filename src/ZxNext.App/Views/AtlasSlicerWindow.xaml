@@ -52,6 +52,13 @@
         <CheckBox Content="Skip duplicate cells (identical pixels imported only once)"
                   IsChecked="{Binding SkipDuplicateCells}" Margin="0,8,0,0" />
 
+        <CheckBox x:Name="MetatileBlocksCheckBox"
+                  Content="Slice into metatile blocks (auto-creates a metatile per block)"
+                  IsChecked="{Binding SliceIntoMetatileBlocks}" Margin="0,8,0,0"
+                  Visibility="{Binding SupportsMetatileBlockSlicing, Converter={StaticResource BoolToVis}}"
+                  Checked="MetatileBlocksCheckBox_OnChecked"
+                  ToolTip="Cuts the atlas into NxN-tile blocks (N = this project's metatile size) instead of individual 8x8 tiles, splitting each block into its 8x8 tiles and auto-building a metatile from them." />
+
         <CheckBox Content="Place the transparent tile first (index 0)" IsChecked="{Binding PlaceTransparentTileFirst}" Margin="0,4,0,0"
                   Visibility="{Binding CanOfferTransparentTileFirst, Converter={StaticResource BoolToVis}}"
                   ToolTip="This slice includes a fully transparent cell and this category has no designated transparent tile yet — put it at the front of the list so it's easy to find (e.g. as a 'walk-through' tile) instead of scrolling through the rest." />

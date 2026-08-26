@@ -22,4 +22,24 @@ public class AtlasSliceParameters
         }
         return rects;
     }
+
+    /// <summary>
+    /// Splits one big metatile-block cell (e.g. 16x16 for GridSize=2) into its gridSize*gridSize 8x8
+    /// sub-tile rectangles, in raster order (row*gridSize+col) — the same order
+    /// <see cref="Model.Metatile.Cells"/> is indexed in (see TileGridBitmapRenderer.RenderMetatile), so the
+    /// result can be fed straight into a <see cref="Model.MetatileCell"/> list with no reordering.
+    /// </summary>
+    public static IReadOnlyList<PixelRect> ComputeSubCellRects(PixelRect block, int gridSize)
+    {
+        const int tileSize = 8;
+        var rects = new List<PixelRect>(gridSize * gridSize);
+        for (var row = 0; row < gridSize; row++)
+        {
+            for (var col = 0; col < gridSize; col++)
+            {
+                rects.Add(new PixelRect(block.X + col * tileSize, block.Y + row * tileSize, tileSize, tileSize));
+            }
+        }
+        return rects;
+    }
 }

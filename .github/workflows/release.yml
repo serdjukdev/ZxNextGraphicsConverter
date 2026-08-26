@@ -1,6 +1,6 @@
 name: Release
 
-# Runs ONLY when a version tag is pushed (e.g. `git push origin v0.1.0`) — never on an ordinary
+# Runs ONLY when a version tag is pushed (e.g. `git push origin v0.1.0`), never on an ordinary
 # commit/PR push. The pushed tag name (minus the leading "v") becomes the app's <Version> for this
 # build, so there is no separate version number to remember to bump anywhere else: pushing a new
 # tag is the only thing that produces a new release, and re-pushing an existing tag name is
@@ -44,26 +44,61 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           -o publish/self-contained
 
+      # File names carry the version so a user comparing two downloaded releases side by side (or
+      # keeping several around) can tell them apart without opening either one. sample-project.zxngc
+      # deliberately does NOT get a version in its name: it's meant as one evolving example the user
+      # adds content to over time across releases, not a per-version snapshot.
       - name: Stage release assets
         shell: pwsh
         run: |
+          $version = "${{ steps.version.outputs.version }}"
           New-Item -ItemType Directory -Force -Path release-assets | Out-Null
-          Copy-Item publish/framework-dependent/ZxNext.App.exe release-assets/ZxNextStudio-x64.exe
-          Copy-Item publish/self-contained/ZxNext.App.exe release-assets/ZxNextStudio-x64-standalone.exe
+          Copy-Item publish/framework-dependent/ZxNext.App.exe "release-assets/ZxNextStudio-v$version-x64.exe"
+          Copy-Item publish/self-contained/ZxNext.App.exe "release-assets/ZxNextStudio-v$version-x64-standalone.exe"
           Copy-Item sample-projects/sample-project.zxngc release-assets/sample-project.zxngc
+
+      # Pulls this version's own section straight out of CHANGELOG.md (the "## vX.Y.Z (date)" heading
+      # matching this tag, up to the next "## " heading or end of file) so the GitHub Release notes are
+      # never just the generic download blurb below, always the actual list of what changed. Requires
+      # CHANGELOG.md to already have that section (move its bullets out of "## Unreleased" into a dated
+      # "## vX.Y.Z (date)" heading before tagging) - if it's missing, the release still publishes, just
+      # with a note saying so instead of failing the whole workflow over a documentation slip.
+      - name: Extract this version's changelog section
+        id: changelog
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $changelog = Get-Content -Raw -Encoding utf8 CHANGELOG.md
+          $pattern = "(?ms)^## v$([regex]::Escape($version))\b.*?(?=^## |\z)"
+          $match = [regex]::Match($changelog, $pattern)
+          if ($match.Success) {
+            $lines = $match.Value -split "`r?`n"
+            $changes = (($lines | Select-Object -Skip 1) -join "`n").Trim()
+          } else {
+            $changes = "_No CHANGELOG.md entry found for v$version._"
+          }
+
+          $body = @"
+          ## ZxNext Studio $version
+
+          Two builds, pick one:
+
+          - **ZxNextStudio-v$version-x64.exe** (small): requires the [.NET 9 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/9.0) to already be installed.
+          - **ZxNextStudio-v$version-x64-standalone.exe** (large, ~135 MB): no dependencies, just run it. Nothing else needed.
+
+          Both are single files, 64-bit Windows only.
+
+          Also included: **sample-project.zxngc**, a ready-made project you can open straight away (File → Open) to explore tiles, sprites, maps, object types, and links without starting from scratch.
+
+          ## What's changed
+
+          $changes
+          "@
+
+          Set-Content -Path release-notes.md -Value $body -Encoding utf8NoBOM
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: release-assets/*
-          body: |
-            ## ZxNext Studio ${{ steps.version.outputs.version }}
-
-            Two builds — pick one:
-
-            - **ZxNextStudio-x64.exe** (small) — requires the [.NET 9 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/9.0) to already be installed.
-            - **ZxNextStudio-x64-standalone.exe** (large, ~135 MB) — no dependencies, just run it. Nothing else needed.
-
-            Both are single files, 64-bit Windows only.
-
-            Also included: **sample-project.zxngc**, a ready-made project you can open straight away (File → Open) to explore tiles, sprites, maps, object types, and links without starting from scratch.
+          body_path: release-notes.md

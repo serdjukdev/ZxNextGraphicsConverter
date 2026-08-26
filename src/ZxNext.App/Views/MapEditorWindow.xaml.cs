@@ -28,6 +28,9 @@ public partial class MapEditorWindow : Window
     private Point _dragStartPixel;
     private Point _dragCurrentPixel;
 
+    /// <summary>Which object the Set Type popup is currently open for — set right before opening <see cref="SetTypePopup"/>, read by <see cref="SetTypePopupItem_OnClick"/> once the user picks a type from it.</summary>
+    private SpritePlacement? _setTypePopupTarget;
+
     public MapEditorWindow()
     {
         InitializeComponent();
@@ -37,12 +40,12 @@ public partial class MapEditorWindow : Window
             {
                 vm.PropertyChanged += MapEditorVm_OnPropertyChanged;
                 vm.SelectedSprites.CollectionChanged += (_, _) => DrawSelectionOverlay();
-                vm.MapResized += () => { DrawGrid(); DrawSelectionOverlay(); DrawLinksOverlay(); DrawLinkToolOverlay(); };
+                vm.MapResized += () => { DrawGrid(); DrawSelectionOverlay(); DrawLinksOverlay(); DrawObjectToolOverlay(); };
             }
             DrawGrid();
             DrawSelectionOverlay();
             DrawLinksOverlay();
-            DrawLinkToolOverlay();
+            DrawObjectToolOverlay();
         };
     }
 
@@ -63,11 +66,11 @@ public partial class MapEditorWindow : Window
         if (e.PropertyName is nameof(MapEditorViewModel.SelectedMap) or nameof(MapEditorViewModel.MapPreview))
         {
             DrawLinksOverlay(); // every sprite-layer mutation (paint/erase/move/copy/delete/link/undo) already calls RenderPreview(), which changes MapPreview — piggybacking on that covers every case without a dedicated event
-            DrawLinkToolOverlay(); // same piggyback: the object list this draws from only changes together with MapPreview
+            DrawObjectToolOverlay(); // same piggyback: the object list this draws from only changes together with MapPreview
         }
-        if (e.PropertyName is nameof(MapEditorViewModel.LinkSource) or nameof(MapEditorViewModel.IsLinkToolActive))
+        if (e.PropertyName is nameof(MapEditorViewModel.LinkSource) or nameof(MapEditorViewModel.IsLinkToolActive) or nameof(MapEditorViewModel.IsSetTypeToolActive))
         {
-            DrawLinkToolOverlay();
+            DrawObjectToolOverlay();
         }
     }
 
@@ -163,6 +166,17 @@ public partial class MapEditorWindow : Window
             return;
         }
 
+        if (vm.IsSetTypeToolActive)
+        {
+            // Takes over the click entirely so normal paint/select never also fires, but the actual hit-test
+            // and popup-open happen on the matching MouseLeftButtonUp instead (see that handler) — opening a
+            // StaysOpen="False" Popup from MouseDown means its own dismiss-on-outside-click logic still has
+            // this same click's pending MouseUp to evaluate, and dismisses unless that release happens to
+            // land back inside the popup's bounds. Waiting for Up means the click gesture that identifies
+            // the target object is already fully finished before the popup exists at all.
+            return;
+        }
+
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
         {
             StartSelectDrag(vm, pixelX, pixelY);
@@ -193,6 +207,17 @@ public partial class MapEditorWindow : Window
         var snapToGrid = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         vm.PaintOrEraseAt(pixelX, pixelY, snapToGrid: snapToGrid, forceErase: forceErase);
         UpdateHoverHighlight(vm, pixelX, pixelY);
+    }
+
+    /// <summary>Click handler for one entry in <see cref="SetTypePopup"/> (bound to <see cref="MapEditorViewModel.ObjectTypePalette"/>, including the "(none)" sentinel to clear a type). Applies the picked type to <see cref="_setTypePopupTarget"/> and closes the popup; the Set Type tool itself stays armed for the next click.</summary>
+    private void SetTypePopupItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        SetTypePopup.IsOpen = false;
+        if (DataContext is not MapEditorViewModel vm || _setTypePopupTarget is null) return;
+        if (((Button)sender).Tag is not ObjectType type) return;
+
+        vm.ApplyObjectType(_setTypePopupTarget, type);
+        _setTypePopupTarget = null;
     }
 
     private void MapCanvasHost_OnMouseMove(object sender, MouseEventArgs e)
@@ -381,32 +406,34 @@ public partial class MapEditorWindow : Window
     }
 
     /// <summary>
-    /// Draws the Link tool's own candidate-highlight overlay: while armed, every object on the Sprite layer
-    /// gets a gray bounding box (they're all clickable), and once the first click has picked object A, its
-    /// box is redrawn green on top. Deliberately a separate canvas from <see cref="HoverOverlay"/> (which
-    /// MapCanvasHost_OnMouseMove's UpdateHoverHighlight clears unconditionally on every mouse move) and from
-    /// <see cref="SelectionOverlay"/> (the ordinary Alt-drag marquee/move selection, which Link never uses —
-    /// clicks are intercepted before that path even runs) so the A highlight doesn't flicker away as the
-    /// user moves the mouse toward object B.
+    /// Draws the shared candidate-highlight overlay for both the Link and Set Type tools: while either is
+    /// armed, every object on the Sprite layer gets a gray bounding box (they're all clickable), and, for
+    /// Link only, once the first click has picked object A, its box is redrawn green on top (Set Type has no
+    /// equivalent "half-done" state since each click is independent). Deliberately a separate canvas from
+    /// <see cref="HoverOverlay"/> (which MapCanvasHost_OnMouseMove's UpdateHoverHighlight clears
+    /// unconditionally on every mouse move) and from <see cref="SelectionOverlay"/> (the ordinary Alt-drag
+    /// marquee/move selection, which neither tool uses, clicks are intercepted before that path even runs)
+    /// so a highlight doesn't flicker away as the mouse moves.
     /// </summary>
-    private void DrawLinkToolOverlay()
+    private void DrawObjectToolOverlay()
     {
-        LinkToolOverlay.Children.Clear();
-        if (DataContext is not MapEditorViewModel vm || vm.SelectedMap is null || !vm.IsLinkToolActive) return;
+        ObjectToolOverlay.Children.Clear();
+        if (DataContext is not MapEditorViewModel vm || vm.SelectedMap is null) return;
+        if (!vm.IsLinkToolActive && !vm.IsSetTypeToolActive) return;
         if (!vm.SelectedMap.Map.SpriteLayerVisible) return;
 
         foreach (var sprite in vm.SelectedMap.Map.SpriteLayer)
         {
-            DrawLinkOverlayRect(sprite.X, sprite.Y, Brushes.Gray, Color.FromArgb(50, 128, 128, 128));
+            DrawObjectOverlayRect(sprite.X, sprite.Y, Brushes.Gray, Color.FromArgb(50, 128, 128, 128));
         }
 
-        if (vm.LinkSource is { } source)
+        if (vm.IsLinkToolActive && vm.LinkSource is { } source)
         {
-            DrawLinkOverlayRect(source.X, source.Y, Brushes.LimeGreen, Color.FromArgb(90, 0, 255, 0));
+            DrawObjectOverlayRect(source.X, source.Y, Brushes.LimeGreen, Color.FromArgb(90, 0, 255, 0));
         }
     }
 
-    private void DrawLinkOverlayRect(int x, int y, Brush stroke, Color fill)
+    private void DrawObjectOverlayRect(int x, int y, Brush stroke, Color fill)
     {
         var rect = new Rectangle
         {
@@ -418,7 +445,7 @@ public partial class MapEditorWindow : Window
         };
         Canvas.SetLeft(rect, x);
         Canvas.SetTop(rect, y);
-        LinkToolOverlay.Children.Add(rect);
+        ObjectToolOverlay.Children.Add(rect);
     }
 
     /// <summary>Draws one arrowed line per active <see cref="SpritePlacement.LinkedPlacementId"/> on the current map's Sprite layer, center-to-center. A reciprocal pair (A links to B AND B links to A) is offset apart perpendicular to the line so both directions stay visible instead of overlapping into one line.</summary>
@@ -540,7 +567,22 @@ public partial class MapEditorWindow : Window
         HoverOverlay.Children.Add(highlight);
     }
 
-    private void MapCanvasHost_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e) => EndDrawing();
+    private void MapCanvasHost_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is MapEditorViewModel vm && vm.IsSetTypeToolActive)
+        {
+            var position = e.GetPosition(MapImage);
+            _setTypePopupTarget = vm.FindSpriteAt((int)position.X, (int)position.Y);
+            if (_setTypePopupTarget is not null)
+            {
+                vm.BuildSetTypePopupItems(_setTypePopupTarget);
+                SetTypePopup.IsOpen = true;
+            }
+            return;
+        }
+
+        EndDrawing();
+    }
 
     private void MapCanvasHost_OnLostMouseCapture(object sender, MouseEventArgs e)
     {

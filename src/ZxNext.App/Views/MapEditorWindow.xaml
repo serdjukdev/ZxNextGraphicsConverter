@@ -131,17 +131,7 @@
             </Grid>
 
             <Grid Grid.Row="2" Margin="0,0,0,6" Visibility="{Binding IsSpritesLayerActive, Converter={StaticResource BoolToVis}}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="Selected object's type" FontSize="10" Foreground="Gray" />
-                    <ComboBox ItemsSource="{Binding ObjectTypePalette}" SelectedItem="{Binding SelectedTypeForAssignment}"
-                              DisplayMemberPath="Name" IsEnabled="{Binding HasSelection}" />
-                    <TextBlock Text="{Binding TypeAssignmentHint}" FontSize="9" Foreground="Gray" />
-                </StackPanel>
-                <Button Grid.Column="1" Content="Manage Types..." Click="ManageTypes_OnClick" VerticalAlignment="Bottom" Margin="6,0,0,0" />
+                <Button Content="Manage Types..." Click="ManageTypes_OnClick" HorizontalAlignment="Left" />
             </Grid>
 
             <TextBlock Grid.Row="4" Margin="0,0,0,4" TextWrapping="Wrap"
@@ -199,21 +189,38 @@
                 </ListBox>
             </Border>
 
-            <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,8,0,0">
-                <Button Content="Fill Selection" Command="{Binding FillSelectionCommand}" IsEnabled="{Binding CanFillSelection}" Width="100" Margin="0,0,6,0" />
-                <Button Content="Delete Selection" Command="{Binding DeleteSelectionCommand}" IsEnabled="{Binding HasSelection}" Width="110" Margin="0,0,6,0" />
-                <Button Content="{Binding LinkButtonText}" Command="{Binding ToggleLinkToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}" Width="80" Margin="0,0,6,0" ToolTip="Link two objects: click one, then click the other.">
-                    <Button.Style>
-                        <Style TargetType="Button">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsLinkToolActive}" Value="True">
-                                    <Setter Property="Background" Value="Orange" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-                <Button Content="Undo (Ctrl+Z)" Command="{Binding UndoCommand}" Width="110" />
+            <StackPanel Grid.Row="6" Margin="0,8,0,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <Button Content="Fill Selection" Command="{Binding FillSelectionCommand}" IsEnabled="{Binding CanFillSelection}" Width="100" Margin="0,0,6,0" />
+                    <Button Content="Delete Selection" Command="{Binding DeleteSelectionCommand}" IsEnabled="{Binding HasSelection}" Width="110" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <Button Content="{Binding LinkButtonText}" Command="{Binding ToggleLinkToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}" Width="105" Margin="0,0,6,0" ToolTip="Link two objects: click one, then click the other.">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsLinkToolActive}" Value="True">
+                                        <Setter Property="Background" Value="Orange" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Content="Set Type" Command="{Binding ToggleSetTypeToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}" Width="105" ToolTip="Click objects one after another to pick a type for each from a popup.">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSetTypeToolActive}" Value="True">
+                                        <Setter Property="Background" Value="Orange" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Undo (Ctrl+Z)" Command="{Binding UndoCommand}" Width="110" />
+                </StackPanel>
             </StackPanel>
         </Grid>
 
@@ -260,12 +267,42 @@
                         <Image x:Name="MapImage" Source="{Binding MapPreview}" Stretch="None" RenderOptions.BitmapScalingMode="NearestNeighbor" />
                         <Canvas x:Name="GridOverlay" IsHitTestVisible="False" />
                         <Canvas x:Name="LinksOverlay" IsHitTestVisible="False" />
-                        <Canvas x:Name="LinkToolOverlay" IsHitTestVisible="False" />
+                        <Canvas x:Name="ObjectToolOverlay" IsHitTestVisible="False" />
                         <Canvas x:Name="HoverOverlay" IsHitTestVisible="False" />
                         <Canvas x:Name="SelectionOverlay" IsHitTestVisible="False" />
                     </Grid>
                 </ScrollViewer>
             </Border>
         </DockPanel>
+
+        <!-- Deliberately OUTSIDE the DockPanel/MapCanvasHost above: that Grid carries the zoom LayoutTransform
+             (MapZoomTransform), which was bleeding into this Popup's content and rendering it at the current
+             zoom scale (huge at high zoom) — Placement="Mouse" positions it from the live cursor position
+             regardless of where it sits in the tree, so it doesn't need to be nested under the canvas at all. -->
+        <Popup x:Name="SetTypePopup" Placement="Mouse" StaysOpen="False" AllowsTransparency="True">
+            <Border Background="White" BorderBrush="#666" BorderThickness="1" Padding="2">
+                <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding SetTypePopupItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Content="{Binding Type.Name}" Click="SetTypePopupItem_OnClick" Tag="{Binding Type}"
+                                        HorizontalContentAlignment="Left" Padding="8,3" Margin="0,1" MinWidth="90">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                    <Setter Property="Background" Value="#CCE4FF" />
+                                                    <Setter Property="FontWeight" Value="Bold" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+        </Popup>
     </Grid>
 </Window>

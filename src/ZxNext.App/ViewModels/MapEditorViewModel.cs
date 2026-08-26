@@ -104,7 +104,6 @@ public partial class MapEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanFillSelection))]
     [NotifyPropertyChangedFor(nameof(CanvasHintText))]
     [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
-    [NotifyPropertyChangedFor(nameof(TypeAssignmentHint))]
     private MapLayerKind activeLayer = MapLayerKind.Tilemap;
 
     public bool IsGridLayerActive => ActiveLayer != MapLayerKind.Sprites;
@@ -140,7 +139,6 @@ public partial class MapEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanFillSelection))]
     [NotifyPropertyChangedFor(nameof(CanvasHintText))]
     [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
-    [NotifyPropertyChangedFor(nameof(TypeAssignmentHint))]
     private CellRect? gridSelection;
 
     /// <summary>Active only on the Sprite layer — the sprites currently selected by the Select tool's marquee (bounding-box intersection), populated in place of GridSelection.</summary>
@@ -171,9 +169,6 @@ public partial class MapEditorViewModel : ObservableObject
         }
     }
 
-    /// <summary>Empty once an object is selected (the type ComboBox becomes usable) — shown next to it so the reason it starts disabled isn't a mystery.</summary>
-    public string TypeAssignmentHint => HasSelection ? "" : "Select an object first (Alt-drag on the canvas).";
-
     /// <summary>One shared grid overlay toggle for the whole canvas (fine 8x8 tile grid + brighter metatile-size grid) — not per-layer, since all layers occupy the same cell grid.</summary>
     [ObservableProperty]
     private bool isGridVisible = true;
@@ -190,11 +185,19 @@ public partial class MapEditorViewModel : ObservableObject
     [ObservableProperty]
     private ObservableCollection<ObjectType> objectTypePalette = [];
 
-    private bool _isSyncingTypeAssignment;
+    /// <summary>One row for the Set Type tool's popup: pairs a real <see cref="ObjectType"/> with whether it's the type currently assigned to whichever object the popup was opened for, so that entry can be highlighted. Rebuilt fresh by <see cref="BuildSetTypePopupItems"/> every time the popup opens, not a live-updating view.</summary>
+    public sealed record SetTypePopupItem(ObjectType Type, bool IsCurrent);
 
-    /// <summary>Bound to the Sprites-layer inspector's type ComboBox — reflects the (first) selected sprite's current TypeId, and assigning a different value here applies it to every currently selected sprite. See <see cref="OnSelectedTypeForAssignmentChanged"/>.</summary>
     [ObservableProperty]
-    private ObjectType? selectedTypeForAssignment;
+    private ObservableCollection<SetTypePopupItem> setTypePopupItems = [];
+
+    /// <summary>Called by the View right before opening the Set Type popup for <paramref name="target"/> — builds <see cref="SetTypePopupItems"/> with whichever entry matches the object's current type flagged for highlighting.</summary>
+    public void BuildSetTypePopupItems(SpritePlacement target)
+    {
+        var currentId = target.TypeId ?? Guid.Empty;
+        SetTypePopupItems = new ObservableCollection<SetTypePopupItem>(
+            ObjectTypePalette.Select(t => new SetTypePopupItem(t, t.Id == currentId)));
+    }
 
     /// <summary>Exposed only so the View can open the Object Types management dialog without duplicating ProjectState plumbing — the dialog mutates <see cref="ProjectState.ObjectTypes"/> directly, same as every other list-management dialog in this app.</summary>
     public ProjectState Project => _project;
@@ -211,6 +214,10 @@ public partial class MapEditorViewModel : ObservableObject
     /// <summary>Drives the Link button's label through its three states: idle, armed waiting for the first click (object A), armed waiting for the second click (object B) — computed here rather than via XAML DataTrigger, since a MultiDataTrigger/DataTrigger mix on the same property previously resolved by trigger-type precedence instead of declaration order (see the Object Types/Linking hardening pass, 2026-08-23).</summary>
     public string LinkButtonText => !IsLinkToolActive ? "Link" : LinkSource is null ? "Click A" : "Click B";
 
+    /// <summary>True while the Set Type tool is armed (Sprites layer only) — every canvas click on an object opens the type-picker popup for it and applies the pick immediately. Unlike the Link tool this does NOT auto-deactivate after one click, since tagging a batch of objects one after another is the whole point. See <see cref="ToggleSetTypeTool"/>/<see cref="ApplyObjectType"/>.</summary>
+    [ObservableProperty]
+    private bool isSetTypeToolActive;
+
     public MapEditorViewModel(ProjectState project)
     {
         _project = project;
@@ -223,8 +230,6 @@ public partial class MapEditorViewModel : ObservableObject
             OnPropertyChanged(nameof(HasSelection));
             OnPropertyChanged(nameof(CanvasHintText));
             OnPropertyChanged(nameof(CanvasHintForeground));
-            OnPropertyChanged(nameof(TypeAssignmentHint));
-            SyncTypeAssignmentFromSelection();
         };
         SelectedLayerRow = LayerOrder.First(r => r.Kind == MapLayerKind.Tilemap);
         RefreshObjectTypePalette();
@@ -377,6 +382,7 @@ public partial class MapEditorViewModel : ObservableObject
         _undoStack.Clear(); // a stroke's undo closures capture the previously-selected map's arrays — never valid across a map switch
         ClearSelection();
         CancelLinkTool(); // LinkSource points at a placement on the map we're leaving
+        CancelSetTypeTool();
         RefreshMetatilePalette();
         RefreshSpritePalette();
         RenderPreview();
@@ -386,48 +392,14 @@ public partial class MapEditorViewModel : ObservableObject
     {
         ClearSelection(); // GridSelection/SelectedSprites are each meaningful for only one kind of layer — never valid across a layer switch
         CancelLinkTool(); // the Link tool only makes sense on the Sprites layer
+        CancelSetTypeTool(); // ditto for Set Type
         RefreshMetatilePalette();
     }
 
-    /// <summary>Refreshes the type-assignment ComboBox's source list — call after Object Types are added/renamed/deleted via the management dialog, since that dialog mutates <see cref="ProjectState.ObjectTypes"/> directly without this ViewModel otherwise noticing.</summary>
+    /// <summary>Refreshes the type popup's source list — call after Object Types are added/renamed/deleted via the management dialog, since that dialog mutates <see cref="ProjectState.ObjectTypes"/> directly without this ViewModel otherwise noticing.</summary>
     public void RefreshObjectTypePalette()
     {
         ObjectTypePalette = new ObservableCollection<ObjectType>(new[] { NoTypeSentinel }.Concat(_project.ObjectTypes));
-        SyncTypeAssignmentFromSelection();
-    }
-
-    private void SyncTypeAssignmentFromSelection()
-    {
-        _isSyncingTypeAssignment = true;
-        try
-        {
-            var first = SelectedSprites.FirstOrDefault();
-            SelectedTypeForAssignment = first is null
-                ? null
-                : ObjectTypePalette.FirstOrDefault(t => t.Id == first.TypeId) ?? NoTypeSentinel;
-        }
-        finally
-        {
-            _isSyncingTypeAssignment = false;
-        }
-    }
-
-    /// <summary>Applies the newly-picked type to every currently selected sprite — a bulk "set", not a per-sprite toggle, since a multi-selection with mixed types has no single value to show anyway (falls back to the first sprite's type — see SyncTypeAssignmentFromSelection). One combined undo step.</summary>
-    partial void OnSelectedTypeForAssignmentChanged(ObjectType? value)
-    {
-        if (_isSyncingTypeAssignment || value is null || SelectedSprites.Count == 0) return;
-
-        var newTypeId = value.Id == Guid.Empty ? (Guid?)null : value.Id;
-        var original = SelectedSprites.Select(s => (Sprite: s, s.TypeId)).ToList();
-        foreach (var sprite in SelectedSprites) sprite.TypeId = newTypeId;
-        _undoStack.Push(() =>
-        {
-            foreach (var (sprite, typeId) in original) sprite.TypeId = typeId;
-            RenderPreview();
-        });
-
-        HasChanges = true;
-        RenderPreview();
     }
 
     [RelayCommand]
@@ -440,6 +412,7 @@ public partial class MapEditorViewModel : ObservableObject
         }
         if (!IsSpritesLayerActive) return;
 
+        CancelSetTypeTool(); // only one canvas-click-intercepting tool armed at a time
         ClearSelection();
         LinkSource = null;
         IsLinkToolActive = true;
@@ -449,6 +422,50 @@ public partial class MapEditorViewModel : ObservableObject
     {
         IsLinkToolActive = false;
         LinkSource = null;
+    }
+
+    [RelayCommand]
+    private void ToggleSetTypeTool()
+    {
+        if (IsSetTypeToolActive)
+        {
+            CancelSetTypeTool();
+            return;
+        }
+        if (!IsSpritesLayerActive) return;
+        if (_project.ObjectTypes.Count == 0)
+        {
+            StatusText = "Create an object type first (Manage Types...).";
+            IsStatusError = true;
+            return;
+        }
+
+        CancelLinkTool(); // only one canvas-click-intercepting tool armed at a time
+        ClearSelection();
+        IsSetTypeToolActive = true;
+    }
+
+    private void CancelSetTypeTool()
+    {
+        IsSetTypeToolActive = false;
+    }
+
+    /// <summary>Applies a type to exactly one placement, the Set Type tool's click target. Called by the View once the user picks an entry from the type-picker popup.</summary>
+    public void ApplyObjectType(SpritePlacement sprite, ObjectType type)
+    {
+        var newTypeId = type.Id == Guid.Empty ? (Guid?)null : type.Id;
+        if (sprite.TypeId == newTypeId) return;
+
+        var previous = sprite.TypeId;
+        sprite.TypeId = newTypeId;
+        _undoStack.Push(() =>
+        {
+            sprite.TypeId = previous;
+            RenderPreview();
+        });
+
+        HasChanges = true;
+        RenderPreview();
     }
 
     /// <summary>Called by the View on a canvas click while the Link tool is armed — <paramref name="clicked"/> is whatever <see cref="FindSpriteAt"/> hit, or null for empty space. First hit becomes the link source; a second, DIFFERENT hit commits <see cref="SpritePlacement.LinkedPlacementId"/> and deactivates the tool. Clicking empty space or the source again is a no-op (stays armed) rather than cancelling — cancelling is the button's job.</summary>

@@ -237,8 +237,11 @@
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Trim' button" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Auto-crops the map to the tightest box containing any real content, considering BOTH grid layers together plus every sprite's footprint (never just whichever layer happens to be selected) — never drops anything by construction. No-ops with a message if the map is completely empty." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Object type dropdown / 'Manage Types...' (Sprite layer)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Object types are project-wide categories (e.g. 'portal', 'character') for map objects — not visual, just an ID a game's own code can check. 'Manage Types...' adds/renames/deletes them (delete is blocked while any object still uses that type); the dropdown assigns the picked type to every currently selected sprite." />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="'Manage Types...' button (Sprite layer)" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Object types are project-wide categories (e.g. 'portal', 'character') for map objects — not visual, just an ID a game's own code can check. Adds/renames/deletes them (delete is blocked while any object still uses that type). To assign a type to an object, use the 'Set Type' button below." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="'Set Type' button (Sprite layer)" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Click the button (requires at least one object type to already exist): every object on the map gets a gray outline. Click any object: a small popup lists the available types, click one to apply it and close the popup. The tool stays armed, so you can keep clicking through several objects in a row; click the button again to stop." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Link' button (Sprite layer)" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Click the button (now labeled 'Click A') — every object on the map gets a gray outline to show it's clickable. Click the first object: it turns green and the button switches to 'Click B'. Click a different object: a cyan arrow (pointing at the second object) records that the first links to the second, e.g. a button that opens a specific door, and all outlines clear. Deleting either object removes the link. If two objects link to each other, both arrows are drawn slightly apart so both stay visible." />

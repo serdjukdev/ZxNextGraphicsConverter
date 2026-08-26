@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added: Atlas Slicer can now cut a Tile4Bpp/Tile8Bpp atlas straight into the project's fixed metatile blocks (16×16/24×24/32×32, matching the project's chosen metatile size) instead of only individual 8x8 tiles — each block's tiles are imported (duplicate tiles within the same slicing pass are reused, same rule as "Skip duplicate cells"), and a metatile is auto-created from the result. If the project's metatile size isn't chosen yet, checking the new option asks for it right away. A block where any tile fails to import (e.g. palette overflow) is skipped entirely rather than creating a metatile with a missing cell.
+- Fixed: painting on a large map (tens of thousands of metatile cells) re-rendered the ENTIRE map from raw pixel data on every single mouse event, causing multi-second freezes proportional to map size. Rendering is now cached (decoded tile/metatile bitmaps are memoized for the editor session) and incremental (paint/erase/fill/delete/move-selection repaint only the affected region instead of the whole canvas) — painting, zooming, and undo all stay responsive regardless of map size.
+
 ## v0.2.0 (2026-08-26)
 
 - Added: a "Set User Byte" tool (Sprite layer) — click it, then click an object to open a small dialog that edits its raw user byte (0-255, exported as the object's 8th byte) as either a number or its 8 individual bits, either one edits the other live. Stays armed after OK so a batch of objects can be tagged one after another; Cancel discards.

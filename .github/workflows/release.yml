@@ -50,11 +50,12 @@ jobs:
           New-Item -ItemType Directory -Force -Path release-assets | Out-Null
           Copy-Item publish/framework-dependent/ZxNext.App.exe release-assets/ZxNextStudio-x64.exe
           Copy-Item publish/self-contained/ZxNext.App.exe release-assets/ZxNextStudio-x64-standalone.exe
+          Copy-Item sample-projects/sample-project.zxngc release-assets/sample-project.zxngc
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/*.exe
+          files: release-assets/*
           body: |
             ## ZxNext Studio ${{ steps.version.outputs.version }}
 
@@ -64,3 +65,5 @@ jobs:
             - **ZxNextStudio-x64-standalone.exe** (large, ~135 MB) — no dependencies, just run it. Nothing else needed.
 
             Both are single files, 64-bit Windows only.
+
+            Also included: **sample-project.zxngc**, a ready-made project you can open straight away (File → Open) to explore tiles, sprites, maps, object types, and links without starting from scratch.

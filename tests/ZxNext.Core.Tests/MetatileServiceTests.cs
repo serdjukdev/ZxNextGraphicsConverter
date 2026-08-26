@@ -202,6 +202,42 @@ public class MetatileServiceTests
     }
 
     [Fact]
+    public void DeleteCascading_PlacedOnMap_RedirectsCellsToReservedBlank_ThenDeletesAndCompacts()
+    {
+        var project = new ProjectState();
+        var a = MetatileService.Create(project, "a", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 1
+        var b = MetatileService.Create(project, "b", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 2 -> deleted
+        var blankIndex = project.Metatiles.Single(m => m.Kind == MetatileKind.FourBpp && m.IsReservedBlank).SortIndex;
+
+        var map = new MapAsset(2, 1)
+        {
+            Name = "level1",
+            MetatileGridSize = 2,
+            TilemapLayer = new MapGridLayer { MetatileIndices = [(byte)a.SortIndex, (byte)b.SortIndex] },
+            TileLayer8Bpp = new MapGridLayer { MetatileIndices = [0, 0] }
+        };
+        project.Maps.Add(map);
+
+        MetatileService.DeleteCascading(project, b);
+
+        Assert.DoesNotContain(project.Metatiles, m => m.Id == b.Id);
+        Assert.Equal(1, map.TilemapLayer.MetatileIndices[0]); // 'a' untouched
+        Assert.Equal(blankIndex, map.TilemapLayer.MetatileIndices[1]); // redirected to the reserved blank instead of left dangling
+    }
+
+    [Fact]
+    public void DeleteCascading_NotPlacedAnywhere_BehavesLikePlainDelete()
+    {
+        var project = new ProjectState();
+        var a = MetatileService.Create(project, "a", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!;
+
+        MetatileService.DeleteCascading(project, a);
+
+        var remaining = Assert.Single(project.Metatiles);
+        Assert.True(remaining.IsReservedBlank);
+    }
+
+    [Fact]
     public void Update_ChangesNameAndCells_ButKeepsIdKindGridSizeSortIndex()
     {
         var project = new ProjectState();

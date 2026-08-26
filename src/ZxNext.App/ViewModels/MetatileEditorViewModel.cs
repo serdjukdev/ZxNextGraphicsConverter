@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -343,17 +344,30 @@ public partial class MetatileEditorViewModel : ObservableObject
     private void DeleteMetatile()
     {
         if (SelectedMetatile is null) return;
+        var metatile = SelectedMetatile.Metatile;
 
-        var check = ReferenceIntegrityService.CanDeleteMetatile(_project, SelectedMetatile.Metatile);
-        if (!check.CanDelete)
+        // The reserved blank metatile stays unconditionally undeletable — unrelated to the cascade below.
+        if (metatile.IsReservedBlank)
         {
-            StatusText = check.BlockingReason;
+            StatusText = $"Cannot delete '{metatile.Name}': it's the reserved blank metatile every map's grid cells default to.";
             IsStatusError = true;
             return;
         }
 
-        var deletedName = SelectedMetatile.Metatile.Name;
-        MetatileService.Delete(_project, SelectedMetatile.Metatile);
+        // Being placed on a map is no longer a hard block — confirm the cascade instead (affected cells
+        // become Blank, see MetatileService.DeleteCascading).
+        var maps = ReferenceIntegrityService.FindMapsReferencingMetatile(_project, metatile);
+        if (maps.Count > 0)
+        {
+            var detail = string.Join(", ", maps.Select(x => $"{x.Map.Name} ({x.CellCount} cell(s))"));
+            var confirm = MessageBox.Show(
+                $"'{metatile.Name}' is placed on map(s) {detail}. Those cells will become Blank. This cannot be undone.\n\nDelete anyway?",
+                "Delete metatile", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (confirm != MessageBoxResult.Yes) return;
+        }
+
+        var deletedName = metatile.Name;
+        MetatileService.DeleteCascading(_project, metatile);
         HasChanges = true;
         // Selecting a metatile in the library always loads it into the draft (see
         // OnSelectedMetatileChanged), so whatever's in the draft right now IS the thing just deleted —

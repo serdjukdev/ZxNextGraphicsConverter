@@ -896,54 +896,96 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var blockingReasons = targetIds
+        var targetAssets = targetIds
             .Select(id => _project.Assets.FirstOrDefault(a => a.Id == id))
             .Where(asset => asset is not null)
-            .Select(asset => ReferenceIntegrityService.CanDeleteAsset(_project, asset!))
-            .Where(check => !check.CanDelete)
-            .Select(check => check.BlockingReason!)
+            .Select(asset => asset!)
             .ToList();
-        if (blockingReasons.Count > 0)
+
+        // The reserved blank tile is still unconditionally undeletable — unrelated to the cascade below,
+        // it has no "delete it too" option, ever.
+        var reservedBlanks = targetAssets.Where(a => a.IsReservedBlank).ToList();
+        if (reservedBlanks.Count > 0)
         {
-            MessageBox.Show(string.Join("\n", blockingReasons), "Cannot delete", MessageBoxButton.OK, MessageBoxImage.Warning);
+            var reasons = reservedBlanks.Select(a => $"Cannot delete '{a.Name}': it's the reserved blank tile every map's grid layer relies on.");
+            MessageBox.Show(string.Join("\n", reasons), "Cannot delete", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        var confirmMessage = targetIds.Count == 1
-            ? "Delete this tile/sprite?"
-            : $"Delete {targetIds.Count} selected tiles/sprites?";
-        var confirm = MessageBox.Show(confirmMessage, "Delete", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        // Tiles used in metatiles / sprites placed on maps are no longer a hard block — see
+        // CascadeDeletionService's own doc comment. The confirmation dialog spells out everything that
+        // would ALSO go: metatiles containing a deleted tile, the map cells that placed them (become
+        // Blank), and every map placement of a deleted sprite.
+        var impact = CascadeDeletionService.PlanAssetDeletion(_project, targetAssets);
+
+        var confirmLines = new List<string>
+        {
+            targetAssets.Count == 1 ? "Delete this tile/sprite?" : $"Delete {targetAssets.Count} selected tiles/sprites?"
+        };
+        if (!impact.IsEmpty)
+        {
+            if (impact.AffectedMetatiles.Count > 0)
+            {
+                confirmLines.Add($"Also deletes {impact.AffectedMetatiles.Count} metatile(s) that use them: {string.Join(", ", impact.AffectedMetatiles.Select(m => m.Name))}.");
+            }
+            if (impact.AffectedMapCells.Count > 0)
+            {
+                var cellDetail = string.Join(", ", impact.AffectedMapCells.Select(x => $"{x.Map.Name} ({x.CellCount} cell(s))"));
+                confirmLines.Add($"{impact.AffectedMapCells.Sum(x => x.CellCount)} map cell(s) will become Blank: {cellDetail}.");
+            }
+            if (impact.AffectedSpritePlacements.Count > 0)
+            {
+                var placementDetail = string.Join(", ", impact.AffectedSpritePlacements.Select(x => $"{x.Map.Name} ({x.PlacementCount})"));
+                confirmLines.Add($"{impact.AffectedSpritePlacements.Sum(x => x.PlacementCount)} sprite placement(s) will be removed: {placementDetail}.");
+            }
+            confirmLines.Add("This cannot be undone.");
+        }
+
+        var confirm = MessageBox.Show(string.Join("\n", confirmLines), "Delete", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes) return;
+
+        if (!impact.IsEmpty)
+        {
+            CascadeDeletionService.ExecuteAssetDeletion(_project, targetAssets, impact);
+        }
 
         var removed = new List<GraphicsAsset>();
         var affectedFlatFolders = new HashSet<(AssetCategory Category, string FolderPath)>();
-        foreach (var id in targetIds)
+        var affectedBankCategories = new HashSet<AssetCategory>();
+        foreach (var asset in targetAssets)
         {
-            var asset = _project.Assets.FirstOrDefault(a => a.Id == id);
-            if (asset is null) continue;
-
-            _project.RemoveAsset(id);
-            Tree.RemoveAssetNode(id, _project); // clears SelectedNode (and so the edit panels, via OnSelectionChanged) if this was the selected asset
+            _project.RemoveAsset(asset.Id);
+            Tree.RemoveAssetNode(asset.Id, _project); // clears SelectedNode (and so the edit panels, via OnSelectionChanged) if this was the selected asset
             removed.Add(asset);
-            if (!asset.Category.UsesPaletteBank()) affectedFlatFolders.Add((asset.Category, asset.FolderPath));
+            if (asset.Category.UsesPaletteBank()) affectedBankCategories.Add(asset.Category);
+            else affectedFlatFolders.Add((asset.Category, asset.FolderPath));
         }
 
         Tree.ClearMultiSelection();
         if (removed.Count == 0) return;
 
-        // A flat folder palette can lose colours no other surviving asset still uses — compact it so that
-        // space is usable again. This remaps every surviving asset's pixel indices, so a plain undo that
-        // just re-adds the removed assets back with their OLD indices would point at the wrong colours;
-        // clear undo instead, same as every other operation in this codebase that rebuilds a shared palette.
-        if (affectedFlatFolders.Count > 0)
+        // A flat folder palette (or, for tile/sprite 4bpp, a bank slot) can lose colours no other
+        // surviving asset still uses — compact it so that space is usable again. This remaps every
+        // surviving asset's pixel indices, so a plain undo that just re-adds the removed assets back
+        // with their OLD indices would point at the wrong colours; clear undo instead, same as every
+        // other operation in this codebase that rebuilds a shared palette. The cascade above (metatile/
+        // map changes) is likewise not undoable, for the same "too complex to safely snapshot" reasoning
+        // DeleteFolder/DeleteSourceImage already use.
+        if (affectedFlatFolders.Count > 0 || affectedBankCategories.Count > 0 || !impact.IsEmpty)
         {
             foreach (var (category, folderPath) in affectedFlatFolders)
             {
                 _project.CompactFlatPalette(category, folderPath);
             }
+            foreach (var category in affectedBankCategories)
+            {
+                _project.CompactPaletteBank(category);
+            }
             _undoStack.Clear();
             RefreshSelectedAssetRender();
-            PixelEditor.StatusText = $"Deleted {removed.Count} tile(s)/sprite(s) and freed unused palette colours.";
+            PixelEditor.StatusText = impact.IsEmpty
+                ? $"Deleted {removed.Count} tile(s)/sprite(s) and freed unused palette colours."
+                : $"Deleted {removed.Count} tile(s)/sprite(s), {impact.AffectedMetatiles.Count} metatile(s), and updated affected map(s).";
         }
         else
         {

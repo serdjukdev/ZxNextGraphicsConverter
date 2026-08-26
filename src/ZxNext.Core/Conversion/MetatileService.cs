@@ -148,6 +148,34 @@ public static class MetatileService
         }
     }
 
+    /// <summary>
+    /// Cascading variant of <see cref="Delete"/> for when the caller has already confirmed with the user
+    /// that every map placing this metatile should have those cells cleared instead of blocking the
+    /// delete (see <see cref="Project.ReferenceIntegrityService.CanDeleteMetatile"/>, which still gates
+    /// the ordinary, non-cascading path). Redirects every map cell that placed this metatile to its
+    /// Kind+GridSize's reserved blank metatile (auto-created if needed) BEFORE calling <see cref="Delete"/>
+    /// — the blanked cells then hold the reserved blank's SortIndex, which never moves (it's always
+    /// first), so <see cref="Delete"/>'s own remap-on-compaction logic can't mistakenly touch them.
+    /// </summary>
+    public static void DeleteCascading(ProjectState project, Metatile metatile)
+    {
+        if (!metatile.IsReservedBlank)
+        {
+            var blankIndex = (byte)ReservedBlankAssetService.EnsureBlankMetatile(project, metatile.Kind, metatile.GridSize).SortIndex;
+            var targetIndex = (byte)metatile.SortIndex;
+            foreach (var map in project.Maps)
+            {
+                var layer = metatile.Kind == MetatileKind.FourBpp ? map.TilemapLayer : map.TileLayer8Bpp;
+                for (var i = 0; i < layer.MetatileIndices.Length; i++)
+                {
+                    if (layer.MetatileIndices[i] == targetIndex) layer.MetatileIndices[i] = blankIndex;
+                }
+            }
+        }
+
+        Delete(project, metatile);
+    }
+
     /// <summary>A metatile's name doubles as its ASM export label (like GraphicsAsset.Name — see AssetImporter.EnsureUniqueName, same auto-suffix approach), so it must be unique among metatiles. Scoped to metatiles only, not cross-checked against GraphicsAsset/map names — those live in visually separate tree areas, and a real collision would fail loudly at ASM assembly time rather than silently corrupting anything.</summary>
     private static string EnsureUniqueName(ProjectState project, string desiredName, Guid? excludeMetatileId = null)
     {

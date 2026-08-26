@@ -165,6 +165,7 @@ public partial class MainViewModel : ObservableObject
         {
             Tree.AddAssetNode(result.Asset!, _project);
             HasUnsavedChanges = true;
+            OnSelectionChanged(); // re-derive whatever the palette panel is currently showing — the newly imported tile may have added colours to a bank slot/folder palette it's displaying; called BEFORE the status text below since OnSelectionChanged sets its own (see OptimizeCurrentBankAsync's own ordering note)
             PixelEditor.StatusText = $"Imported {result.Asset!.Name} into {folderPath} ({category}).";
         }
         else if (result.Reason == ImportFailureReason.RedundantWithReservedBlank)
@@ -209,6 +210,7 @@ public partial class MainViewModel : ObservableObject
         {
             Tree.AddAssetNode(result.Asset!, _project);
             HasUnsavedChanges = true;
+            OnSelectionChanged(); // re-derive whatever the palette panel is currently showing — see the analogous note in ImportIntoCategory
             PixelEditor.StatusText = $"Imported {result.Asset!.Name} into {folderPath} ({category}), {width}x{height}.";
         }
         else
@@ -220,7 +222,8 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Called after the user confirms the atlas slicer dialog for an oversized dropped sprite-sheet/tile-sheet image — can be thousands of cells, so it runs off the UI thread behind a busy indicator. Not used for Layer2 categories, which go through <see cref="ImportLayer2Placement"/> instead (exactly one output image, never a repeating grid).</summary>
-    public async Task ImportSlicedAsync(SourceImageViewModel source, AssetCategory category, string folderPath, AtlasSliceParameters parameters, bool skipDuplicateCells, bool placeTransparentTileFirst = false)
+    public async Task ImportSlicedAsync(SourceImageViewModel source, AssetCategory category, string folderPath, AtlasSliceParameters parameters,
+        bool skipDuplicateCells, bool placeTransparentTileFirst = false, IReadOnlyList<bool>? includedUnits = null)
     {
         var decoded = DecodeSource(source);
         var rects = parameters.ComputeCellRects(decoded.Width, decoded.Height);
@@ -231,6 +234,7 @@ public partial class MainViewModel : ObservableObject
             var imported = new List<GraphicsAsset>();
             var failed = 0;
             var duplicatesSkipped = 0;
+            var excludedBySelection = 0;
             var reportStep = Math.Max(1, rects.Count / 100);
 
             await Task.Run(() =>
@@ -241,6 +245,12 @@ public partial class MainViewModel : ObservableObject
                     if (i % reportStep == 0 || i == rects.Count - 1)
                     {
                         progress.Report(new BusyProgress($"Slicing {source.Model.FileName}: cell {i + 1}/{rects.Count}...", i + 1, rects.Count));
+                    }
+
+                    if (includedUnits is not null && i < includedUnits.Count && !includedUnits[i])
+                    {
+                        excludedBySelection++;
+                        continue;
                     }
 
                     var cellRgba = PixelRectExtractor.Extract(decoded.Rgba32, decoded.Width, rect);
@@ -298,10 +308,12 @@ public partial class MainViewModel : ObservableObject
             SyncReservedBlankAssetNodes(); // the category's reserved blank tile may have been auto-created mid-slice (first cell in) and never got a node of its own above
 
             if (imported.Count > 0) HasUnsavedChanges = true;
+            OnSelectionChanged(); // re-derive whatever the palette panel is currently showing — see the analogous note in ImportIntoCategory; harmless no-op when nothing was imported
 
             var message = $"Sliced {source.Model.FileName}: {imported.Count} cell(s) imported into {folderPath}.";
             if (movedTransparentToFront) message += " Transparent tile placed first.";
             if (duplicatesSkipped > 0) message += $" {duplicatesSkipped} duplicate(s) skipped.";
+            if (excludedBySelection > 0) message += $" {excludedBySelection} cell(s) excluded by selection.";
             if (failed > 0) message += $" {failed} failed (likely palette overflow — try Re-quantize category from the overflow dialog on a single-tile import, or reduce colours before slicing).";
             PixelEditor.StatusText = message;
         });
@@ -319,7 +331,7 @@ public partial class MainViewModel : ObservableObject
     /// metatile with a missing cell is ever created.
     /// </summary>
     public async Task ImportSlicedAsMetatilesAsync(SourceImageViewModel source, AssetCategory category, string folderPath,
-        AtlasSliceParameters blockParameters, int gridSize, bool skipDuplicateCells)
+        AtlasSliceParameters blockParameters, int gridSize, bool skipDuplicateCells, IReadOnlyList<bool>? includedUnits = null)
     {
         var decoded = DecodeSource(source);
         var blocks = blockParameters.ComputeCellRects(decoded.Width, decoded.Height);
@@ -330,9 +342,12 @@ public partial class MainViewModel : ObservableObject
             var seenTileSignatures = new Dictionary<string, Guid>();
             var newlyImported = new List<GraphicsAsset>();
             var metatilesCreated = 0;
+            var metatilesReused = 0;
             var tilesReused = 0;
             var blocksFailed = 0;
+            var blocksExcludedBySelection = 0;
             var reportStep = Math.Max(1, blocks.Count / 100);
+            var blankTileId = ReservedBlankAssetService.EnsureBlankTile(_project, category).Id;
 
             await Task.Run(() =>
             {
@@ -342,6 +357,12 @@ public partial class MainViewModel : ObservableObject
                     if (b % reportStep == 0 || b == blocks.Count - 1)
                     {
                         progress.Report(new BusyProgress($"Slicing {source.Model.FileName}: block {b + 1}/{blocks.Count}...", b + 1, blocks.Count));
+                    }
+
+                    if (includedUnits is not null && b < includedUnits.Count && !includedUnits[b])
+                    {
+                        blocksExcludedBySelection++;
+                        continue;
                     }
 
                     var subRects = AtlasSliceParameters.ComputeSubCellRects(block, gridSize);
@@ -397,6 +418,18 @@ public partial class MainViewModel : ObservableObject
                         continue;
                     }
 
+                    // A block whose every cell resolved to the reserved blank tile is, by definition, pixel-
+                    // identical to the Kind+GridSize's own reserved blank metatile — reuse that single
+                    // canonical metatile instead of creating another functionally-identical one that would
+                    // just eat into the 255-per-Kind cap for nothing (see AtlasCapacityPlanner, which already
+                    // treats an all-transparent block as free for exactly this reason).
+                    if (cells.All(c => c.TileAssetId == blankTileId))
+                    {
+                        ReservedBlankAssetService.EnsureBlankMetatile(_project, kind, gridSize);
+                        metatilesReused++;
+                        continue;
+                    }
+
                     var autoName = $"{source.Model.FileName}_{block.X}_{block.Y}";
                     var metatileResult = MetatileService.Create(_project, autoName, kind, gridSize, cells);
                     if (metatileResult.Success) metatilesCreated++;
@@ -408,8 +441,11 @@ public partial class MainViewModel : ObservableObject
             SyncReservedBlankAssetNodes();
 
             if (newlyImported.Count > 0 || metatilesCreated > 0) HasUnsavedChanges = true;
+            OnSelectionChanged(); // re-derive whatever the palette panel is currently showing — see the analogous note in ImportIntoCategory; harmless no-op when nothing was imported
 
             var message = $"Sliced {source.Model.FileName}: {metatilesCreated} metatile(s) created, {newlyImported.Count} tile(s) imported, {tilesReused} tile(s) reused.";
+            if (metatilesReused > 0) message += $" {metatilesReused} fully-blank block(s) reused the existing Blank metatile instead of creating new ones.";
+            if (blocksExcludedBySelection > 0) message += $" {blocksExcludedBySelection} block(s) excluded by selection.";
             if (blocksFailed > 0) message += $" {blocksFailed} block(s) skipped (likely palette overflow — reduce colours before slicing).";
             PixelEditor.StatusText = message;
         });

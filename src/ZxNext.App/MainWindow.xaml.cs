@@ -180,12 +180,12 @@ public partial class MainWindow : Window
         {
             if (slicerVm.SliceIntoMetatileBlocks && slicerVm.ResolvedGridSize is { } gridSize)
             {
-                await _viewModel.ImportSlicedAsMetatilesAsync(source, category, folderPath, slicerVm.BuildParameters(), gridSize, slicerVm.SkipDuplicateCells);
+                await _viewModel.ImportSlicedAsMetatilesAsync(source, category, folderPath, slicerVm.BuildParameters(), gridSize, slicerVm.SkipDuplicateCells, slicerVm.IncludedUnits);
             }
             else
             {
                 var placeTransparentFirst = slicerVm.CanOfferTransparentTileFirst && slicerVm.PlaceTransparentTileFirst;
-                await _viewModel.ImportSlicedAsync(source, category, folderPath, slicerVm.BuildParameters(), slicerVm.SkipDuplicateCells, placeTransparentFirst);
+                await _viewModel.ImportSlicedAsync(source, category, folderPath, slicerVm.BuildParameters(), slicerVm.SkipDuplicateCells, placeTransparentFirst, slicerVm.IncludedUnits);
             }
         }
     }

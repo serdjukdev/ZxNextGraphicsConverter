@@ -17,13 +17,16 @@
 
         <Border BorderBrush="#666" BorderThickness="1" HorizontalAlignment="Left">
             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" MaxWidth="520" MaxHeight="420">
-                <Grid x:Name="PreviewHost">
+                <Grid x:Name="PreviewHost" Cursor="Hand" MouseLeftButtonDown="PreviewHost_OnMouseLeftButtonDown">
                     <Image x:Name="PreviewImage" Source="{Binding SourcePreview}" Stretch="None"
                            RenderOptions.BitmapScalingMode="NearestNeighbor" />
                     <Canvas x:Name="GridOverlay" IsHitTestVisible="False" />
                 </Grid>
             </ScrollViewer>
         </Border>
+
+        <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="Gray"
+                   Text="Click a cell/block to include or exclude it from the conversion." />
 
         <Grid Margin="0,10,0,0">
             <Grid.ColumnDefinitions>
@@ -48,6 +51,17 @@
         <TextBlock Margin="0,10,0,0" FontWeight="Bold">
             <Run Text="Cells found: " /><Run Text="{Binding CellCount, Mode=OneWay}" />
         </TextBlock>
+
+        <Grid Margin="0,6,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="{Binding SelectionStatusText}" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="Select all that fit" Margin="8,0,0,0" Click="SelectAllThatFit_OnClick" />
+            <Button Grid.Column="2" Content="Clear selection" Margin="8,0,0,0" Click="ClearSelection_OnClick" />
+        </Grid>
 
         <CheckBox Content="Skip duplicate cells (identical pixels imported only once)"
                   IsChecked="{Binding SkipDuplicateCells}" Margin="0,8,0,0" />

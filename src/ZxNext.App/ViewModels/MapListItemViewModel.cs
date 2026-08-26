@@ -21,13 +21,13 @@ public partial class MapListItemViewModel : ObservableObject
     [ObservableProperty]
     private WriteableBitmap preview;
 
-    public MapListItemViewModel(MapAsset map, ProjectState project)
+    public MapListItemViewModel(MapAsset map, ProjectState project, MapRenderCache? cache = null)
     {
         Map = map;
-        preview = TileGridBitmapRenderer.RenderMap(map, project);
+        preview = TileGridBitmapRenderer.RenderMap(map, project, cache);
     }
 
-    public void RefreshPreview(ProjectState project) => Preview = TileGridBitmapRenderer.RenderMap(Map, project);
+    public void RefreshPreview(ProjectState project, MapRenderCache? cache = null) => Preview = TileGridBitmapRenderer.RenderMap(Map, project, cache);
 
     /// <summary>SizeLabel reads Map.Width/Height directly (not an ObservableProperty of its own), so nothing re-renders it automatically when Resize/Trim change those — call this right after, alongside RefreshPreview.</summary>
     public void NotifySizeChanged() => OnPropertyChanged(nameof(SizeLabel));

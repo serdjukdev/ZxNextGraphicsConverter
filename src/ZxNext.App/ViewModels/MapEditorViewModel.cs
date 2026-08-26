@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -58,6 +59,14 @@ public partial class MapEditorViewModel : ObservableObject
     public const int TileSnapSize = 8;
 
     private readonly ProjectState _project;
+
+    /// <summary>
+    /// Memoizes tile/metatile bitmap decoding for this whole modal session — see <see cref="MapRenderCache"/>'s
+    /// own doc comment for why it needs no invalidation while this window is open. Shared with every
+    /// <see cref="MapListItemViewModel"/> in <see cref="Maps"/> so switching between maps that reuse the
+    /// same metatiles also benefits from an already-warm cache.
+    /// </summary>
+    private readonly MapRenderCache _renderCache = new();
 
     /// <summary>Guards the visibility-sync-on-map-selection code path so just clicking through the map list never spuriously marks the project dirty — see <see cref="OnSelectedMapChanged"/>.</summary>
     private bool _isSyncingFromMap;
@@ -648,6 +657,7 @@ public partial class MapEditorViewModel : ObservableObject
 
         if (ActiveLayer == MapLayerKind.Sprites)
         {
+            Int32Rect affectedRect;
             if (!forceErase)
             {
                 if (SelectedPaletteSprite is null) return;
@@ -656,6 +666,7 @@ public partial class MapEditorViewModel : ObservableObject
                 var placement = new SpritePlacement { SpriteAssetId = SelectedPaletteSprite.Asset.Id, X = placeX, Y = placeY };
                 map.SpriteLayer.Add(placement);
                 _undoStack.Push(() => { map.SpriteLayer.Remove(placement); RenderPreview(); RefreshSelectedMapThumbnail(); });
+                affectedRect = new Int32Rect(placeX, placeY, SpritePixelSize, SpritePixelSize);
             }
             else
             {
@@ -663,9 +674,13 @@ public partial class MapEditorViewModel : ObservableObject
                 if (hit is null) return;
                 map.SpriteLayer.Remove(hit);
                 _strokeRemovedSprites.Add(hit);
+                affectedRect = new Int32Rect(hit.X, hit.Y, SpritePixelSize, SpritePixelSize);
             }
             _strokeChangedAnything = true;
-            RenderPreview();
+            RenderPreviewRegion(affectedRect);
+            // Grid-cell paints deliberately don't do this (see RenderPreviewRegion's doc comment) — only
+            // the Sprite layer's links/object-tool overlays need to react to a single placement change.
+            OnPropertyChanged(nameof(MapPreview));
             return;
         }
 
@@ -689,7 +704,7 @@ public partial class MapEditorViewModel : ObservableObject
         }
 
         SetGridCell(layer, index, newValue);
-        RenderPreview();
+        RenderPreviewRegion(new Int32Rect(col * cellPixelSize, row * cellPixelSize, cellPixelSize, cellPixelSize));
     }
 
     /// <summary>
@@ -792,6 +807,7 @@ public partial class MapEditorViewModel : ObservableObject
         var map = SelectedMap.Map;
         var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
         var newValue = (byte)SelectedPaletteMetatile!.Metatile.SortIndex;
+        var cellPixelSize = map.MetatileGridSize * 8;
 
         BeginStroke();
         for (var row = rect.Row0; row <= rect.Row1; row++)
@@ -801,7 +817,7 @@ public partial class MapEditorViewModel : ObservableObject
                 SetGridCell(layer, row * map.Width + col, newValue);
             }
         }
-        RenderPreview();
+        RenderPreviewRegion(new Int32Rect(rect.Col0 * cellPixelSize, rect.Row0 * cellPixelSize, rect.Width * cellPixelSize, rect.Height * cellPixelSize));
         EndStroke();
     }
 
@@ -842,6 +858,7 @@ public partial class MapEditorViewModel : ObservableObject
             if (GridSelection is not { } rect) return;
             var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
             var blankValue = BlankValueFor(ActiveLayer == MapLayerKind.Tilemap ? MetatileKind.FourBpp : MetatileKind.EightBpp, map.MetatileGridSize);
+            var cellPixelSize = map.MetatileGridSize * 8;
             BeginStroke();
             for (var row = rect.Row0; row <= rect.Row1; row++)
             {
@@ -850,7 +867,7 @@ public partial class MapEditorViewModel : ObservableObject
                     SetGridCell(layer, row * map.Width + col, blankValue);
                 }
             }
-            RenderPreview();
+            RenderPreviewRegion(new Int32Rect(rect.Col0 * cellPixelSize, rect.Row0 * cellPixelSize, rect.Width * cellPixelSize, rect.Height * cellPixelSize));
             EndStroke();
         }
     }
@@ -905,10 +922,19 @@ public partial class MapEditorViewModel : ObservableObject
                 SetGridCell(layer, destRow * map.Width + destCol, buffer[row - rect.Row0, col - rect.Col0]);
             }
         }
-        RenderPreview();
+        var destRect = CellRect.Normalized(rect.Col0 + deltaCols, rect.Row0 + deltaRows, rect.Col1 + deltaCols, rect.Row1 + deltaRows);
+
+        // Both the source (cleared, unless copying) and destination cells changed — recompositing just
+        // their union covers both without falling back to a full-map RenderPreview().
+        var unionCol0 = Math.Min(rect.Col0, destRect.Col0);
+        var unionRow0 = Math.Min(rect.Row0, destRect.Row0);
+        var unionCol1 = Math.Max(rect.Col1, destRect.Col1);
+        var unionRow1 = Math.Max(rect.Row1, destRect.Row1);
+        var cellPixelSize = map.MetatileGridSize * 8;
+        RenderPreviewRegion(new Int32Rect(unionCol0 * cellPixelSize, unionRow0 * cellPixelSize,
+            (unionCol1 - unionCol0 + 1) * cellPixelSize, (unionRow1 - unionRow0 + 1) * cellPixelSize));
         EndStroke();
 
-        var destRect = CellRect.Normalized(rect.Col0 + deltaCols, rect.Row0 + deltaRows, rect.Col1 + deltaCols, rect.Row1 + deltaRows);
         SetGridSelection(destRect.Col0, destRect.Row0, destRect.Col1, destRect.Row1);
     }
 
@@ -954,8 +980,9 @@ public partial class MapEditorViewModel : ObservableObject
         RefreshSelectedMapThumbnail();
     }
 
-    private void RefreshSelectedMapThumbnail() => SelectedMap?.RefreshPreview(_project);
+    private void RefreshSelectedMapThumbnail() => SelectedMap?.RefreshPreview(_project, _renderCache);
 
+    /// <summary>Full rebuild — used for every structural change (map switch, resize/trim, layer visibility/reorder, undo). O(map size), but cache-backed (see <see cref="_renderCache"/>) so even a very large map decodes each distinct tile/metatile only once per session instead of once per cell.</summary>
     private void RenderPreview()
     {
         if (SelectedMap is null)
@@ -966,10 +993,32 @@ public partial class MapEditorViewModel : ObservableObject
 
         // LayerOrder is displayed top(front)-to-bottom(back); RenderMap wants back-to-front.
         var drawOrderBackToFront = LayerOrder.Select(r => r.Kind).Reverse().ToList();
-        MapPreview = TileGridBitmapRenderer.RenderMap(SelectedMap.Map, _project, drawOrderBackToFront);
+        MapPreview = TileGridBitmapRenderer.RenderMap(SelectedMap.Map, _project, drawOrderBackToFront, _renderCache);
+    }
+
+    /// <summary>
+    /// The hot path: re-renders ONLY <paramref name="pixelRect"/> directly into the existing
+    /// <see cref="MapPreview"/> instance instead of rebuilding the whole map bitmap — see
+    /// <see cref="TileGridBitmapRenderer.RenderMapRegionInto"/>. Deliberately does NOT reassign the
+    /// <see cref="MapPreview"/> property (no <c>OnPropertyChanged</c>) — the bound `Image` in
+    /// MapEditorWindow still repaints because `WriteableBitmap.WritePixels` self-invalidates, and
+    /// skipping the property-changed notification is what keeps this from also re-triggering the
+    /// links/object-tool overlay redraws on every single grid-cell paint (those only actually depend on
+    /// the Sprite layer — callers that DO need them, i.e. sprite placement/erasure, raise it explicitly).
+    /// </summary>
+    private void RenderPreviewRegion(Int32Rect pixelRect)
+    {
+        if (SelectedMap is null || MapPreview is null)
+        {
+            RenderPreview();
+            return;
+        }
+
+        var drawOrderBackToFront = LayerOrder.Select(r => r.Kind).Reverse().ToList();
+        TileGridBitmapRenderer.RenderMapRegionInto(MapPreview, SelectedMap.Map, _project, _renderCache, drawOrderBackToFront, pixelRect);
     }
 
     private void RefreshMapList() =>
         Maps = new ObservableCollection<MapListItemViewModel>(
-            _project.Maps.OrderBy(m => m.SortIndex).Select(m => new MapListItemViewModel(m, _project)));
+            _project.Maps.OrderBy(m => m.SortIndex).Select(m => new MapListItemViewModel(m, _project, _renderCache)));
 }

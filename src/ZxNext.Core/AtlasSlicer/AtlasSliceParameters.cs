@@ -9,13 +9,23 @@ public class AtlasSliceParameters
     public int OffsetTop { get; init; }
     public int Spacing { get; init; }
 
-    /// <summary>Non-overlapping cell rectangles in raster order (row by row), only cells that fully fit.</summary>
+    /// <summary>
+    /// When true, a trailing row/column that doesn't fully fit the cell size is included anyway (at its
+    /// full nominal <see cref="CellWidth"/>x<see cref="CellHeight"/>) instead of being dropped — the
+    /// caller is expected to extract it with a bounds-safe, zero-padding extractor (see
+    /// <see cref="PixelRectExtractor.ExtractPadded"/>), since part of the rect extends past the source.
+    /// Default false preserves the original "only cells that fully fit" behaviour. Only meaningful for
+    /// plain (non-metatile-block) slicing — <see cref="ComputeSubCellRects"/> always assumes full blocks.
+    /// </summary>
+    public bool PadIncompleteEdgeCells { get; init; }
+
+    /// <summary>Non-overlapping cell rectangles in raster order (row by row) — only cells that fully fit, unless <see cref="PadIncompleteEdgeCells"/> is set, in which case one trailing partial row/column per edge is included too.</summary>
     public IReadOnlyList<PixelRect> ComputeCellRects(int sourceWidth, int sourceHeight)
     {
         var rects = new List<PixelRect>();
-        for (var y = OffsetTop; y + CellHeight <= sourceHeight; y += CellHeight + Spacing)
+        for (var y = OffsetTop; PadIncompleteEdgeCells ? y < sourceHeight : y + CellHeight <= sourceHeight; y += CellHeight + Spacing)
         {
-            for (var x = OffsetLeft; x + CellWidth <= sourceWidth; x += CellWidth + Spacing)
+            for (var x = OffsetLeft; PadIncompleteEdgeCells ? x < sourceWidth : x + CellWidth <= sourceWidth; x += CellWidth + Spacing)
             {
                 rects.Add(new PixelRect(x, y, CellWidth, CellHeight));
             }

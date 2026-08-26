@@ -113,6 +113,13 @@ public partial class AtlasSlicerViewModel : ObservableObject
     [ObservableProperty]
     private string selectionStatusText = "";
 
+    /// <summary>When true, a trailing row/column that doesn't fully fit the cell size is kept (padded with transparent pixels) instead of dropped — see <see cref="AtlasSliceParameters.PadIncompleteEdgeCells"/>. Only meaningful for plain slicing; see <see cref="CanPadIncompleteEdgeCells"/>.</summary>
+    [ObservableProperty]
+    private bool padIncompleteEdgeCells;
+
+    /// <summary>Hides/disables the padding checkbox in metatile-block mode — blocks there must still fully fit, no padding scope applies.</summary>
+    public bool CanPadIncompleteEdgeCells => !SliceIntoMetatileBlocks;
+
     public AtlasSlicerViewModel(WriteableBitmap preview, int sourceWidth, int sourceHeight, int cellWidth, int cellHeight,
         ProjectState project, AssetCategory category, byte[] sourceRgba32)
     {
@@ -145,6 +152,7 @@ public partial class AtlasSlicerViewModel : ObservableObject
     partial void OnOffsetTopChanged(int value) => RecomputeCellCount();
     partial void OnSpacingChanged(int value) => RecomputeCellCount();
     partial void OnSkipDuplicateCellsChanged(bool value) => RecomputeIncludedUnits();
+    partial void OnPadIncompleteEdgeCellsChanged(bool value) => RecomputeCellCount();
     partial void OnIncludedUnitsChanged(IReadOnlyList<bool> value) => UpdateSelectionStatusText();
 
     /// <summary>
@@ -165,6 +173,9 @@ public partial class AtlasSlicerViewModel : ObservableObject
             CellWidth = _tileCellWidth;
             CellHeight = _tileCellHeight;
         }
+
+        if (value) PadIncompleteEdgeCells = false; // no padding scope in block mode — avoid stale state leaking into the big-block grid
+        OnPropertyChanged(nameof(CanPadIncompleteEdgeCells));
         RecomputeCellCount();
     }
 
@@ -218,7 +229,7 @@ public partial class AtlasSlicerViewModel : ObservableObject
         }
 
         if (_remainingTileCapacity == int.MaxValue) return true;
-        var used = AtlasCapacityPlanner.ComputePlainSliceUsage(_sourceRgba32, SourceWidth, rects, SkipDuplicateCells, candidate);
+        var used = AtlasCapacityPlanner.ComputePlainSliceUsage(_sourceRgba32, SourceWidth, SourceHeight, rects, SkipDuplicateCells, candidate);
         return used <= _remainingTileCapacity;
     }
 
@@ -243,7 +254,7 @@ public partial class AtlasSlicerViewModel : ObservableObject
         }
 
         return _remainingTileCapacity < int.MaxValue
-            ? AtlasCapacityPlanner.PlanPlainSlice(_sourceRgba32, SourceWidth, rects, SkipDuplicateCells, _remainingTileCapacity, seed)
+            ? AtlasCapacityPlanner.PlanPlainSlice(_sourceRgba32, SourceWidth, SourceHeight, rects, SkipDuplicateCells, _remainingTileCapacity, seed)
             : rects.Select(_ => true).ToList();
     }
 
@@ -263,7 +274,8 @@ public partial class AtlasSlicerViewModel : ObservableObject
         CellHeight = CellHeight,
         OffsetLeft = OffsetLeft,
         OffsetTop = OffsetTop,
-        Spacing = Spacing
+        Spacing = Spacing,
+        PadIncompleteEdgeCells = PadIncompleteEdgeCells
     };
 
     public IReadOnlyList<PixelRect> ComputeCellRects() => BuildParameters().ComputeCellRects(SourceWidth, SourceHeight);

@@ -253,7 +253,7 @@ public partial class MainViewModel : ObservableObject
                         continue;
                     }
 
-                    var cellRgba = PixelRectExtractor.Extract(decoded.Rgba32, decoded.Width, rect);
+                    var cellRgba = PixelRectExtractor.ExtractPadded(decoded.Rgba32, decoded.Width, decoded.Height, rect);
 
                     if (skipDuplicateCells)
                     {

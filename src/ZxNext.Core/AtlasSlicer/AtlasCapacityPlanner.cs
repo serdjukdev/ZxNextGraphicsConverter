@@ -31,7 +31,7 @@ public static class AtlasCapacityPlanner
     /// a later identical cell look like a duplicate of something that doesn't exist).
     /// </summary>
     public static IReadOnlyList<bool> PlanPlainSlice(
-        byte[] sourceRgba32, int sourceWidth, IReadOnlyList<PixelRect> cellRects,
+        byte[] sourceRgba32, int sourceWidth, int sourceHeight, IReadOnlyList<PixelRect> cellRects,
         bool skipDuplicateCells, int remainingTileCapacity, IReadOnlyList<bool>? alreadyIncluded = null)
     {
         var result = new bool[cellRects.Count];
@@ -41,7 +41,7 @@ public static class AtlasCapacityPlanner
         for (var i = 0; i < cellRects.Count; i++)
         {
             var forcedIncluded = alreadyIncluded is not null && i < alreadyIncluded.Count && alreadyIncluded[i];
-            var cellRgba = PixelRectExtractor.Extract(sourceRgba32, sourceWidth, cellRects[i]);
+            var cellRgba = PixelRectExtractor.ExtractPadded(sourceRgba32, sourceWidth, sourceHeight, cellRects[i]);
 
             if (IsFullyTransparent(cellRgba))
             {
@@ -155,7 +155,7 @@ public static class AtlasCapacityPlanner
 
     /// <summary>Plain-slicing counterpart of <see cref="ComputeMetatileBlockUsage"/> — how many tiles exactly the currently-included cells would cost.</summary>
     public static int ComputePlainSliceUsage(
-        byte[] sourceRgba32, int sourceWidth, IReadOnlyList<PixelRect> cellRects,
+        byte[] sourceRgba32, int sourceWidth, int sourceHeight, IReadOnlyList<PixelRect> cellRects,
         bool skipDuplicateCells, IReadOnlyList<bool> includedUnits)
     {
         var seenSignatures = new HashSet<string>();
@@ -165,7 +165,7 @@ public static class AtlasCapacityPlanner
         {
             if (i >= includedUnits.Count || !includedUnits[i]) continue;
 
-            var cellRgba = PixelRectExtractor.Extract(sourceRgba32, sourceWidth, cellRects[i]);
+            var cellRgba = PixelRectExtractor.ExtractPadded(sourceRgba32, sourceWidth, sourceHeight, cellRects[i]);
             var isFree = IsFullyTransparent(cellRgba);
             if (!isFree && skipDuplicateCells)
             {

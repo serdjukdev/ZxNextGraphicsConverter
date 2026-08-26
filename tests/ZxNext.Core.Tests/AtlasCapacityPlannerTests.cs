@@ -40,7 +40,7 @@ public class AtlasCapacityPlannerTests
         var rgba = BuildRow(5, i => ((byte)(i * 40), (byte)0, (byte)0), out var width);
         var rects = CellRects(5);
 
-        var plan = AtlasCapacityPlanner.PlanPlainSlice(rgba, width, rects, skipDuplicateCells: true, remainingTileCapacity: 3);
+        var plan = AtlasCapacityPlanner.PlanPlainSlice(rgba, width, TileSize, rects, skipDuplicateCells: true, remainingTileCapacity: 3);
 
         Assert.Equal([true, true, true, false, false], plan);
     }
@@ -52,7 +52,7 @@ public class AtlasCapacityPlannerTests
         var rgba = BuildRow(4, i => i switch { 0 => (10, 20, 30), 1 => (10, 20, 30), 2 => null, _ => (40, 50, 60) }, out var width);
         var rects = CellRects(4);
 
-        var plan = AtlasCapacityPlanner.PlanPlainSlice(rgba, width, rects, skipDuplicateCells: true, remainingTileCapacity: 1);
+        var plan = AtlasCapacityPlanner.PlanPlainSlice(rgba, width, TileSize, rects, skipDuplicateCells: true, remainingTileCapacity: 1);
 
         // Budget of 1: cell0 (the only genuinely new tile) uses it. cell1 (duplicate of real content) is
         // free and stays included regardless. cell2 (transparent — the reserved blank already covers it,
@@ -68,7 +68,7 @@ public class AtlasCapacityPlannerTests
         var rects = CellRects(3);
         var seed = new[] { false, true, false }; // user manually turned the transparent cell1 ON
 
-        var plan = AtlasCapacityPlanner.PlanPlainSlice(rgba, width, rects, skipDuplicateCells: true, remainingTileCapacity: 2, alreadyIncluded: seed);
+        var plan = AtlasCapacityPlanner.PlanPlainSlice(rgba, width, TileSize, rects, skipDuplicateCells: true, remainingTileCapacity: 2, alreadyIncluded: seed);
 
         // cell1 stays on as forced, costing nothing — both real cells (0 and 2) still fit within budget 2.
         Assert.Equal([true, true, true], plan);
@@ -84,7 +84,7 @@ public class AtlasCapacityPlannerTests
         var rgba = BuildRow(2, _ => (5, 5, 5), out var width);
         var rects = CellRects(2);
 
-        var plan = AtlasCapacityPlanner.PlanPlainSlice(rgba, width, rects, skipDuplicateCells: true, remainingTileCapacity: 0);
+        var plan = AtlasCapacityPlanner.PlanPlainSlice(rgba, width, TileSize, rects, skipDuplicateCells: true, remainingTileCapacity: 0);
 
         Assert.Equal([false, false], plan);
     }
@@ -95,7 +95,7 @@ public class AtlasCapacityPlannerTests
         var rgba = BuildRow(3, _ => (10, 20, 30), out var width); // all three cells identical
         var rects = CellRects(3);
 
-        var plan = AtlasCapacityPlanner.PlanPlainSlice(rgba, width, rects, skipDuplicateCells: false, remainingTileCapacity: 2);
+        var plan = AtlasCapacityPlanner.PlanPlainSlice(rgba, width, TileSize, rects, skipDuplicateCells: false, remainingTileCapacity: 2);
 
         Assert.Equal([true, true, false], plan);
     }
@@ -107,7 +107,7 @@ public class AtlasCapacityPlannerTests
         var rects = CellRects(4);
         var seed = new[] { false, true, false, false }; // user manually turned ON only cell1
 
-        var plan = AtlasCapacityPlanner.PlanPlainSlice(rgba, width, rects, skipDuplicateCells: true, remainingTileCapacity: 2, alreadyIncluded: seed);
+        var plan = AtlasCapacityPlanner.PlanPlainSlice(rgba, width, TileSize, rects, skipDuplicateCells: true, remainingTileCapacity: 2, alreadyIncluded: seed);
 
         // cell1 stays on (forced) using 1 of the 2 slots; cell0 fills the remaining slot (raster order);
         // cell2/cell3 don't fit anymore.
@@ -271,8 +271,26 @@ public class AtlasCapacityPlannerTests
         var rgba = BuildRow(3, i => i switch { 0 => (1, 2, 3), 1 => null, _ => (4, 5, 6) }, out var width);
         var rects = CellRects(3);
 
-        var used = AtlasCapacityPlanner.ComputePlainSliceUsage(rgba, width, rects, skipDuplicateCells: true, includedUnits: [true, true, false]);
+        var used = AtlasCapacityPlanner.ComputePlainSliceUsage(rgba, width, TileSize, rects, skipDuplicateCells: true, includedUnits: [true, true, false]);
 
         Assert.Equal(1, used); // cell0 counted, cell1 (transparent, included) is free, cell2 excluded so not counted
+    }
+
+    [Fact]
+    public void PlanPlainSlice_HandlesAPaddedRectExtendingPastSourceBounds_WithoutCrashing()
+    {
+        // Mirrors AtlasSliceParameters.PadIncompleteEdgeCells's output: a rect whose nominal size extends
+        // past the real source bounds. cell0 is fully in-bounds (real content); cell1's bottom half is
+        // padding (source is only 8 tall, cell1 is a 16x16 rect starting at y=0 -> pure padding since the
+        // real content is entirely within cell0's row) — this specifically exercises ExtractPadded instead
+        // of the old Extract (which would throw for an out-of-bounds rect).
+        var rgba = BuildRow(1, _ => (10, 20, 30), out var width); // single 8x8 opaque cell, source height = TileSize (8)
+        var rects = new List<PixelRect> { new(0, 0, 8, 8), new(0, 8, 8, 8) }; // second rect starts exactly at the source's bottom edge -> pure padding
+
+        var plan = AtlasCapacityPlanner.PlanPlainSlice(rgba, width, TileSize, rects, skipDuplicateCells: true, remainingTileCapacity: 5);
+
+        // cell0 is real (included, uses budget); cell1 is entirely padding (transparent) -> free, not
+        // auto-included by default (same "fully transparent" rule as any other blank cell).
+        Assert.Equal([true, false], plan);
     }
 }

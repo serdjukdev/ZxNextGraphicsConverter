@@ -66,6 +66,10 @@
         <CheckBox Content="Skip duplicate cells (identical pixels imported only once)"
                   IsChecked="{Binding SkipDuplicateCells}" Margin="0,8,0,0" />
 
+        <CheckBox Content="Pad incomplete edge cells with transparency" IsChecked="{Binding PadIncompleteEdgeCells}" Margin="0,8,0,0"
+                  Visibility="{Binding CanPadIncompleteEdgeCells, Converter={StaticResource BoolToVis}}"
+                  ToolTip="A trailing row/column that doesn't fully fit the cell size is normally dropped entirely — check this to keep it anyway, padded with transparent pixels up to the full cell size." />
+
         <CheckBox x:Name="MetatileBlocksCheckBox"
                   Content="Slice into metatile blocks (auto-creates a metatile per block)"
                   IsChecked="{Binding SliceIntoMetatileBlocks}" Margin="0,8,0,0"

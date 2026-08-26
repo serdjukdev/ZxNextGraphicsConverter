@@ -69,6 +69,10 @@ tests/ZxNext.Core.Tests/   xUnit tests over ZxNext.Core.
 
 `ZxNext.Core` is deliberately UI-agnostic: every conversion, palette, and export decision lives there and is unit-tested independently of WPF.
 
+## Support
+
+If you find this useful, you can support its development on [Patreon](https://www.patreon.com/cw/Serdjuk) or [Ko-fi](https://ko-fi.com/serdjuk).
+
 ## License
 
 [MIT](LICENSE)

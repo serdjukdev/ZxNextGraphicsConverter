@@ -6,13 +6,29 @@ A Windows desktop tool (WPF, .NET 9) that converts ordinary images into native [
 
 ## Screenshots
 
-Project tree, source-image library, and the drag-and-drop workflow:
+Painting a map across the Tilemap/8bpp-Tile/Sprite layers, with a metatile selected for painting:
 
-![Main window: project tree and source images](docs/screenshot-main.png)
+![Map Editor: painting a level across grid layers](docs/screenshot-map-editor.png)
 
-Editing a converted sprite: pixel canvas, its own palette highlighted in the folder's shared palette strip, and the tree showing hundreds of auto-sliced sprites from one dropped source image:
+The Metatile Editor: composing a reusable 2x2 block from individual tiles, with per-cell mirror/rotate:
 
-![Pixel/palette editor with an auto-sliced sprite sheet](docs/screenshot-editor.png)
+![Metatile Editor: composing a 2x2 metatile from tiles](docs/screenshot-metatile-editor.png)
+
+Two placed objects linked with a directed arrow (e.g. a switch tied to a specific door):
+
+![Map Editor: a directed link drawn between two objects](docs/screenshot-object-link.png)
+
+The 4bpp palette-bank overview, with "Optimize bank" about to repack tiles into fewer slots:
+
+![Palette-bank overview and the Optimize bank confirmation dialog](docs/screenshot-optimize-palette-bank.png)
+
+Slicing an oversized source image into individual 4bpp tiles, with duplicate-cell skipping:
+
+![Atlas slicer: cutting a source image into tiles](docs/screenshot-atlas-slicer.png)
+
+The genuine 512-colour Next picker, grouped into 8 blocks by R value:
+
+![The 512-colour Next colour picker](docs/screenshot-next-color-picker.png)
 
 ## Demo
 

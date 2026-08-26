@@ -36,7 +36,7 @@ The genuine 512-colour Next picker, grouped into 8 blocks by R value:
 
 ## Features
 
-- **Import**: drag-and-drop a source image onto a category folder, or `File → Import Images...`. An image larger than the target cell size opens an atlas-slicer dialog (grid overlay, offset/spacing controls, duplicate-cell skipping) instead of failing. For tile categories, the slicer can also cut straight into the project's metatile blocks (16×16/24×24/32×32, matching the fixed metatile size) — each block's tiles are imported with duplicates reused, and a metatile is auto-built from the result.
+- **Import**: drag-and-drop a source image onto a category folder, or `File → Import Images...`. An image larger than the target cell size opens an atlas-slicer dialog (grid overlay, offset/spacing controls, duplicate-cell skipping, and a click-to-toggle preview so any cell/block can be included or excluded by hand) instead of failing. For tile categories, the slicer can also cut straight into the project's metatile blocks (16×16/24×24/32×32, matching the fixed metatile size) — each block's tiles are imported with duplicates reused, and a metatile is auto-built from the result. Tile4Bpp's real 256-tile hardware limit (and the 255-metatile-per-Kind limit in block mode) is enforced right there in the dialog — the default selection fills up to whatever's left, and clicking past it is refused rather than failing later at export.
 - **Asset categories**, each with its own cell size and palette model:
 
   | Category | Cell size | Palette model |

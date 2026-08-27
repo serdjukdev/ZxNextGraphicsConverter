@@ -14,6 +14,7 @@ using ZxNext.Core.Model;
 using ZxNext.Core.PaletteAllocation;
 using ZxNext.Core.Project;
 using ZxNext.Core.Quantization;
+using ZxNext.Core.Settings;
 
 namespace ZxNext.App.ViewModels;
 
@@ -168,7 +169,7 @@ public partial class MainViewModel : ObservableObject
     public ImportOutcome ImportIntoCategory(SourceImageViewModel source, AssetCategory category, string folderPath, int? maxColors = null)
     {
         var decoded = DecodeSource(source);
-        var result = AssetImporter.Import(_project, source.Model, decoded.Rgba32, category, folderPath, DitherMode.None, maxColors);
+        var result = AssetImporter.Import(_project, source.Model, decoded.Rgba32, category, folderPath, AppSettingsStore.Load().DefaultDitherMode ?? DitherMode.None, maxColors);
 
         if (result.Success)
         {
@@ -212,7 +213,7 @@ public partial class MainViewModel : ObservableObject
             Width = width,
             Height = height
         };
-        var result = AssetImporter.Import(_project, placedSource, placedRgba32, category, folderPath, DitherMode.None, maxColors,
+        var result = AssetImporter.Import(_project, placedSource, placedRgba32, category, folderPath, AppSettingsStore.Load().DefaultDitherMode ?? DitherMode.None, maxColors,
             sourceOffsetX: offsetX, sourceOffsetY: offsetY, sourceCropWidth: cropWidth, sourceCropHeight: cropHeight);
 
         if (result.Success)
@@ -236,6 +237,7 @@ public partial class MainViewModel : ObservableObject
     {
         var decoded = DecodeSource(source);
         var rects = parameters.ComputeCellRects(decoded.Width, decoded.Height);
+        var ditherMode = AppSettingsStore.Load().DefaultDitherMode ?? DitherMode.None; // read once, not per cell — this loop can run thousands of times
 
         await RunBusyAsync($"Slicing {source.Model.FileName}...", async progress =>
         {
@@ -283,7 +285,7 @@ public partial class MainViewModel : ObservableObject
                         Height = rect.Height
                     };
 
-                    var result = AssetImporter.Import(_project, cellSource, cellRgba, category, folderPath, DitherMode.None, null, rect.X, rect.Y);
+                    var result = AssetImporter.Import(_project, cellSource, cellRgba, category, folderPath, ditherMode, null, rect.X, rect.Y);
                     if (result.Success) imported.Add(result.Asset!);
                     else if (result.Reason == ImportFailureReason.RedundantWithReservedBlank) duplicatesSkipped++; // pixel-identical to the reserved blank tile — same bucket as a same-batch duplicate
                     else failed++;
@@ -345,6 +347,7 @@ public partial class MainViewModel : ObservableObject
         var decoded = DecodeSource(source);
         var blocks = blockParameters.ComputeCellRects(decoded.Width, decoded.Height);
         var kind = category == AssetCategory.Tile4Bpp ? MetatileKind.FourBpp : MetatileKind.EightBpp;
+        var ditherMode = AppSettingsStore.Load().DefaultDitherMode ?? DitherMode.None; // read once, not per tile — this loop can run thousands of times
 
         await RunBusyAsync($"Slicing {source.Model.FileName} into metatiles...", async progress =>
         {
@@ -399,7 +402,7 @@ public partial class MainViewModel : ObservableObject
                             Height = subRect.Height
                         };
 
-                        var result = AssetImporter.Import(_project, subSource, subRgba, category, folderPath, DitherMode.None, null, subRect.X, subRect.Y);
+                        var result = AssetImporter.Import(_project, subSource, subRgba, category, folderPath, ditherMode, null, subRect.X, subRect.Y);
                         Guid tileId;
                         if (result.Success)
                         {

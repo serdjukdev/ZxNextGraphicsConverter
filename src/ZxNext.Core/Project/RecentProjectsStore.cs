@@ -7,8 +7,9 @@ public static class RecentProjectsStore
 {
     private const int MaxEntries = 10;
 
+    /// <summary>Same ZXNEXT_SETTINGS_DIR test-isolation seam as AppSettingsStore.FilePath — see its doc comment.</summary>
     private static string FilePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        Environment.GetEnvironmentVariable("ZXNEXT_SETTINGS_DIR") ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "ZxNextGraphicsConverter",
         "recent-projects.json");
 

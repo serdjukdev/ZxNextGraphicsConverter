@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using ZxNext.App.ViewModels;
 using ZxNext.Core.Model;
+using ZxNext.Core.Settings;
 
 namespace ZxNext.App.Views;
 
@@ -100,8 +101,22 @@ public partial class MapEditorWindow : Window
         // by the current zoom so every grid line stays exactly 1 PHYSICAL pixel wide at any zoom level.
         var hairline = 1.0 / MapZoomTransform.ScaleX;
 
-        DrawGridLines(pixelWidth, pixelHeight, tilePixelSize, Brushes.White, 0.12, hairline);
-        DrawGridLines(pixelWidth, pixelHeight, cellPixelSize, Brushes.Yellow, 0.7, hairline);
+        var settings = AppSettingsStore.Load();
+        DrawGridLines(pixelWidth, pixelHeight, tilePixelSize, ParseGridBrush(settings.MapEditorTileGridColorHex, Brushes.White), settings.MapEditorTileGridOpacity ?? 0.12, hairline);
+        DrawGridLines(pixelWidth, pixelHeight, cellPixelSize, ParseGridBrush(settings.MapEditorCellGridColorHex, Brushes.Yellow), settings.MapEditorCellGridOpacity ?? 0.7, hairline);
+    }
+
+    private static Brush ParseGridBrush(string? colorHex, Brush fallback)
+    {
+        if (string.IsNullOrWhiteSpace(colorHex)) return fallback;
+        try
+        {
+            return new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex)!);
+        }
+        catch
+        {
+            return fallback;
+        }
     }
 
     private void DrawGridLines(int pixelWidth, int pixelHeight, int step, Brush brush, double opacity, double strokeThickness)

@@ -1,6 +1,8 @@
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
+using System.Windows.Interop;
 using Microsoft.Win32;
 using ZxNext.App.Rendering;
 using ZxNext.App.ViewModels;
@@ -44,22 +46,34 @@ public partial class MainWindow : Window
         _viewModel.HelpRequested += OnHelpRequested;
         _viewModel.MetatileGridSizeNeeded += OnMetatileGridSizeNeeded;
 
+        // F1 is intercepted at the raw Win32 message level (WM_KEYDOWN), not through any WPF routed-event
+        // or command mechanism. Two prior attempts (a plain <KeyBinding Key="F1">, then a CommandBinding
+        // for the built-in ApplicationCommands.Help) both still depend on SOME element having actual WPF
+        // keyboard focus for the event/command to route through at all — several of this window's own
+        // child controls (Pixel Editor's paint canvas, Image Viewer, Palette Strip) never end up holding
+        // real keyboard focus after being clicked, so nothing was there to route through. An HwndSource
+        // hook fires on any keystroke reaching this window's native handle, independent of WPF focus state
+        // entirely — the one mechanism that can't have this problem.
+        SourceInitialized += (_, _) =>
+        {
+            if (PresentationSource.FromVisual(this) is HwndSource hwndSource) hwndSource.AddHook(WndProc);
+        };
+
         RestoreWindowGeometry();
     }
 
-    /// <summary>
-    /// F1 is handled here (PreviewKeyDown, tunnelling from the Window down) instead of as a declarative
-    /// &lt;KeyBinding Key="F1"&gt; — that was tried first and silently never fired. F1 is WPF's default
-    /// gesture for the built-in <see cref="ApplicationCommands.Help"/> RoutedCommand, and something in the
-    /// focus/routing chain appears to consume it before a plain Window-level KeyBinding ever sees it (no
-    /// such CommandBinding is registered anywhere in this app, so it just silently swallows the key rather
-    /// than doing anything). Handling PreviewKeyDown directly on the Window sidesteps that entirely.
-    /// </summary>
-    private void MainWindow_OnPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    private const int WM_KEYDOWN = 0x0100;
+    private const int VK_F1 = 0x70;
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (e.Key != System.Windows.Input.Key.F1) return;
-        e.Handled = true;
-        if (_viewModel.ShowHelpCommand.CanExecute(null)) _viewModel.ShowHelpCommand.Execute(null);
+        if (msg == WM_KEYDOWN && wParam.ToInt32() == VK_F1)
+        {
+            if (_viewModel.ShowHelpCommand.CanExecute(null)) _viewModel.ShowHelpCommand.Execute(null);
+            handled = true;
+        }
+
+        return IntPtr.Zero;
     }
 
     /// <summary>
@@ -397,6 +411,13 @@ public partial class MainWindow : Window
     /// still be null here; nothing left to do about that at this point, the editor just opens with an
     /// empty (and, since nothing can be created without a size, permanently empty) palette.
     /// </summary>
+    private void Settings_OnClick(object sender, RoutedEventArgs e)
+    {
+        var vm = new SettingsViewModel();
+        var dialog = new SettingsWindow { DataContext = vm, Owner = this };
+        dialog.ShowDialog();
+    }
+
     private void MetatileEditor_OnClick(object sender, RoutedEventArgs e)
     {
         var vm = new MetatileEditorViewModel(_viewModel.Project);

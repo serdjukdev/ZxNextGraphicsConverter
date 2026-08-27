@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ZxNext.Core.Export;
+using ZxNext.Core.Settings;
 
 namespace ZxNext.App.ViewModels;
 
@@ -15,12 +16,12 @@ public partial class NewMapViewModel(int gridSize) : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ValidationText))]
     [NotifyPropertyChangedFor(nameof(IsValid))]
-    private int width = 32;
+    private int width = AppSettingsStore.Load().DefaultMapWidth ?? 32;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ValidationText))]
     [NotifyPropertyChangedFor(nameof(IsValid))]
-    private int height = 24;
+    private int height = AppSettingsStore.Load().DefaultMapHeight ?? 24;
 
     public string ValidationText
     {

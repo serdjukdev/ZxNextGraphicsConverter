@@ -9,10 +9,10 @@
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
         mc:Ignorable="d"
         Title="{Binding WindowTitle}" Height="600" Width="1000" MinWidth="700" MinHeight="450"
-        Closing="MainWindow_OnClosing" PreviewKeyDown="MainWindow_OnPreviewKeyDown">
+        Closing="MainWindow_OnClosing">
     <Window.InputBindings>
-        <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveProjectCommand}" />
-        <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
+        <KeyBinding Key="{x:Static local:Shortcuts.SaveKey}" Modifiers="{x:Static local:Shortcuts.SaveModifiers}" Command="{Binding SaveProjectCommand}" />
+        <KeyBinding Key="{x:Static local:Shortcuts.UndoKey}" Modifiers="{x:Static local:Shortcuts.UndoModifiers}" Command="{Binding UndoCommand}" />
     </Window.InputBindings>
     <DockPanel LastChildFill="True">
         <Menu DockPanel.Dock="Top">
@@ -35,6 +35,8 @@
                 <MenuItem Header="_Import Images..." Command="{Binding SourceImages.ImportFilesCommand}" />
                 <Separator />
                 <MenuItem Header="_Export for Next..." Click="Export_OnClick" />
+                <Separator />
+                <MenuItem Header="_Settings..." Click="Settings_OnClick" />
             </MenuItem>
             <MenuItem Header="_Tools">
                 <MenuItem Header="_Metatile Editor..." Click="MetatileEditor_OnClick" />

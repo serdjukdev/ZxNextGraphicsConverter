@@ -68,7 +68,7 @@ public partial class ExportFolderRowViewModel : ObservableObject
         this.dataBytes = dataBytes;
         IsChunkConfigurable = isChunkConfigurable;
         IsPixelOrderConfigurable = isPixelOrderConfigurable;
-        selectedChunkSize = ExportChunkSize.EightKb;
+        selectedChunkSize = AppSettingsStore.Load().DefaultExportChunkSize ?? ExportChunkSize.EightKb;
         selectedPixelOrder = PixelExportOrder.RowMajor;
         _recompute = recompute;
     }

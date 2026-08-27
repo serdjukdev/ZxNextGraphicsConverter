@@ -23,7 +23,7 @@ public partial class NewProjectViewModel : ObservableObject
 
     /// <summary>Locks <see cref="ZxNext.Core.Project.ProjectState.MetatileGridSize"/> for the whole project's lifetime — chosen once, here, instead of lazily the first time a metatile/map is created (see MetatileGridSizeWindow's history). Meaningless (and hidden, see <see cref="ShowMetatileGridSizeOption"/>) for Save Project As, whose project already has this locked.</summary>
     [ObservableProperty]
-    private int metatileGridSize = 2;
+    private int metatileGridSize = AppSettingsStore.Load().DefaultMetatileGridSize ?? 2;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FullPath))]

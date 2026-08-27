@@ -813,6 +813,81 @@ public partial class MapEditorViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Aggregate Mirror X / Mirror Y / Rotate across every Tilemap cell in the current <see cref="GridSelection"/>
+    /// — null per field means the selected cells disagree on it, non-null means every one of them shares
+    /// that exact value. Feeds the right-click popup's "Apply to selection" checkboxes (WPF's native
+    /// indeterminate/dash display for a disagreeing field). Deliberately says nothing about palette slot
+    /// override — that's never part of "Apply to selection".
+    /// </summary>
+    public (bool? MirrorX, bool? MirrorY, bool? Rotate) GetSelectionAttributeSummary()
+    {
+        if (SelectedMap is null || GridSelection is not { } rect) return (null, null, null);
+        var map = SelectedMap.Map;
+        var layer = map.TilemapLayer;
+
+        bool? mirrorX = null, mirrorY = null, rotate = null;
+        var first = true;
+        for (var row = rect.Row0; row <= rect.Row1; row++)
+        {
+            for (var col = rect.Col0; col <= rect.Col1; col++)
+            {
+                var (cellMirrorX, cellMirrorY, cellRotate, _) = CellAttributePacking.Unpack(layer.CellAttributes[row * map.Width + col]);
+                if (first)
+                {
+                    mirrorX = cellMirrorX;
+                    mirrorY = cellMirrorY;
+                    rotate = cellRotate;
+                    first = false;
+                }
+                else
+                {
+                    if (mirrorX != cellMirrorX) mirrorX = null;
+                    if (mirrorY != cellMirrorY) mirrorY = null;
+                    if (rotate != cellRotate) rotate = null;
+                }
+            }
+        }
+
+        return (mirrorX, mirrorY, rotate);
+    }
+
+    /// <summary>
+    /// "Apply to selection" apply — for every Tilemap cell in the current <see cref="GridSelection"/>,
+    /// sets whichever of <paramref name="mirrorX"/>/<paramref name="mirrorY"/>/<paramref name="rotate"/>
+    /// is non-null to that value; a null field is left exactly as each cell already had it (a field the
+    /// user left at the popup's "mixed" dash must never overwrite a cell's own existing value for that
+    /// bit — including the cell that was right-clicked to open the popup). Palette slot override is never
+    /// touched here, for any cell. One undo step, via the same <see cref="BeginStroke"/>/<see cref="SetCellAttribute"/>/
+    /// <see cref="EndStroke"/> machinery Fill/Delete/Move already use — its own per-index "first touch"
+    /// snapshot already does the right thing here with no changes needed.
+    /// </summary>
+    public void ApplyCellAttributesToSelection(bool? mirrorX, bool? mirrorY, bool? rotate)
+    {
+        if (SelectedMap is null || GridSelection is not { } rect) return;
+        var map = SelectedMap.Map;
+        if (map.MetatileGridSize != 1) return; // defensive — the UI never offers this checkbox otherwise
+        var layer = map.TilemapLayer;
+
+        BeginStroke();
+        for (var row = rect.Row0; row <= rect.Row1; row++)
+        {
+            for (var col = rect.Col0; col <= rect.Col1; col++)
+            {
+                var index = row * map.Width + col;
+                var (currentMirrorX, currentMirrorY, currentRotate, paletteOverride) = CellAttributePacking.Unpack(layer.CellAttributes[index]);
+                var newAttr = CellAttributePacking.Pack(mirrorX ?? currentMirrorX, mirrorY ?? currentMirrorY, rotate ?? currentRotate, paletteOverride);
+                SetCellAttribute(layer, index, newAttr);
+            }
+        }
+
+        // Full rebuild, not RenderPreviewRegion: this is an occasional bulk edit (not a hot per-cell paint
+        // path), and RenderPreview() is the exact call ApplyCellAttributes already uses for the single-cell
+        // case confirmed correct on real hardware — no reason to risk a region-math edge case here too.
+        RenderPreview();
+        EndStroke();
+    }
+
+    /// <summary>
     /// Writes one grid cell, capturing its pre-write value into <see cref="_strokeOriginalCellValues"/> the
     /// FIRST time (only) that index is touched during the current stroke — shared by PaintOrEraseAt (one
     /// cell per mouse event), FillSelection, DeleteSelection, and MoveGridSelection (a whole rectangle per

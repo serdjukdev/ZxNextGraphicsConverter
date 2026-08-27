@@ -649,10 +649,14 @@ public partial class MapEditorWindow : Window
     /// the clicked cell from its metatile (always the tile's own fixed default, see MapGridLayer's doc
     /// comment), but pre-fills Mirror/Rotate/PaletteSlotOverride by unpacking that cell's own
     /// <see cref="ZxNext.Core.Model.MapGridLayer.CellAttributes"/> byte, NOT from the metatile's cell (which
-    /// never carries a real one). Applies via <see cref="MapEditorViewModel.ApplyCellAttributes"/> on OK,
-    /// which only ever writes that same byte back — the tile itself is never touched. A no-op on an
-    /// untouched/erased cell (its reserved Blank metatile is not a real, editable tile) or one whose tile
-    /// no longer exists.
+    /// never carries a real one). A no-op on an untouched/erased cell (its reserved Blank metatile is not a
+    /// real, editable tile) or one whose tile no longer exists.
+    ///
+    /// If the map currently has an active grid selection, editing here automatically targets every cell in
+    /// that selection instead of just the clicked one — see
+    /// <see cref="MapEditorViewModel.GetSelectionAttributeSummary"/>/<see cref="MapEditorViewModel.ApplyCellAttributesToSelection"/>.
+    /// Palette slot override is never part of that — it always applies to just this one cell, via
+    /// <see cref="MapEditorViewModel.ApplyCellAttributes"/>, exactly as before that feature existed.
     /// </summary>
     private void OpenCellAttributeDialogAt(MapEditorViewModel vm, Point position)
     {
@@ -673,10 +677,17 @@ public partial class MapEditorWindow : Window
             PaletteSlotOverride = paletteOverride
         };
 
-        var dialog = new CellAttributeWindow(attributes) { Owner = this };
+        var dialog = new CellAttributeWindow(attributes, vm.GridSelection is not null, vm.GetSelectionAttributeSummary) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
-        vm.ApplyCellAttributes(cellIndex.Value, dialog.Attributes);
+        if (dialog.ApplyToSelection)
+        {
+            vm.ApplyCellAttributesToSelection(dialog.MirrorXResult, dialog.MirrorYResult, dialog.RotateResult);
+        }
+        else
+        {
+            vm.ApplyCellAttributes(cellIndex.Value, dialog.Attributes);
+        }
     }
 
     private void ObjectActionPopup_SetUserByte_OnClick(object sender, RoutedEventArgs e)

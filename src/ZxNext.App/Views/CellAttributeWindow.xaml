@@ -12,13 +12,18 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
     </Window.Resources>
     <StackPanel Margin="14" Width="220">
-        <Image Source="{Binding Preview}" Width="64" Height="64" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor"
+        <Image x:Name="PreviewImage" Source="{Binding Preview}" Width="64" Height="64" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor"
                HorizontalAlignment="Center" Margin="0,0,0,10" />
+        <TextBlock x:Name="SelectionModeText" Text="Editing every tile in the selection. A dash means the selected tiles don't all agree on that setting: leave it alone to keep each tile's own value, or click it to set that value on every selected tile." FontSize="10" Foreground="Gray" TextWrapping="Wrap"
+                   HorizontalAlignment="Center" TextAlignment="Center" Visibility="Collapsed" Margin="0,0,0,10" />
 
         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-            <CheckBox Content="Mirror X" IsChecked="{Binding MirrorX}" Margin="0,0,8,0" />
-            <CheckBox Content="Mirror Y" IsChecked="{Binding MirrorY}" Margin="0,0,8,0" />
-            <CheckBox Content="Rotate" IsChecked="{Binding Rotate}"
+            <CheckBox x:Name="MirrorXCheckBox" Content="Mirror X" Margin="0,0,8,0"
+                      Checked="AttributeCheckBox_OnDefiniteStateChanged" Unchecked="AttributeCheckBox_OnDefiniteStateChanged" />
+            <CheckBox x:Name="MirrorYCheckBox" Content="Mirror Y" Margin="0,0,8,0"
+                      Checked="AttributeCheckBox_OnDefiniteStateChanged" Unchecked="AttributeCheckBox_OnDefiniteStateChanged" />
+            <CheckBox x:Name="RotateCheckBox" Content="Rotate"
+                      Checked="AttributeCheckBox_OnDefiniteStateChanged" Unchecked="AttributeCheckBox_OnDefiniteStateChanged"
                       ToolTip="Transposes the tile (diagonal flip). Combined with Mirror X/Y this reaches all 8 possible orientations." />
         </StackPanel>
 

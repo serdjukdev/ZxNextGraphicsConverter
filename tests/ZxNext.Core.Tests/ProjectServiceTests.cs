@@ -359,13 +359,13 @@ public class ProjectServiceTests : IDisposable
     public void SaveThenLoad_RoundTripsTheProjectsLockedMetatileGridSize()
     {
         var project = new ProjectState();
-        MapService.Create(project, "level1", 4, 4, 3);
-        Assert.Equal(3, project.MetatileGridSize);
+        MapService.Create(project, "level1", 4, 4, 4);
+        Assert.Equal(4, project.MetatileGridSize);
 
         ProjectService.Save(project, _tempProjectFile);
         var loaded = ProjectService.Load(_tempProjectFile);
 
-        Assert.Equal(3, loaded.MetatileGridSize);
+        Assert.Equal(4, loaded.MetatileGridSize);
     }
 
     /// <summary>A project saved before the project-wide GridSize lock existed (no "MetatileGridSize" key at all) infers it from whichever GridSize its own already-saved metatiles/maps actually use, rather than leaving it unlocked and letting a later create silently lock to something arbitrary.</summary>

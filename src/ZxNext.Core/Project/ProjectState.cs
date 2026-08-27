@@ -29,14 +29,17 @@ public class ProjectState
     public List<MapAsset> Maps { get; } = [];
 
     /// <summary>
-    /// The one metatile GridSize (2/3/4) this whole project is locked to, for BOTH MetatileKinds and
-    /// every map — null until the first metatile or map is ever created. There is no realistic reason
-    /// within one game to want different metatile sizes for different maps (a project needing a
-    /// genuinely different size is a different game/project); locking project-wide, once, up front,
-    /// removes an entire axis of per-metatile/per-map choice (and per-map size mismatches) that never
-    /// bought anything. Set (and thereafter enforced) by <see cref="Conversion.MetatileService.Create"/>
-    /// and <see cref="Conversion.MapService.Create"/> — whichever of those runs first for a project locks
-    /// it, the other then validates against the same value.
+    /// The one metatile GridSize this whole project is locked to, for BOTH MetatileKinds and every map.
+    /// Restricted to 2 or 4 (powers of two) — nothing in the hardware demands that, but the arithmetic and
+    /// typical sprite sizes work out cleaner, and 3 turned out to be untested/unused dead weight in
+    /// practice, so it was dropped. There is no realistic reason within one game to want different metatile sizes for
+    /// different maps (a project needing a genuinely different size is a different game/project); locking
+    /// project-wide, once, up front, removes an entire axis of per-metatile/per-map choice (and per-map
+    /// size mismatches) that never bought anything. Chosen once in the New Project dialog (see
+    /// MainViewModel.CreateNewProject) and never changed afterward. Still nullable only for a project
+    /// loaded from a .zxngc saved before this was asked up front — <see cref="Conversion.MetatileService.Create"/>
+    /// and <see cref="Conversion.MapService.Create"/> validate against it once set, and MainWindow prompts
+    /// once, right after such a legacy project finishes loading, if it's still null then.
     /// </summary>
     public int? MetatileGridSize { get; set; }
 

@@ -13,9 +13,6 @@ public partial class AtlasSlicerViewModel : ObservableObject
 {
     private readonly ProjectState _project;
     private readonly AssetCategory _category;
-
-    /// <summary>Exposed so AtlasSlicerWindow's code-behind can lazily resolve <see cref="ProjectState.MetatileGridSize"/> via MetatileGridSizeWindow.EnsureChosen when the user checks <see cref="SliceIntoMetatileBlocks"/>.</summary>
-    public ProjectState Project => _project;
     private readonly byte[] _sourceRgba32;
 
     /// <summary>Fixed for the whole dialog session — whether the target category already has a designated transparent tile doesn't change while slicing/import parameters are being tweaked, only whether the CURRENT slice contains one does (see <see cref="RecomputeCellCount"/>).</summary>
@@ -68,11 +65,11 @@ public partial class AtlasSlicerViewModel : ObservableObject
     private bool sliceIntoMetatileBlocks;
 
     /// <summary>
-    /// The project's locked <see cref="ProjectState.MetatileGridSize"/> (2/3/4), once known — null until
-    /// either the project already had it locked at dialog-open time, or the user just resolved it via
-    /// <see cref="SetResolvedGridSize"/> (see AtlasSlicerWindow's lazy MetatileGridSizeWindow prompt).
+    /// The project's locked <see cref="ProjectState.MetatileGridSize"/> (2 or 4), set from the constructor.
+    /// Null only for a legacy project whose once-per-load MetatileGridSizeWindow prompt (see MainWindow)
+    /// got cancelled — metatile-block slicing stays unavailable for the rest of this dialog session then.
     /// </summary>
-    public int? ResolvedGridSize { get; private set; }
+    public int? ResolvedGridSize { get; }
 
     [ObservableProperty]
     private int offsetLeft;
@@ -156,10 +153,9 @@ public partial class AtlasSlicerViewModel : ObservableObject
     partial void OnIncludedUnitsChanged(IReadOnlyList<bool> value) => UpdateSelectionStatusText();
 
     /// <summary>
-    /// Toggling on with a still-unknown <see cref="ResolvedGridSize"/> leaves the cell size untouched —
-    /// the code-behind (AtlasSlicerWindow) is responsible for lazily resolving it (via
-    /// MetatileGridSizeWindow.EnsureChosen) and calling <see cref="SetResolvedGridSize"/>, or reverting
-    /// this flag back to false if the user cancels that prompt.
+    /// Toggling on with a still-unknown <see cref="ResolvedGridSize"/> (a legacy project whose load-time
+    /// prompt got cancelled) leaves the cell size untouched — the code-behind reverts the checkbox back to
+    /// false right away in that case (see AtlasSlicerWindow.MetatileBlocksCheckBox_OnChecked).
     /// </summary>
     partial void OnSliceIntoMetatileBlocksChanged(bool value)
     {
@@ -177,18 +173,6 @@ public partial class AtlasSlicerViewModel : ObservableObject
         if (value) PadIncompleteEdgeCells = false; // no padding scope in block mode — avoid stale state leaking into the big-block grid
         OnPropertyChanged(nameof(CanPadIncompleteEdgeCells));
         RecomputeCellCount();
-    }
-
-    /// <summary>Called by AtlasSlicerWindow once it has resolved (or already knew) the project's MetatileGridSize, after the user checked <see cref="SliceIntoMetatileBlocks"/>.</summary>
-    public void SetResolvedGridSize(int gridSize)
-    {
-        ResolvedGridSize = gridSize;
-        if (SliceIntoMetatileBlocks)
-        {
-            CellWidth = 8 * gridSize;
-            CellHeight = 8 * gridSize;
-            RecomputeCellCount();
-        }
     }
 
     /// <summary>

@@ -40,6 +40,7 @@ public class MapServiceTests
 
     [Theory]
     [InlineData(1)]
+    [InlineData(3)]
     [InlineData(5)]
     public void Create_InvalidGridSize_Rejected(int gridSize)
     {
@@ -104,9 +105,9 @@ public class MapServiceTests
         var project = new ProjectState();
         Assert.Null(project.MetatileGridSize);
 
-        MapService.Create(project, "a", 2, 2, 3);
+        MapService.Create(project, "a", 2, 2, 4);
 
-        Assert.Equal(3, project.MetatileGridSize);
+        Assert.Equal(4, project.MetatileGridSize);
     }
 
     [Fact]

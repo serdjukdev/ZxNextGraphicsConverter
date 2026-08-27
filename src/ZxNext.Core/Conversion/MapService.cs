@@ -11,9 +11,9 @@ public static class MapService
 {
     public static MapCreateResult Create(ProjectState project, string name, int width, int height, int metatileGridSize)
     {
-        if (metatileGridSize is not (2 or 3 or 4))
+        if (metatileGridSize is not (2 or 4))
         {
-            return new MapCreateResult(false, null, $"MetatileGridSize must be 2, 3, or 4 (got {metatileGridSize}).");
+            return new MapCreateResult(false, null, $"MetatileGridSize must be 2 or 4 (got {metatileGridSize}).");
         }
 
         if (width <= 0 || height <= 0)

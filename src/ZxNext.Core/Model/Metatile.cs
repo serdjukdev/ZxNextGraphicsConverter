@@ -1,7 +1,7 @@
 namespace ZxNext.Core.Model;
 
 /// <summary>
-/// A reusable NxN block of tiles (N = <see cref="GridSize"/>, 2/3/4) — the atomic unit placed onto a
+/// A reusable NxN block of tiles (N = <see cref="GridSize"/>, 2 or 4) — the atomic unit placed onto a
 /// map's Tilemap or 8bpp Tile layer; direct single-tile placement on a map is disallowed. Project-wide
 /// library, not per-map data.
 ///

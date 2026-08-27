@@ -39,10 +39,11 @@ public partial class MetatileEditorViewModel : ObservableObject
     /// <summary>
     /// The whole project's fixed metatile size (see <see cref="ProjectState.MetatileGridSize"/>'s own doc
     /// comment) — no longer a per-metatile choice, so unlike every other Draft* property this is a
-    /// plain read-only value, set once in the constructor. The caller (MainWindow.MetatileEditor_OnClick)
-    /// guarantees <see cref="ProjectState.MetatileGridSize"/> is already locked before this ViewModel is
-    /// ever constructed (via MetatileGridSizeWindow.EnsureChosen), so the fallback here should never
-    /// actually apply — it exists only so this can't null-reference if that guarantee is ever violated.
+    /// plain read-only value, set once in the constructor. Normally already locked (New Project dialog, or
+    /// MainWindow's once-per-legacy-project load-time prompt) by the time this ViewModel is constructed;
+    /// the <c>?? 2</c> fallback below only actually applies for a legacy project whose load-time prompt got
+    /// cancelled, so this editor can't null-reference even then (it'll just create metatiles at a size the
+    /// project hasn't really committed to).
     /// </summary>
     public int DraftGridSize { get; }
 
@@ -91,9 +92,6 @@ public partial class MetatileEditorViewModel : ObservableObject
     public MetatileEditorViewModel(ProjectState project)
     {
         _project = project;
-        // Guaranteed already locked before this ViewModel is ever constructed (MainWindow.MetatileEditor_OnClick
-        // calls MetatileGridSizeWindow.EnsureChosen first) — the fallback is just so this can't null-reference
-        // if that guarantee is ever violated.
         DraftGridSize = project.MetatileGridSize ?? 2;
         EnsureBlankForCurrentSelection();
         RefreshTilePalette();

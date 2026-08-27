@@ -99,6 +99,7 @@ public class MetatileServiceTests
 
     [Theory]
     [InlineData(1)]
+    [InlineData(3)]
     [InlineData(5)]
     public void Create_InvalidGridSize_Rejected(int gridSize)
     {
@@ -126,7 +127,7 @@ public class MetatileServiceTests
     public void Create_WrongCellCount_Rejected()
     {
         var project = new ProjectState();
-        var result = MetatileService.Create(project, "mismatched", MetatileKind.FourBpp, 3, MakeCells(2)); // 4 cells, needs 9
+        var result = MetatileService.Create(project, "mismatched", MetatileKind.FourBpp, 4, MakeCells(2)); // 4 cells, needs 16
         Assert.False(result.Success);
         Assert.Empty(project.Metatiles);
     }
@@ -331,7 +332,7 @@ public class MetatileServiceTests
         var project = new ProjectState();
         MetatileService.Create(project, "grass_4bpp", MetatileKind.FourBpp, 2, MakeCells(2));
 
-        var result = MetatileService.Create(project, "grass_8bpp", MetatileKind.EightBpp, 3, MakeCells(3));
+        var result = MetatileService.Create(project, "grass_8bpp", MetatileKind.EightBpp, 4, MakeCells(4));
 
         Assert.False(result.Success);
         Assert.Contains("2x2", result.Error);
@@ -343,12 +344,12 @@ public class MetatileServiceTests
     public void Create_GridSizeAlreadyLockedByAMap_MatchingMetatileSucceeds_MismatchedRejected()
     {
         var project = new ProjectState();
-        MapService.Create(project, "level1", 4, 4, 3); // locks the project to 3x3
+        MapService.Create(project, "level1", 4, 4, 4); // locks the project to 4x4
 
         var mismatched = MetatileService.Create(project, "bad", MetatileKind.FourBpp, 2, MakeCells(2));
         Assert.False(mismatched.Success);
 
-        var matching = MetatileService.Create(project, "ok", MetatileKind.FourBpp, 3, MakeCells(3));
+        var matching = MetatileService.Create(project, "ok", MetatileKind.FourBpp, 4, MakeCells(4));
         Assert.True(matching.Success, matching.Error);
     }
 }

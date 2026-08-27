@@ -12,11 +12,18 @@ public partial class NewProjectViewModel : ObservableObject
 {
     private readonly bool _createSubfolder;
 
-    /// <summary><paramref name="createSubfolder"/>: New Project creates "ParentFolder\ProjectName\ProjectName.zxngc" (a dedicated folder per project, so it has a natural home for exports etc.) — Save Project As instead saves directly at "ParentFolder\ProjectName.zxngc", since the user is placing an already-existing project, not creating a fresh one.</summary>
+    /// <summary><paramref name="createSubfolder"/>: New Project creates "ParentFolder\ProjectName\ProjectName.zxngc" (a dedicated folder per project, so it has a natural home for exports etc.) — Save Project As instead saves directly at "ParentFolder\ProjectName.zxngc", since the user is placing an already-existing project, not creating a fresh one. Also doubles as "is this a genuinely new project" for <see cref="ShowMetatileGridSizeOption"/>: Save Project As persists an already-existing <see cref="ZxNext.Core.Project.ProjectState.MetatileGridSize"/>, so there is nothing to ask there.</summary>
     public NewProjectViewModel(bool createSubfolder = true)
     {
         _createSubfolder = createSubfolder;
     }
+
+    /// <summary>Only the "New Project" dialog (not "Save Project As") asks for this — see the constructor doc.</summary>
+    public bool ShowMetatileGridSizeOption => _createSubfolder;
+
+    /// <summary>Locks <see cref="ZxNext.Core.Project.ProjectState.MetatileGridSize"/> for the whole project's lifetime — chosen once, here, instead of lazily the first time a metatile/map is created (see MetatileGridSizeWindow's history). Meaningless (and hidden, see <see cref="ShowMetatileGridSizeOption"/>) for Save Project As, whose project already has this locked.</summary>
+    [ObservableProperty]
+    private int metatileGridSize = 2;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FullPath))]

@@ -8,6 +8,9 @@
         mc:Ignorable="d"
         Title="New Project" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
     <StackPanel Margin="16" Width="420">
         <TextBlock Text="Project name" FontSize="11" />
         <TextBox Text="{Binding ProjectName, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,10" />
@@ -21,6 +24,16 @@
             <TextBox Grid.Column="0" Text="{Binding ParentFolder, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="True" />
             <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseParentFolderCommand}" Margin="6,0,0,0" Padding="8,2" />
         </Grid>
+
+        <StackPanel Visibility="{Binding ShowMetatileGridSizeOption, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
+            <TextBlock Text="Metatile size" FontSize="11" />
+            <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="Gray" Margin="0,2,0,6"
+                       Text="Every metatile and every map's grid in this project will share this one size, fixed forever once created." />
+            <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="Size2" Content="2x2" GroupName="NewProjectGridSize" Margin="0,0,14,0" IsChecked="True" />
+                <RadioButton x:Name="Size4" Content="4x4" GroupName="NewProjectGridSize" />
+            </StackPanel>
+        </StackPanel>
 
         <TextBlock Text="Project will be created at:" FontSize="11" Foreground="Gray" Margin="0,8,0,0" />
         <TextBlock Text="{Binding FullPath}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" />

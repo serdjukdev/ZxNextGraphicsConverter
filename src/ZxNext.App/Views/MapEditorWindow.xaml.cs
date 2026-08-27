@@ -116,19 +116,29 @@ public partial class MapEditorWindow : Window
         }
     }
 
+    /// <summary>
+    /// <see cref="ZxNext.Core.Project.ProjectState.MetatileGridSize"/> is locked up front now (New Project
+    /// dialog, or MainWindow's once-per-legacy-project prompt right after load) — the only way it's still
+    /// null here is a legacy project whose load-time prompt got cancelled, which leaves map creation
+    /// blocked until the project is closed and reopened (accepting that prompt, or starting a fresh
+    /// project, is the only way forward).
+    /// </summary>
     private void NewMap_OnClick(object sender, RoutedEventArgs e)
     {
         if (DataContext is not MapEditorViewModel vm) return;
 
-        var wasAlreadyLocked = vm.Project.MetatileGridSize is not null;
-        if (!MetatileGridSizeWindow.EnsureChosen(vm.Project, this)) return;
-        if (!wasAlreadyLocked) vm.MarkChanged();
+        if (vm.Project.MetatileGridSize is not { } gridSize)
+        {
+            MessageBox.Show("This project has no metatile size set. Close and reopen the project to be asked again.",
+                "New Map", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
 
         var newMapVm = new NewMapViewModel();
         var dialog = new NewMapWindow { DataContext = newMapVm, Owner = this };
         if (dialog.ShowDialog() != true) return;
 
-        vm.CreateMap(newMapVm.Name, newMapVm.Width, newMapVm.Height, vm.Project.MetatileGridSize!.Value);
+        vm.CreateMap(newMapVm.Name, newMapVm.Width, newMapVm.Height, gridSize);
     }
 
     private void ManageTypes_OnClick(object sender, RoutedEventArgs e)

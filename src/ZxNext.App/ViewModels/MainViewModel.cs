@@ -65,6 +65,15 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Raised (handled by code-behind, which owns window ownership) when the user asks for Help — F1 or the Help menu.</summary>
     public event Action? HelpRequested;
 
+    /// <summary>
+    /// Raised right after a project finishes loading (Open, Open Recent, or the startup auto-reopen) if
+    /// it's a legacy .zxngc saved before <see cref="ProjectState.MetatileGridSize"/> was asked up front in
+    /// the New Project dialog and still has no value. Code-behind owns window ownership, so it shows the
+    /// picker (once, here, instead of lazily at the first place that used to need it — Metatile Editor,
+    /// New Map, Atlas Slicer's metatile-block checkbox).
+    /// </summary>
+    public event Action? MetatileGridSizeNeeded;
+
     [RelayCommand]
     private void ShowHelp() => HelpRequested?.Invoke();
 
@@ -1295,9 +1304,9 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Creates a brand-new project directly at the given file path (name + location chosen by the user in the New Project dialog) and saves it immediately, so it always has a real location on disk. Always empty (no source images yet), so no busy indicator needed.</summary>
-    public void CreateNewProject(string projectFilePath)
+    public void CreateNewProject(string projectFilePath, int metatileGridSize)
     {
-        _project = new ProjectState();
+        _project = new ProjectState { MetatileGridSize = metatileGridSize };
         RebuildFromProject();
         SaveTo(projectFilePath);
     }
@@ -1305,6 +1314,8 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Re-decodes every source image in the project, which can be slow for a project with many/large images — runs off the UI thread behind a busy indicator.</summary>
     public async Task LoadProjectFromAsync(string path)
     {
+        var loadSucceeded = false;
+
         await RunBusyAsync("Opening project...", async progress =>
         {
             ProjectState loaded;
@@ -1326,7 +1337,10 @@ public partial class MainViewModel : ObservableObject
             RefreshRecentProjects();
             await RebuildFromProjectAsync(progress);
             PixelEditor.StatusText = $"Opened project from {path}.";
+            loadSucceeded = true;
         });
+
+        if (loadSucceeded && _project.MetatileGridSize is null) MetatileGridSizeNeeded?.Invoke();
     }
 
     /// <summary>Explicit user-triggered save (Save / Save As), wrapped with a busy indicator since a project with many images can take a moment to write. The plain synchronous <see cref="SaveTo"/> below stays for internal call sites (New Project, the unsaved-changes discard prompt) where a project is either always empty or the operation is a rare "confirm before quitting" gate not worth the extra async plumbing.</summary>

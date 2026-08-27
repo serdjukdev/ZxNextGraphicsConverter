@@ -78,24 +78,19 @@ public partial class AtlasSlicerWindow : Window
     private void ClearSelection_OnClick(object sender, RoutedEventArgs e) => Vm.ClearSelection();
 
     /// <summary>
-    /// Lazily resolves the project's <see cref="ZxNext.Core.Project.ProjectState.MetatileGridSize"/> the
-    /// first time it's actually needed — same pattern/dialog as MainWindow.MetatileEditor_OnClick. If the
-    /// project already has it locked, <see cref="AtlasSlicerViewModel.ResolvedGridSize"/> was already set
-    /// in the constructor and this is a no-op check (EnsureChosen returns true immediately). If the user
-    /// cancels the size-picker, the checkbox reverts so the dialog is left in a consistent 8x8 state.
+    /// <see cref="AtlasSlicerViewModel.ResolvedGridSize"/> is set from <see cref="ZxNext.Core.Project.ProjectState.MetatileGridSize"/>
+    /// in the constructor now that it's locked up front (New Project dialog, or MainWindow's
+    /// once-per-legacy-project prompt right after load) — so this is normally a no-op. It can still be
+    /// null only for a legacy project whose load-time prompt got cancelled, in which case metatile-block
+    /// slicing stays unavailable (the checkbox reverts) until the project is reopened.
     /// </summary>
     private void MetatileBlocksCheckBox_OnChecked(object sender, RoutedEventArgs e)
     {
         if (Vm.ResolvedGridSize is not null) return;
 
-        if (MetatileGridSizeWindow.EnsureChosen(Vm.Project, this) && Vm.Project.MetatileGridSize is { } gridSize)
-        {
-            Vm.SetResolvedGridSize(gridSize);
-        }
-        else
-        {
-            MetatileBlocksCheckBox.IsChecked = false;
-        }
+        MetatileBlocksCheckBox.IsChecked = false;
+        MessageBox.Show("This project has no metatile size set. Close and reopen the project to be asked again.",
+            "Slice into metatile blocks", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     private void Cancel_OnClick(object sender, RoutedEventArgs e)

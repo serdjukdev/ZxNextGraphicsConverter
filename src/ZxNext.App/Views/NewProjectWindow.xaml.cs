@@ -1,4 +1,5 @@
 using System.Windows;
+using ZxNext.App.ViewModels;
 
 namespace ZxNext.App.Views;
 
@@ -16,6 +17,11 @@ public partial class NewProjectWindow : Window
 
     private void Create_OnClick(object sender, RoutedEventArgs e)
     {
+        if (DataContext is NewProjectViewModel { ShowMetatileGridSizeOption: true } vm)
+        {
+            vm.MetatileGridSize = Size4.IsChecked == true ? 4 : 2;
+        }
+
         DialogResult = true;
     }
 }

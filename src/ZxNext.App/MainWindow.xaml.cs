@@ -42,6 +42,7 @@ public partial class MainWindow : Window
         _viewModel.PaletteStrip.SwatchDoubleClicked += OnPaletteSwatchDoubleClicked;
         _viewModel.ReQuantizeRequested += OnReQuantizeRequested;
         _viewModel.HelpRequested += OnHelpRequested;
+        _viewModel.MetatileGridSizeNeeded += OnMetatileGridSizeNeeded;
 
         RestoreWindowGeometry();
     }
@@ -82,6 +83,17 @@ public partial class MainWindow : Window
         _helpWindow = new HelpWindow { Owner = this };
         _helpWindow.Closed += (_, _) => _helpWindow = null;
         _helpWindow.Show();
+    }
+
+    /// <summary>
+    /// Fires once, right after a project finishes loading, only for a legacy .zxngc saved before
+    /// <see cref="ProjectState.MetatileGridSize"/> was asked up front in the New Project dialog. Resolves
+    /// it immediately instead of lazily deferring to whichever feature (Metatile Editor, New Map, Atlas
+    /// Slicer) the user happens to touch first.
+    /// </summary>
+    private void OnMetatileGridSizeNeeded()
+    {
+        if (MetatileGridSizeWindow.EnsureChosen(_viewModel.Project, this)) _viewModel.HasUnsavedChanges = true;
     }
 
     /// <summary>Applies the saved window size/position, falling back to the XAML defaults if nothing was saved yet or the saved bounds no longer fit any screen.</summary>
@@ -284,7 +296,7 @@ public partial class MainWindow : Window
         var dialog = new NewProjectWindow { DataContext = vm, Owner = this };
         if (dialog.ShowDialog() == true)
         {
-            _viewModel.CreateNewProject(vm.FullPath);
+            _viewModel.CreateNewProject(vm.FullPath, vm.MetatileGridSize);
             SaveLastProjectDirectory(vm.ParentFolder);
         }
     }
@@ -378,12 +390,15 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Every project has <see cref="ProjectState.MetatileGridSize"/> locked by now — chosen up front in
+    /// the New Project dialog, or (for a legacy .zxngc that predates that) resolved once right after
+    /// loading, by <see cref="OnMetatileGridSizeNeeded"/>. If the user cancelled that legacy prompt it can
+    /// still be null here; nothing left to do about that at this point, the editor just opens with an
+    /// empty (and, since nothing can be created without a size, permanently empty) palette.
+    /// </summary>
     private void MetatileEditor_OnClick(object sender, RoutedEventArgs e)
     {
-        var wasAlreadyLocked = _viewModel.Project.MetatileGridSize is not null;
-        if (!MetatileGridSizeWindow.EnsureChosen(_viewModel.Project, this)) return;
-        if (!wasAlreadyLocked) _viewModel.HasUnsavedChanges = true;
-
         var vm = new MetatileEditorViewModel(_viewModel.Project);
         var dialog = new MetatileEditorWindow { DataContext = vm, Owner = this };
         dialog.ShowDialog();

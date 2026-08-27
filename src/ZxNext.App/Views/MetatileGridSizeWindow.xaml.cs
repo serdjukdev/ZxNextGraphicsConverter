@@ -5,12 +5,14 @@ namespace ZxNext.App.Views;
 
 /// <summary>
 /// One-time-per-project dialog for <see cref="ProjectState.MetatileGridSize"/> — see that property's own
-/// doc comment for why the whole project shares a single metatile size. Shown lazily, the first time it's
-/// actually needed (opening the Metatile Editor, or creating the first map), via <see cref="EnsureChosen"/>.
+/// doc comment for why the whole project shares a single metatile size. A brand-new project now asks for
+/// this up front, embedded directly in the New Project dialog (see NewProjectWindow/NewProjectViewModel) —
+/// this standalone window and <see cref="EnsureChosen"/> only still fire for a legacy .zxngc saved before
+/// that existed, once, right after it finishes loading (see MainWindow.OnMetatileGridSizeNeeded).
 /// </summary>
 public partial class MetatileGridSizeWindow : Window
 {
-    public int SelectedGridSize => Size4.IsChecked == true ? 4 : Size3.IsChecked == true ? 3 : 2;
+    public int SelectedGridSize => Size4.IsChecked == true ? 4 : 2;
 
     public MetatileGridSizeWindow()
     {
@@ -24,8 +26,8 @@ public partial class MetatileGridSizeWindow : Window
     /// <summary>
     /// No-op (returns true immediately) once <see cref="ProjectState.MetatileGridSize"/> is already locked
     /// — otherwise shows this dialog and locks it to whatever the user picks. Returns false only if the
-    /// user cancelled (project stays unlocked) — the caller should abandon whatever it was about to do
-    /// (open the Metatile Editor, create a map) rather than proceed with nothing chosen.
+    /// user cancelled (project stays unlocked) — the caller (MainWindow, right after loading a legacy
+    /// project) proceeds regardless, just leaving the project's metatile-dependent features unavailable.
     /// </summary>
     public static bool EnsureChosen(ProjectState project, Window owner)
     {

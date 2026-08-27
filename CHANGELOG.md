@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Changed: the project's metatile grid size (2x2/4x4) is now chosen once, up front, in the New Project dialog instead of lazily the first time it's actually needed (opening the Metatile Editor, checking Atlas Slicer's "slice into metatile blocks", or creating the first map). A project saved before this existed still resolves it once, right after it finishes loading, if it doesn't already have one locked.
+- Removed: 3x3 metatiles. Nothing on this platform actually needs a non-power-of-two metatile size (no hardware requirement forces it), 2x2/4x4 keep the arithmetic and typical sprite-size alignment cleaner, and 3x3 turned out to be broken (silently created 2x2 metatiles instead) and unused in practice, so it's gone rather than fixed.
+
 ## v0.3.0 (2026-08-27)
 
 - Changed: deleting a tile used in a metatile, a sprite placed on a map, or a metatile placed on a map is no longer blocked outright: the confirmation dialog now spells out the full cascade instead (which metatiles contain the tile, how many map cells will become the Blank tile, how many sprite placements will be removed) and lets you proceed. A cascade that touches anything beyond the selected tiles/sprites themselves is not undoable, same as the project's other cascading deletes (folder/source-image); a delete with nothing else attached still is. Deleting a tile/sprite also now correctly frees unused 4bpp palette bank slots (it already did for flat/8bpp palettes, matching the fix already applied to source-image delete).

@@ -4,7 +4,7 @@ using ZxNext.Core.Export;
 
 namespace ZxNext.App.ViewModels;
 
-/// <summary>Backs the "New Map" dialog: name and starting Width/Height (changeable later via Resize/Trim — see ValidationText). Metatile GridSize is no longer chosen here — the whole project shares one fixed size, chosen once via MetatileGridSizeWindow before this dialog ever opens (see MapEditorWindow.NewMap_OnClick). Validates before creating, same "IsEnabled bound to IsValid" pattern as NewProjectWindow.</summary>
+/// <summary>Backs the "New Map" dialog: name and starting Width/Height (changeable later via Resize/Trim — see ValidationText). Metatile GridSize is no longer chosen here — the whole project shares one fixed size, chosen once up front in the New Project dialog (see MapEditorWindow.NewMap_OnClick). Validates before creating, same "IsEnabled bound to IsValid" pattern as NewProjectWindow.</summary>
 public partial class NewMapViewModel : ObservableObject
 {
     [ObservableProperty]

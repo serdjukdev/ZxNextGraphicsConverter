@@ -40,7 +40,7 @@ public partial class App : Application
         MainWindow = mainWindow; // set explicitly (rather than relying on WPF's first-shown-window heuristic) since MainViewModel's busy indicator owns itself to Application.Current.MainWindow
         mainWindow.Show();
 
-        var lastProject = RecentProjectsStore.Load().FirstOrDefault(File.Exists);
+        var lastProject = RecentProjectsStore.Load().FirstOrDefault();
         if (lastProject is not null)
         {
             var mainViewModel = _services.GetRequiredService<MainViewModel>();

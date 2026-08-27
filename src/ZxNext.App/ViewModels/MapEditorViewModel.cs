@@ -73,6 +73,7 @@ public partial class MapEditorViewModel : ObservableObject
 
     private readonly Stack<Action> _undoStack = new();
     private readonly Dictionary<int, byte> _strokeOriginalCellValues = new();
+    private readonly Dictionary<int, byte> _strokeOriginalAttributes = new();
     private readonly List<SpritePlacement> _strokeRemovedSprites = new();
     private bool _strokeChangedAnything;
 
@@ -129,6 +130,23 @@ public partial class MapEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanvasHintText))]
     [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
     private MetatileListItemViewModel? selectedPaletteMetatile;
+
+    /// <summary>
+    /// GridSize=1's paint-time attribute picker (Mirror X/Y, Rotate, palette slot) — non-null only when
+    /// there's something for it to apply to (Tilemap layer, a GridSize=1 map, a palette selection; 8bpp has
+    /// no attribute concept at all). Rebuilt with fresh defaults (unmirrored, native palette) by
+    /// <see cref="RefreshPaintAttributes"/> whenever the palette selection, active layer, or map changes —
+    /// a newly picked tile always starts unmirrored rather than inheriting whatever the previous tile had.
+    /// Which TILE gets painted is unaffected by this — <see cref="PaintOrEraseAt"/>/<see cref="FillSelection"/>
+    /// still just write <c>SelectedPaletteMetatile.Metatile.SortIndex</c> into <see cref="MapGridLayer.MetatileIndices"/>
+    /// exactly like every other GridSize; this only additionally packs into <see cref="MapGridLayer.CellAttributes"/>
+    /// at the same index (see <see cref="CellAttributePacking"/>) when the map is GridSize=1.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowPaintAttributes))]
+    private MetatileCellViewModel? paintAttributes;
+
+    public bool ShowPaintAttributes => PaintAttributes is not null;
 
     [ObservableProperty]
     private ObservableCollection<TilePaletteItemViewModel> spritePalette = [];
@@ -313,6 +331,7 @@ public partial class MapEditorViewModel : ObservableObject
 
         var previousPlan = new MapResizePlan(map.Width, map.Height,
             (byte[])map.TilemapLayer.MetatileIndices.Clone(),
+            (byte[])map.TilemapLayer.CellAttributes.Clone(),
             (byte[])map.TileLayer8Bpp.MetatileIndices.Clone(),
             CloneSprites(map.SpriteLayer),
             0, 0, 0);
@@ -399,6 +418,7 @@ public partial class MapEditorViewModel : ObservableObject
         CancelSetUserByteTool();
         RefreshMetatilePalette();
         RefreshSpritePalette();
+        RefreshPaintAttributes();
         RenderPreview();
     }
 
@@ -409,7 +429,10 @@ public partial class MapEditorViewModel : ObservableObject
         CancelSetTypeTool(); // ditto for Set Type
         CancelSetUserByteTool(); // ditto for Set User Byte
         RefreshMetatilePalette();
+        RefreshPaintAttributes();
     }
+
+    partial void OnSelectedPaletteMetatileChanged(MetatileListItemViewModel? value) => RefreshPaintAttributes();
 
     /// <summary>Refreshes the type popup's source list — call after Object Types are added/renamed/deleted via the management dialog, since that dialog mutates <see cref="ProjectState.ObjectTypes"/> directly without this ViewModel otherwise noticing.</summary>
     public void RefreshObjectTypePalette()
@@ -619,6 +642,25 @@ public partial class MapEditorViewModel : ObservableObject
                 .Select(m => new MetatileListItemViewModel(m, _project)));
     }
 
+    /// <summary>
+    /// Rebuilds <see cref="PaintAttributes"/> from scratch — always fresh defaults (unmirrored, native
+    /// palette), never carried over from whatever was selected before, so switching tiles never silently
+    /// keeps a stale orientation. Null whenever it wouldn't apply: no map/palette selection, not the
+    /// Tilemap layer (8bpp has no attribute concept), or not a GridSize=1 map (2x2/4x4 metatiles carry
+    /// their own baked-in per-cell attributes, set once in the Metatile Editor, not per paint stroke here).
+    /// </summary>
+    private void RefreshPaintAttributes()
+    {
+        if (SelectedMap is null || ActiveLayer != MapLayerKind.Tilemap || SelectedMap.Map.MetatileGridSize != 1 || SelectedPaletteMetatile is null)
+        {
+            PaintAttributes = null;
+            return;
+        }
+
+        var tileAsset = _project.Assets.FirstOrDefault(a => a.Id == SelectedPaletteMetatile.Metatile.Cells[0].TileAssetId);
+        PaintAttributes = new MetatileCellViewModel(_project, isFourBpp: true) { TileAsset = tileAsset };
+    }
+
     /// <summary>Sprite4Bpp and Sprite8Bpp mixed together — both are freely placeable on the same Sprite layer, unlike the Kind-locked grid layers.</summary>
     private void RefreshSpritePalette()
     {
@@ -631,6 +673,7 @@ public partial class MapEditorViewModel : ObservableObject
     public void BeginStroke()
     {
         _strokeOriginalCellValues.Clear();
+        _strokeOriginalAttributes.Clear();
         _strokeRemovedSprites.Clear();
         _strokeChangedAnything = false;
     }
@@ -691,6 +734,7 @@ public partial class MapEditorViewModel : ObservableObject
 
         var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
         var index = row * map.Width + col;
+        var isTileMode = ActiveLayer == MapLayerKind.Tilemap && map.MetatileGridSize == 1;
 
         byte newValue;
         if (!forceErase)
@@ -704,7 +748,68 @@ public partial class MapEditorViewModel : ObservableObject
         }
 
         SetGridCell(layer, index, newValue);
+        if (isTileMode) SetCellAttribute(layer, index, forceErase ? (byte)0 : ResolvePaintAttributeByte());
+
         RenderPreviewRegion(new Int32Rect(col * cellPixelSize, row * cellPixelSize, cellPixelSize, cellPixelSize));
+    }
+
+    /// <summary>The packed <see cref="CellAttributePacking"/> byte to paint a GridSize=1 Tilemap cell with — whatever the "Paint with" panel currently has dialed in, or the neutral/default byte (0) if it isn't active for some reason. Shared by <see cref="PaintOrEraseAt"/> and <see cref="FillSelection"/>.</summary>
+    private byte ResolvePaintAttributeByte() =>
+        PaintAttributes is { } attrs
+            ? CellAttributePacking.Pack(attrs.MirrorX, attrs.MirrorY, attrs.Rotate, attrs.PaletteSlotOverride)
+            : (byte)0;
+
+    /// <summary>
+    /// Cell (row*Width+col) under a map-canvas pixel position, or null if out of bounds — the View's
+    /// right-click cell-attribute lookup (Tilemap layer, GridSize=1 only) uses this; <see cref="PaintOrEraseAt"/>
+    /// keeps its own inline copy of the same col/row math since it also needs col/row themselves (for the
+    /// repaint rect), not just the flattened index.
+    /// </summary>
+    public int? FindGridCellIndexAt(int pixelX, int pixelY)
+    {
+        if (SelectedMap is null || pixelX < 0 || pixelY < 0) return null;
+        var map = SelectedMap.Map;
+        var cellPixelSize = map.MetatileGridSize * 8;
+        var col = pixelX / cellPixelSize;
+        var row = pixelY / cellPixelSize;
+        if (col >= map.Width || row >= map.Height) return null;
+        return row * map.Width + col;
+    }
+
+    /// <summary>The Tilemap layer's <see cref="Metatile"/> currently occupying a cell — for the right-click "edit this cell" popup to resolve which TILE is there (its own <c>Cells[0].TileAssetId</c>); the popup's Mirror/Rotate/PaletteSlotOverride pre-fill instead comes from unpacking <see cref="MapGridLayer.CellAttributes"/> at the same index, not from this metatile's own (always-default) cell. Null only if the project data is somehow inconsistent (the referenced metatile was deleted without updating the cell), which should never actually happen.</summary>
+    public Metatile? GetTilemapCellMetatile(int cellIndex)
+    {
+        if (SelectedMap is null) return null;
+        var sortIndex = SelectedMap.Map.TilemapLayer.MetatileIndices[cellIndex];
+        return _project.Metatiles.FirstOrDefault(m => m.Kind == MetatileKind.FourBpp && m.SortIndex == sortIndex);
+    }
+
+    /// <summary>
+    /// Right-click "edit this cell" apply — single-undo-entry shape like <see cref="ApplyUserByte"/>.
+    /// Writes ONLY <see cref="MapGridLayer.CellAttributes"/> at this one index — deliberately never
+    /// touches <see cref="MapGridLayer.MetatileIndices"/>, so editing a cell's attribute can never change
+    /// which tile occupies it (and vice versa), and never affects any other cell painted with the same tile.
+    /// </summary>
+    public void ApplyCellAttributes(int cellIndex, MetatileCellViewModel attributes)
+    {
+        if (SelectedMap is null) return;
+        var layer = SelectedMap.Map.TilemapLayer;
+
+        var newAttr = CellAttributePacking.Pack(attributes.MirrorX, attributes.MirrorY, attributes.Rotate, attributes.PaletteSlotOverride);
+        if (layer.CellAttributes[cellIndex] == newAttr) return;
+
+        var previous = layer.CellAttributes[cellIndex];
+        layer.CellAttributes[cellIndex] = newAttr;
+        _undoStack.Push(() =>
+        {
+            layer.CellAttributes[cellIndex] = previous;
+            RenderPreview();
+            RefreshSelectedMapThumbnail();
+        });
+
+        HasChanges = true;
+        RenderPreview();
+        RefreshSelectedMapThumbnail();
     }
 
     /// <summary>
@@ -727,24 +832,36 @@ public partial class MapEditorViewModel : ObservableObject
         _strokeChangedAnything = true;
     }
 
+    /// <summary>Same "capture original on first touch this stroke" shape as <see cref="SetGridCell"/>, but for <see cref="MapGridLayer.CellAttributes"/> — only ever called for a GridSize=1 map's Tilemap layer.</summary>
+    private void SetCellAttribute(MapGridLayer layer, int index, byte newValue)
+    {
+        if (layer.CellAttributes[index] == newValue) return;
+        _strokeOriginalAttributes.TryAdd(index, layer.CellAttributes[index]);
+        layer.CellAttributes[index] = newValue;
+        _strokeChangedAnything = true;
+    }
+
     public void EndStroke()
     {
         if (!_strokeChangedAnything || SelectedMap is null)
         {
             _strokeOriginalCellValues.Clear();
+            _strokeOriginalAttributes.Clear();
             _strokeRemovedSprites.Clear();
             return;
         }
 
         var map = SelectedMap.Map;
 
-        if (_strokeOriginalCellValues.Count > 0)
+        if (_strokeOriginalCellValues.Count > 0 || _strokeOriginalAttributes.Count > 0)
         {
             var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
-            var snapshot = new Dictionary<int, byte>(_strokeOriginalCellValues);
+            var indexSnapshot = new Dictionary<int, byte>(_strokeOriginalCellValues);
+            var attributeSnapshot = new Dictionary<int, byte>(_strokeOriginalAttributes);
             _undoStack.Push(() =>
             {
-                foreach (var (index, originalValue) in snapshot) layer.MetatileIndices[index] = originalValue;
+                foreach (var (index, originalValue) in indexSnapshot) layer.MetatileIndices[index] = originalValue;
+                foreach (var (index, originalAttr) in attributeSnapshot) layer.CellAttributes[index] = originalAttr;
                 RenderPreview();
                 RefreshSelectedMapThumbnail();
             });
@@ -762,6 +879,7 @@ public partial class MapEditorViewModel : ObservableObject
         // A Sprite+Paint click already pushed its own single-placement undo action immediately in PaintOrEraseAt.
 
         _strokeOriginalCellValues.Clear();
+        _strokeOriginalAttributes.Clear();
         _strokeRemovedSprites.Clear();
         HasChanges = true;
         RefreshSelectedMapThumbnail();
@@ -807,6 +925,8 @@ public partial class MapEditorViewModel : ObservableObject
         var map = SelectedMap.Map;
         var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
         var newValue = (byte)SelectedPaletteMetatile!.Metatile.SortIndex;
+        var isTileMode = ActiveLayer == MapLayerKind.Tilemap && map.MetatileGridSize == 1;
+        var newAttr = isTileMode ? ResolvePaintAttributeByte() : (byte)0;
         var cellPixelSize = map.MetatileGridSize * 8;
 
         BeginStroke();
@@ -814,7 +934,9 @@ public partial class MapEditorViewModel : ObservableObject
         {
             for (var col = rect.Col0; col <= rect.Col1; col++)
             {
-                SetGridCell(layer, row * map.Width + col, newValue);
+                var index = row * map.Width + col;
+                SetGridCell(layer, index, newValue);
+                if (isTileMode) SetCellAttribute(layer, index, newAttr);
             }
         }
         RenderPreviewRegion(new Int32Rect(rect.Col0 * cellPixelSize, rect.Row0 * cellPixelSize, rect.Width * cellPixelSize, rect.Height * cellPixelSize));
@@ -858,13 +980,16 @@ public partial class MapEditorViewModel : ObservableObject
             if (GridSelection is not { } rect) return;
             var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
             var blankValue = BlankValueFor(ActiveLayer == MapLayerKind.Tilemap ? MetatileKind.FourBpp : MetatileKind.EightBpp, map.MetatileGridSize);
+            var isTileMode = ActiveLayer == MapLayerKind.Tilemap && map.MetatileGridSize == 1;
             var cellPixelSize = map.MetatileGridSize * 8;
             BeginStroke();
             for (var row = rect.Row0; row <= rect.Row1; row++)
             {
                 for (var col = rect.Col0; col <= rect.Col1; col++)
                 {
-                    SetGridCell(layer, row * map.Width + col, blankValue);
+                    var index = row * map.Width + col;
+                    SetGridCell(layer, index, blankValue);
+                    if (isTileMode) SetCellAttribute(layer, index, 0);
                 }
             }
             RenderPreviewRegion(new Int32Rect(rect.Col0 * cellPixelSize, rect.Row0 * cellPixelSize, rect.Width * cellPixelSize, rect.Height * cellPixelSize));
@@ -890,13 +1015,17 @@ public partial class MapEditorViewModel : ObservableObject
         if (deltaCols == 0 && deltaRows == 0) return;
         var map = SelectedMap.Map;
         var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
+        var isTileMode = ActiveLayer == MapLayerKind.Tilemap && map.MetatileGridSize == 1;
 
         var buffer = new byte[rect.Height, rect.Width];
+        var attrBuffer = isTileMode ? new byte[rect.Height, rect.Width] : null;
         for (var row = rect.Row0; row <= rect.Row1; row++)
         {
             for (var col = rect.Col0; col <= rect.Col1; col++)
             {
-                buffer[row - rect.Row0, col - rect.Col0] = layer.MetatileIndices[row * map.Width + col];
+                var srcIndex = row * map.Width + col;
+                buffer[row - rect.Row0, col - rect.Col0] = layer.MetatileIndices[srcIndex];
+                if (attrBuffer is not null) attrBuffer[row - rect.Row0, col - rect.Col0] = layer.CellAttributes[srcIndex];
             }
         }
 
@@ -908,7 +1037,9 @@ public partial class MapEditorViewModel : ObservableObject
             {
                 for (var col = rect.Col0; col <= rect.Col1; col++)
                 {
-                    SetGridCell(layer, row * map.Width + col, blankValue);
+                    var index = row * map.Width + col;
+                    SetGridCell(layer, index, blankValue);
+                    if (isTileMode) SetCellAttribute(layer, index, 0);
                 }
             }
         }
@@ -919,7 +1050,9 @@ public partial class MapEditorViewModel : ObservableObject
                 var destCol = col + deltaCols;
                 var destRow = row + deltaRows;
                 if (destCol < 0 || destCol >= map.Width || destRow < 0 || destRow >= map.Height) continue; // dropped, not clamped
-                SetGridCell(layer, destRow * map.Width + destCol, buffer[row - rect.Row0, col - rect.Col0]);
+                var destIndex = destRow * map.Width + destCol;
+                SetGridCell(layer, destIndex, buffer[row - rect.Row0, col - rect.Col0]);
+                if (isTileMode) SetCellAttribute(layer, destIndex, attrBuffer![row - rect.Row0, col - rect.Col0]);
             }
         }
         var destRect = CellRect.Normalized(rect.Col0 + deltaCols, rect.Row0 + deltaRows, rect.Col1 + deltaCols, rect.Row1 + deltaRows);

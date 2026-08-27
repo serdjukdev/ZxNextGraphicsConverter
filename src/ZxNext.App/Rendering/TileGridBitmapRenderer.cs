@@ -62,6 +62,11 @@ public static class TileGridBitmapRenderer
     /// is correct here (nothing underneath a grid cell to show through within this one layer). A cell
     /// referencing a metatile that no longer exists (a stale/dangling SortIndex) is skipped rather than
     /// throwing — this renders LIVE editor state, which can transiently be inconsistent.
+    ///
+    /// For a GridSize=1 Tilemap layer, the referenced metatile is always the tile's fixed DEFAULT (no real
+    /// mirror/rotate/palette-override baked in — see <see cref="ZxNext.Core.Model.MapGridLayer.CellAttributes"/>'s
+    /// own doc comment), so this bypasses <see cref="RenderMetatile"/>/the per-Metatile.Id cache entirely
+    /// and renders the tile directly with that cell's OWN unpacked attribute instead.
     /// </summary>
     public static WriteableBitmap RenderMapGridLayer(MapGridLayer layer, MetatileKind kind, int widthCells, int heightCells, int metatileGridSize, ProjectState project, MapRenderCache? cache = null)
     {
@@ -69,6 +74,7 @@ public static class TileGridBitmapRenderer
         var (tileWidth, tileHeight) = tileCategory.CellSize();
         var cellPixelWidth = metatileGridSize * tileWidth;
         var cellPixelHeight = metatileGridSize * tileHeight;
+        var isTileMode = kind == MetatileKind.FourBpp && metatileGridSize == 1;
 
         var composite = new WriteableBitmap(widthCells * cellPixelWidth, heightCells * cellPixelHeight, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null);
 
@@ -83,11 +89,24 @@ public static class TileGridBitmapRenderer
                 // Every cell always references a real metatile now, including a genuinely "empty-looking"
                 // one (the reserved blank metatile, whose own tiles are all fully-transparent pixels) — so
                 // this always renders normally; TryGetValue is just defensive, not a real "empty" check.
-                var cellValue = layer.MetatileIndices[row * widthCells + col];
+                var cellIndex = row * widthCells + col;
+                var cellValue = layer.MetatileIndices[cellIndex];
                 if (!metatilesBySortIndex.TryGetValue(cellValue, out var metatile)) continue;
 
-                var metatileBitmap = cache is not null ? cache.GetMetatileBitmap(metatile, project) : RenderMetatile(metatile, project);
-                Blit(composite, metatileBitmap, col * cellPixelWidth, row * cellPixelHeight);
+                WriteableBitmap? cellBitmap;
+                if (isTileMode)
+                {
+                    var tileAsset = project.Assets.FirstOrDefault(a => a.Id == metatile.Cells[0].TileAssetId);
+                    if (tileAsset is null) continue;
+                    var (mirrorX, mirrorY, rotate, paletteOverride) = CellAttributePacking.Unpack(layer.CellAttributes[cellIndex]);
+                    cellBitmap = RenderTile(tileAsset, project, mirrorX, mirrorY, rotate, paletteOverride, cache);
+                }
+                else
+                {
+                    cellBitmap = cache is not null ? cache.GetMetatileBitmap(metatile, project) : RenderMetatile(metatile, project);
+                }
+
+                Blit(composite, cellBitmap, col * cellPixelWidth, row * cellPixelHeight);
             }
         }
 
@@ -190,10 +209,10 @@ public static class TileGridBitmapRenderer
             switch (layerKind)
             {
                 case MapLayerKind.Tilemap when map.TilemapLayerVisible:
-                    BlitGridLayerRegion(buffer, rect, stride, map.TilemapLayer, MetatileKind.FourBpp, map.Width, map.Height, cellPixelWidth, cellPixelHeight, project, cache);
+                    BlitGridLayerRegion(buffer, rect, stride, map.TilemapLayer, MetatileKind.FourBpp, map.Width, map.Height, map.MetatileGridSize, cellPixelWidth, cellPixelHeight, project, cache);
                     break;
                 case MapLayerKind.TileLayer8Bpp when map.TileLayer8BppVisible:
-                    BlitGridLayerRegion(buffer, rect, stride, map.TileLayer8Bpp, MetatileKind.EightBpp, map.Width, map.Height, cellPixelWidth, cellPixelHeight, project, cache);
+                    BlitGridLayerRegion(buffer, rect, stride, map.TileLayer8Bpp, MetatileKind.EightBpp, map.Width, map.Height, map.MetatileGridSize, cellPixelWidth, cellPixelHeight, project, cache);
                     break;
                 case MapLayerKind.Sprites when map.SpriteLayerVisible:
                     BlitSpriteLayerRegion(buffer, rect, stride, map.SpriteLayer, project, cache);
@@ -205,7 +224,7 @@ public static class TileGridBitmapRenderer
     }
 
     private static void BlitGridLayerRegion(byte[] destBuffer, Int32Rect destRect, int destStride, MapGridLayer layer, MetatileKind kind,
-        int widthCells, int heightCells, int cellPixelWidth, int cellPixelHeight, ProjectState project, MapRenderCache cache)
+        int widthCells, int heightCells, int metatileGridSize, int cellPixelWidth, int cellPixelHeight, ProjectState project, MapRenderCache cache)
     {
         var colStart = Math.Max(0, destRect.X / cellPixelWidth);
         var colEnd = Math.Min(widthCells - 1, (destRect.X + destRect.Width - 1) / cellPixelWidth);
@@ -214,16 +233,30 @@ public static class TileGridBitmapRenderer
         if (colStart > colEnd || rowStart > rowEnd) return;
 
         var metatilesBySortIndex = cache.GetMetatilesBySortIndex(project, kind);
+        var isTileMode = kind == MetatileKind.FourBpp && metatileGridSize == 1;
 
         for (var row = rowStart; row <= rowEnd; row++)
         {
             for (var col = colStart; col <= colEnd; col++)
             {
-                var cellValue = layer.MetatileIndices[row * widthCells + col];
+                var cellIndex = row * widthCells + col;
+                var cellValue = layer.MetatileIndices[cellIndex];
                 if (!metatilesBySortIndex.TryGetValue(cellValue, out var metatile)) continue;
 
-                var metatileBitmap = cache.GetMetatileBitmap(metatile, project);
-                BlitOverBuffer(destBuffer, destStride, destRect.Width, destRect.Height, metatileBitmap,
+                WriteableBitmap cellBitmap;
+                if (isTileMode)
+                {
+                    var tileAsset = project.Assets.FirstOrDefault(a => a.Id == metatile.Cells[0].TileAssetId);
+                    if (tileAsset is null) continue;
+                    var (mirrorX, mirrorY, rotate, paletteOverride) = CellAttributePacking.Unpack(layer.CellAttributes[cellIndex]);
+                    cellBitmap = RenderTile(tileAsset, project, mirrorX, mirrorY, rotate, paletteOverride, cache);
+                }
+                else
+                {
+                    cellBitmap = cache.GetMetatileBitmap(metatile, project);
+                }
+
+                BlitOverBuffer(destBuffer, destStride, destRect.Width, destRect.Height, cellBitmap,
                     col * cellPixelWidth - destRect.X, row * cellPixelHeight - destRect.Y);
             }
         }
@@ -247,11 +280,25 @@ public static class TileGridBitmapRenderer
     }
 
     /// <summary>
-    /// Preview-only approximation of the hardware tilemap attribute byte's rotate+mirror bits (nextreg
-    /// 0x6C): Rotate transposes the (square) tile first, then MirrorX/MirrorY flip on top — the standard
-    /// "transpose + 2 mirror bits = all 8 square orientations" trick this class of tilemap hardware
-    /// uses instead of a true rotation engine. This only affects what the EDITOR shows; the exported
-    /// bytes (see MetatileSerializer) just carry the 3 flag bits as-is — real hardware applies them.
+    /// Exact match for the real hardware tilemap attribute byte's rotate+mirror bits (nextreg 0x6C-style:
+    /// this project's own attribute byte, bit3=MirrorX, bit2=MirrorY, bit1=Rotate — see
+    /// <see cref="ZxNext.Core.Model.CellAttributePacking.PackHardwareAttributeByte"/>) — verified 2026-08-27
+    /// against a real hardware/emulator report and the actual tilemap.vhd RTL source
+    /// (gitlab.com/SpectrumNext/ZX_Spectrum_Next_FPGA, cores/zxnext/src/video/tilemap.vhd). For each
+    /// OUTPUT pixel (ax,ay) the hardware fetches SOURCE pixel (transformedX,transformedY):
+    ///   effectiveXMirror = MirrorX XOR Rotate
+    ///   effectiveX = effectiveXMirror ? (N-1-ax) : ax
+    ///   effectiveY = MirrorY ? (N-1-ay) : ay
+    ///   (transformedX,transformedY) = Rotate ? (effectiveY,effectiveX) : (effectiveX,effectiveY)
+    /// The counterintuitive part (and the exact bug this fixed): Rotate ALONE is NOT a plain diagonal
+    /// transpose — the hardware XORs Rotate into the X-mirror decision, so Rotate alone is a genuine
+    /// 90-degree rotation, while Rotate+MirrorX together is what a naive "just transpose" would look
+    /// like. A previous version of this method applied Rotate as a plain transpose (dest[x,y]=source[y,x])
+    /// then mirrors on top, which reaches all 8 orientations too but pairs them with the WRONG bit
+    /// combinations — e.g. its "Rotate alone" moved a top-right corner to bottom-left, where real
+    /// hardware moves it to bottom-right. The exported bytes themselves were never wrong (see
+    /// MetatileSerializer/CellAttributePacking — they just carry the 3 flag bits as chosen in the UI);
+    /// only this preview's OWN pixel math was mismatched to what real hardware does with them.
     /// </summary>
     private static WriteableBitmap ApplyTileTransform(WriteableBitmap source, bool mirrorX, bool mirrorY, bool rotate)
     {
@@ -259,51 +306,25 @@ public static class TileGridBitmapRenderer
 
         var size = source.PixelWidth; // tiles are always square (8x8)
         var stride = size * 4;
-        var pixels = new byte[stride * source.PixelHeight];
-        source.CopyPixels(pixels, stride, 0);
+        var sourcePixels = new byte[stride * source.PixelHeight];
+        source.CopyPixels(sourcePixels, stride, 0);
 
-        if (rotate) pixels = Transpose(pixels, size);
-        if (mirrorX) pixels = FlipHorizontal(pixels, size);
-        if (mirrorY) pixels = FlipVertical(pixels, size);
+        var destPixels = new byte[sourcePixels.Length];
+        var effectiveXMirror = mirrorX ^ rotate;
+        for (var ay = 0; ay < size; ay++)
+        {
+            for (var ax = 0; ax < size; ax++)
+            {
+                var effectiveX = effectiveXMirror ? size - 1 - ax : ax;
+                var effectiveY = mirrorY ? size - 1 - ay : ay;
+                var transformedX = rotate ? effectiveY : effectiveX;
+                var transformedY = rotate ? effectiveX : effectiveY;
+                Array.Copy(sourcePixels, (transformedY * size + transformedX) * 4, destPixels, (ay * size + ax) * 4, 4);
+            }
+        }
 
         var result = new WriteableBitmap(size, size, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null);
-        result.WritePixels(new Int32Rect(0, 0, size, size), pixels, stride, 0);
-        return result;
-    }
-
-    private static byte[] Transpose(byte[] pixels, int size)
-    {
-        var result = new byte[pixels.Length];
-        for (var y = 0; y < size; y++)
-        {
-            for (var x = 0; x < size; x++)
-            {
-                Array.Copy(pixels, (y * size + x) * 4, result, (x * size + y) * 4, 4);
-            }
-        }
-        return result;
-    }
-
-    private static byte[] FlipHorizontal(byte[] pixels, int size)
-    {
-        var result = new byte[pixels.Length];
-        for (var y = 0; y < size; y++)
-        {
-            for (var x = 0; x < size; x++)
-            {
-                Array.Copy(pixels, (y * size + x) * 4, result, (y * size + (size - 1 - x)) * 4, 4);
-            }
-        }
-        return result;
-    }
-
-    private static byte[] FlipVertical(byte[] pixels, int size)
-    {
-        var result = new byte[pixels.Length];
-        for (var y = 0; y < size; y++)
-        {
-            Array.Copy(pixels, y * size * 4, result, (size - 1 - y) * size * 4, size * 4);
-        }
+        result.WritePixels(new Int32Rect(0, 0, size, size), destPixels, stride, 0);
         return result;
     }
 

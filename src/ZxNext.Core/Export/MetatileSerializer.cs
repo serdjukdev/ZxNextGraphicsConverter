@@ -53,11 +53,7 @@ public static class MetatileSerializer
                         $"Metatile '{metatile.Name}' cell {i}: palette slot override {paletteSlot} is out of the valid 0-15 range.");
                 }
 
-                var attribute = (byte)(
-                    (paletteSlot << 4) |
-                    (cell.MirrorX ? 0b1000 : 0) |
-                    (cell.MirrorY ? 0b0100 : 0) |
-                    (cell.Rotate ? 0b0010 : 0));
+                var attribute = CellAttributePacking.PackHardwareAttributeByte(paletteSlot, cell.MirrorX, cell.MirrorY, cell.Rotate);
                 data[i * 2] = tileIndex;
                 data[i * 2 + 1] = attribute;
             }

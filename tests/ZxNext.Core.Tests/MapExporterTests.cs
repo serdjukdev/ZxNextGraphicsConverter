@@ -51,11 +51,15 @@ public class MapExporterTests
         IsReservedBlank = true
     };
 
-    private static MapAsset FakeMap(string name, int width, int height, int gridSize, byte[]? tilemap = null, byte[]? tile8Bpp = null, List<SpritePlacement>? sprites = null) => new(width, height)
+    private static MapAsset FakeMap(string name, int width, int height, int gridSize, byte[]? tilemap = null, byte[]? tile8Bpp = null, List<SpritePlacement>? sprites = null, byte[]? cellAttributes = null) => new(width, height)
     {
         Name = name,
         MetatileGridSize = gridSize,
-        TilemapLayer = new MapGridLayer { MetatileIndices = tilemap ?? FullOfZero(width * height) },
+        TilemapLayer = new MapGridLayer
+        {
+            MetatileIndices = tilemap ?? FullOfZero(width * height),
+            CellAttributes = gridSize == 1 ? cellAttributes ?? new byte[width * height] : []
+        },
         TileLayer8Bpp = new MapGridLayer { MetatileIndices = tile8Bpp ?? FullOfZero(width * height) },
         SpriteLayer = sprites ?? []
     };
@@ -347,5 +351,17 @@ public class MapExporterTests
         var (success, error) = MapExporter.ValidateSize(overLimit);
         Assert.False(success);
         Assert.Contains("16384", error);
+    }
+
+    [Fact]
+    public void ValidateSize_GridSize1_HalvedLimit_ExactlyAtLimit_Ok_OneCellOver_Blocked()
+    {
+        var atLimit = FakeMap("fits", 128, 64, gridSize: 1); // 8192 cells exactly (half of 16384 -- GridSize=1's Tilemap layer is 2 bytes/cell)
+        Assert.True(MapExporter.ValidateSize(atLimit).Success);
+
+        var overLimit = FakeMap("too_big", 129, 64, gridSize: 1); // 8256 cells
+        var (success, error) = MapExporter.ValidateSize(overLimit);
+        Assert.False(success);
+        Assert.Contains("8192", error);
     }
 }

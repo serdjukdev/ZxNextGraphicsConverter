@@ -134,7 +134,7 @@ public partial class MapEditorWindow : Window
             return;
         }
 
-        var newMapVm = new NewMapViewModel();
+        var newMapVm = new NewMapViewModel(gridSize);
         var dialog = new NewMapWindow { DataContext = newMapVm, Owner = this };
         if (dialog.ShowDialog() != true) return;
 
@@ -623,14 +623,60 @@ public partial class MapEditorWindow : Window
     private void MapCanvasHost_OnMouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (DataContext is not MapEditorViewModel vm || vm.SelectedMap is null) return;
-        if (vm.ActiveLayer != MapLayerKind.Sprites) return;
-        if (vm.IsLinkToolActive || vm.IsSetTypeToolActive || vm.IsSetUserByteToolActive) return;
 
-        var position = e.GetPosition(MapImage);
-        _objectActionPopupTarget = vm.FindSpriteAt((int)position.X, (int)position.Y);
-        if (_objectActionPopupTarget is null) return;
+        if (vm.ActiveLayer == MapLayerKind.Sprites)
+        {
+            if (vm.IsLinkToolActive || vm.IsSetTypeToolActive || vm.IsSetUserByteToolActive) return;
 
-        ObjectActionPopup.IsOpen = true;
+            var position = e.GetPosition(MapImage);
+            _objectActionPopupTarget = vm.FindSpriteAt((int)position.X, (int)position.Y);
+            if (_objectActionPopupTarget is null) return;
+
+            ObjectActionPopup.IsOpen = true;
+            return;
+        }
+
+        // GridSize=1 only: 2x2/4x4 metatiles carry their own baked-in per-cell attributes, set once in the
+        // Metatile Editor — there's nothing to edit per placed cell there. 8bpp has no attribute concept at all.
+        if (vm.ActiveLayer == MapLayerKind.Tilemap && vm.SelectedMap.Map.MetatileGridSize == 1)
+        {
+            OpenCellAttributeDialogAt(vm, e.GetPosition(MapImage));
+        }
+    }
+
+    /// <summary>
+    /// Right-click "edit this cell" for a GridSize=1 map's Tilemap layer — resolves WHICH TILE occupies
+    /// the clicked cell from its metatile (always the tile's own fixed default, see MapGridLayer's doc
+    /// comment), but pre-fills Mirror/Rotate/PaletteSlotOverride by unpacking that cell's own
+    /// <see cref="ZxNext.Core.Model.MapGridLayer.CellAttributes"/> byte, NOT from the metatile's cell (which
+    /// never carries a real one). Applies via <see cref="MapEditorViewModel.ApplyCellAttributes"/> on OK,
+    /// which only ever writes that same byte back — the tile itself is never touched. A no-op on an
+    /// untouched/erased cell (its reserved Blank metatile is not a real, editable tile) or one whose tile
+    /// no longer exists.
+    /// </summary>
+    private void OpenCellAttributeDialogAt(MapEditorViewModel vm, Point position)
+    {
+        var cellIndex = vm.FindGridCellIndexAt((int)position.X, (int)position.Y);
+        if (cellIndex is null) return;
+
+        var metatile = vm.GetTilemapCellMetatile(cellIndex.Value);
+        if (metatile is null || metatile.IsReservedBlank) return;
+
+        var tileAsset = vm.Project.Assets.FirstOrDefault(a => a.Id == metatile.Cells[0].TileAssetId);
+        var (mirrorX, mirrorY, rotate, paletteOverride) = CellAttributePacking.Unpack(vm.SelectedMap!.Map.TilemapLayer.CellAttributes[cellIndex.Value]);
+        var attributes = new MetatileCellViewModel(vm.Project, isFourBpp: true)
+        {
+            TileAsset = tileAsset,
+            MirrorX = mirrorX,
+            MirrorY = mirrorY,
+            Rotate = rotate,
+            PaletteSlotOverride = paletteOverride
+        };
+
+        var dialog = new CellAttributeWindow(attributes) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        vm.ApplyCellAttributes(cellIndex.Value, dialog.Attributes);
     }
 
     private void ObjectActionPopup_SetUserByte_OnClick(object sender, RoutedEventArgs e)

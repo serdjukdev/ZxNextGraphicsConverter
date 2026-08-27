@@ -12,12 +12,16 @@ public static class RecentProjectsStore
         "ZxNextGraphicsConverter",
         "recent-projects.json");
 
+    /// <summary>Prunes any path whose project file no longer exists (deleted/moved/renamed outside the app) before returning — and persists that pruning, so a dead entry disappears for good after the first load that notices it, not just from this one call's result.</summary>
     public static List<string> Load()
     {
         try
         {
             if (!File.Exists(FilePath)) return [];
-            return JsonSerializer.Deserialize<List<string>>(File.ReadAllText(FilePath)) ?? [];
+            var list = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(FilePath)) ?? [];
+            var existing = list.Where(File.Exists).ToList();
+            if (existing.Count != list.Count) SaveList(existing);
+            return existing;
         }
         catch
         {
@@ -31,7 +35,11 @@ public static class RecentProjectsStore
         list.RemoveAll(p => string.Equals(p, projectPath, StringComparison.OrdinalIgnoreCase));
         list.Insert(0, projectPath);
         if (list.Count > MaxEntries) list = list[..MaxEntries];
+        SaveList(list);
+    }
 
+    private static void SaveList(List<string> list)
+    {
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
         File.WriteAllText(FilePath, JsonSerializer.Serialize(list));
     }

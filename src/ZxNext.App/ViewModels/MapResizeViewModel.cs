@@ -18,9 +18,9 @@ public enum ResizeAnchor
 /// <summary>
 /// Backs the "Resize Map" dialog: new Width/Height plus a 3x3 anchor picker, with a live drop-count
 /// preview computed by calling the real <see cref="MapResizeCalculator.Plan"/> on every change (cheap —
-/// maps are capped at <see cref="MapExporter.MaxGridCells"/> cells) rather than re-deriving the count some
-/// other way, so the preview can never drift from what actually happens on Apply. Same "IsEnabled bound
-/// to IsValid" pattern as NewMapViewModel/NewProjectViewModel.
+/// maps are capped at <see cref="MapExporter.MaxGridCellsFor"/> cells) rather than re-deriving the count
+/// some other way, so the preview can never drift from what actually happens on Apply. Same "IsEnabled
+/// bound to IsValid" pattern as NewMapViewModel/NewProjectViewModel.
 /// </summary>
 public partial class MapResizeViewModel : ObservableObject
 {
@@ -69,12 +69,13 @@ public partial class MapResizeViewModel : ObservableObject
         {
             if (NewWidth <= 0 || NewHeight <= 0) return "Width and Height must be positive.";
             var cells = (long)NewWidth * NewHeight;
-            if (cells > MapExporter.MaxGridCells) return $"{NewWidth}x{NewHeight} = {cells} cells — over the {MapExporter.MaxGridCells} limit.";
-            return $"{cells} cells (limit {MapExporter.MaxGridCells}).";
+            var maxCells = MapExporter.MaxGridCellsFor(_map.MetatileGridSize);
+            if (cells > maxCells) return $"{NewWidth}x{NewHeight} = {cells} cells — over the {maxCells} limit{MapExporter.GridCellLimitReasonFor(_map.MetatileGridSize)}.";
+            return $"{cells} cells (limit {maxCells}{MapExporter.GridCellLimitReasonFor(_map.MetatileGridSize)}).";
         }
     }
 
-    public bool IsValid => NewWidth > 0 && NewHeight > 0 && (long)NewWidth * NewHeight <= MapExporter.MaxGridCells;
+    public bool IsValid => NewWidth > 0 && NewHeight > 0 && (long)NewWidth * NewHeight <= MapExporter.MaxGridCellsFor(_map.MetatileGridSize);
 
     /// <summary>Where the OLD (0,0) cell lands in the new grid, per the current anchor — the offsetX/offsetY <see cref="MapResizeCalculator.Plan"/> itself expects.</summary>
     private (int OffsetX, int OffsetY) ComputeOffset()

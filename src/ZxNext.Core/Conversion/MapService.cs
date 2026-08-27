@@ -21,10 +21,11 @@ public static class MapService
             return new MapCreateResult(false, null, "Width and Height must both be positive.");
         }
 
-        if ((long)width * height > MapExporter.MaxGridCells)
+        var maxGridCells = MapExporter.MaxGridCellsFor(metatileGridSize);
+        if ((long)width * height > maxGridCells)
         {
             return new MapCreateResult(false, null,
-                $"{width}x{height} = {width * height} cells, over the {MapExporter.MaxGridCells}-cell-per-layer limit.");
+                $"{width}x{height} = {width * height} cells, over the {maxGridCells}-cell-per-layer limit{MapExporter.GridCellLimitReasonFor(metatileGridSize)}.");
         }
 
         // The whole project is locked to one metatile GridSize (see ProjectState.MetatileGridSize's own
@@ -50,7 +51,11 @@ public static class MapService
             Name = EnsureUniqueName(project, name),
             SortIndex = NextSortIndex(project),
             MetatileGridSize = metatileGridSize,
-            TilemapLayer = new MapGridLayer { MetatileIndices = FullOfValue(cellCount, (byte)tilemapBlank.SortIndex) },
+            TilemapLayer = new MapGridLayer
+            {
+                MetatileIndices = FullOfValue(cellCount, (byte)tilemapBlank.SortIndex),
+                CellAttributes = metatileGridSize == 1 ? new byte[cellCount] : []
+            },
             TileLayer8Bpp = new MapGridLayer { MetatileIndices = FullOfValue(cellCount, (byte)tileLayer8BppBlank.SortIndex) }
         };
 

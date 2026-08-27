@@ -87,6 +87,22 @@ public class MapServiceTests
     }
 
     [Fact]
+    public void Create_GridSize1_HalvedCellLimit_ExactlyAtLimit_Succeeds_OneOver_Rejected()
+    {
+        // GridSize=1's Tilemap layer exports 2 bytes/cell directly (no metatile-table indirection), so its
+        // effective cell-count budget is half of the normal 16384 (which assumes 1 byte/cell) — see
+        // MapExporter.MaxGridCellsFor.
+        var project = new ProjectState();
+
+        var atLimit = MapService.Create(project, "fits", 128, 64, 1); // 8192 exactly
+        Assert.True(atLimit.Success, atLimit.Error);
+
+        var overLimit = MapService.Create(project, "too_big", 129, 64, 1); // 8256
+        Assert.False(overLimit.Success);
+        Assert.Contains("8192", overLimit.Error);
+    }
+
+    [Fact]
     public void Create_DuplicateName_GetsAutoDisambiguatedSuffix()
     {
         var project = new ProjectState();

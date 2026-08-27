@@ -4,8 +4,8 @@ using ZxNext.Core.Export;
 
 namespace ZxNext.App.ViewModels;
 
-/// <summary>Backs the "New Map" dialog: name and starting Width/Height (changeable later via Resize/Trim — see ValidationText). Metatile GridSize is no longer chosen here — the whole project shares one fixed size, chosen once up front in the New Project dialog (see MapEditorWindow.NewMap_OnClick). Validates before creating, same "IsEnabled bound to IsValid" pattern as NewProjectWindow.</summary>
-public partial class NewMapViewModel : ObservableObject
+/// <summary>Backs the "New Map" dialog: name and starting Width/Height (changeable later via Resize/Trim — see ValidationText). Metatile GridSize is no longer chosen here — the whole project shares one fixed size, chosen once up front in the New Project dialog (see MapEditorWindow.NewMap_OnClick), passed in here only to compute the right cell-count limit (<see cref="MapExporter.MaxGridCellsFor"/> — a GridSize=1 map's Tilemap layer is 2 bytes/cell, so its effective limit is tighter). Validates before creating, same "IsEnabled bound to IsValid" pattern as NewProjectWindow.</summary>
+public partial class NewMapViewModel(int gridSize) : ObservableObject
 {
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ValidationText))]
@@ -29,8 +29,9 @@ public partial class NewMapViewModel : ObservableObject
             if (string.IsNullOrWhiteSpace(Name)) return "Enter a name.";
             if (Width <= 0 || Height <= 0) return "Width and Height must be positive.";
             var cells = (long)Width * Height;
-            if (cells > MapExporter.MaxGridCells) return $"{Width}x{Height} = {cells} cells — over the {MapExporter.MaxGridCells} limit.";
-            return $"{cells} cells (limit {MapExporter.MaxGridCells}).";
+            var maxCells = MapExporter.MaxGridCellsFor(gridSize);
+            if (cells > maxCells) return $"{Width}x{Height} = {cells} cells — over the {maxCells} limit{MapExporter.GridCellLimitReasonFor(gridSize)}.";
+            return $"{cells} cells (limit {maxCells}{MapExporter.GridCellLimitReasonFor(gridSize)}).";
         }
     }
 
@@ -39,7 +40,7 @@ public partial class NewMapViewModel : ObservableObject
         get
         {
             if (string.IsNullOrWhiteSpace(Name) || Width <= 0 || Height <= 0) return false;
-            return (long)Width * Height <= MapExporter.MaxGridCells;
+            return (long)Width * Height <= MapExporter.MaxGridCellsFor(gridSize);
         }
     }
 

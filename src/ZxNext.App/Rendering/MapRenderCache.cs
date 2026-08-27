@@ -13,7 +13,9 @@ namespace ZxNext.App.Rendering;
 /// Metatile Editor nor the Pixel Editor (both reached only through MainWindow's own buttons) can run
 /// concurrently, and the Map Editor itself never mutates a <see cref="Metatile"/>'s cells or a
 /// <see cref="GraphicsAsset"/>'s pixels — only which existing metatile/sprite a map cell/placement
-/// references. The set of possible rendered bitmaps is therefore fixed for the whole session.
+/// references (including a GridSize=1 map's per-cell mirror/rotate/palette attribute, which lives in
+/// <see cref="MapGridLayer.CellAttributes"/>, entirely separate from the metatile library). The set of
+/// possible rendered bitmaps is therefore fixed for the whole session.
 /// </summary>
 public sealed class MapRenderCache
 {

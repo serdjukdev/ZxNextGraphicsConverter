@@ -139,23 +139,44 @@
 
             <!-- Metatile palette: grid layers -->
             <Border Grid.Row="5" BorderBrush="#999" BorderThickness="1" Visibility="{Binding IsGridLayerActive, Converter={StaticResource BoolToVis}}">
-                <ListBox ItemsSource="{Binding MetatilePalette}" SelectedItem="{Binding SelectedPaletteMetatile}"
-                         BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}">
-                    <ListBox.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel />
-                        </ItemsPanelTemplate>
-                    </ListBox.ItemsPanel>
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding Name}">
-                                <Image Source="{Binding Preview}" Width="48" Height="48" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                                <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="52" HorizontalAlignment="Center" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                <DockPanel>
+                    <!-- GridSize=1 only: pick the orientation/palette slot to paint the currently-selected tile with. See MapEditorViewModel.PaintAttributes/RefreshPaintAttributes. -->
+                    <StackPanel DockPanel.Dock="Top" Margin="4" Visibility="{Binding ShowPaintAttributes, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Paint with:" FontSize="9" Foreground="Gray" Margin="0,0,0,2" />
+                        <StackPanel Orientation="Horizontal" DataContext="{Binding PaintAttributes}">
+                            <CheckBox Content="Mirror X" IsChecked="{Binding MirrorX}" Margin="0,0,8,0" />
+                            <CheckBox Content="Mirror Y" IsChecked="{Binding MirrorY}" Margin="0,0,8,0" />
+                            <CheckBox Content="Rotate" IsChecked="{Binding Rotate}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0" DataContext="{Binding PaintAttributes}"
+                                    Visibility="{Binding CanOverridePalette, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding NativePaletteSlotLabel}" FontSize="9" VerticalAlignment="Center" Margin="0,0,4,0" />
+                            <ComboBox ItemsSource="{Binding AvailablePaletteSlots}" SelectedItem="{Binding EffectivePaletteSlot}" Width="46" FontSize="9"
+                                      ToolTip="Recolor: read this tile against a DIFFERENT palette slot than its own native one." />
+                            <Button Content="&#8630;" Width="20" Margin="4,0,0,0" Command="{Binding ResetPaletteToNativeCommand}"
+                                    Visibility="{Binding HasOverride, Converter={StaticResource BoolToVis}}"
+                                    ToolTip="Reset to the tile's own native palette slot" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <ListBox ItemsSource="{Binding MetatilePalette}" SelectedItem="{Binding SelectedPaletteMetatile}"
+                             BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding Name}">
+                                    <Image Source="{Binding Preview}" Width="48" Height="48" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                    <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="52" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
             </Border>
 
             <!-- Sprite palette: Sprite layer -->

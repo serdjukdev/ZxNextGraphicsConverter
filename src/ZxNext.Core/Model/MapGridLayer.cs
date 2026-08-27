@@ -14,4 +14,20 @@ namespace ZxNext.Core.Model;
 public class MapGridLayer
 {
     public byte[] MetatileIndices { get; set; } = [];
+
+    /// <summary>
+    /// One packed <see cref="CellAttributePacking"/> byte per cell, same indexing as <see cref="MetatileIndices"/>
+    /// — ONLY meaningful (and only ever non-empty) for the Tilemap layer of a GridSize=1
+    /// <see cref="MapAsset"/>. At that GridSize, <see cref="MetatileIndices"/> always references a tile's
+    /// one fixed default (unmirrored, native-palette) metatile — auto-created once by
+    /// <see cref="Conversion.AssetImporter.Import"/>, never again afterward — so which TILE occupies a
+    /// cell and what ATTRIBUTE (mirror/rotate/palette-slot override) it's painted with are deliberately
+    /// independent: editing a cell's attribute writes only here, never touches <see cref="MetatileIndices"/>.
+    /// This is what keeps attribute editing from eating into the 255-per-Kind metatile cap — every cell
+    /// gets its own byte here regardless of how many distinct attribute combinations are in use across the
+    /// map, instead of each combination needing its own metatile. Every other layer/GridSize combination
+    /// (8bpp always; Tilemap at GridSize 2/4) leaves this <c>[]</c> — those bake mirror/rotate/palette
+    /// into the metatile's own cells instead, authored once in the Metatile Editor.
+    /// </summary>
+    public byte[] CellAttributes { get; set; } = [];
 }

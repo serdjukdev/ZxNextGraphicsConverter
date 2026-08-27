@@ -131,6 +131,9 @@ public class MapDto
     public int MetatileGridSize { get; set; }
     public string TilemapDataFile { get; set; } = "";
     public string TileLayer8BppDataFile { get; set; } = "";
+
+    /// <summary>Only set for a GridSize=1 map — the sidecar file holding <see cref="Model.MapGridLayer.CellAttributes"/>'s raw bytes for the Tilemap layer (same "raw bytes, sidecar zip entry" convention as <see cref="TilemapDataFile"/>). Null for every other GridSize, and for a map saved before this field existed — <see cref="ProjectService.Load"/> falls back to an all-zero (no overrides) array of the right length in both cases.</summary>
+    public string? TilemapAttributesDataFile { get; set; }
     public List<SpritePlacementDto> SpriteLayer { get; set; } = [];
     public bool TilemapLayerVisible { get; set; } = true;
     public bool TileLayer8BppVisible { get; set; } = true;

@@ -8,11 +8,15 @@ public class MapResizeCalculatorTests
     /// <summary>Stand-in for whatever a Kind+GridSize's reserved blank metatile's SortIndex happens to be — these tests never use 0 as a real content value, so it's always distinguishable.</summary>
     private const byte Blank = 0;
 
-    private static MapAsset MakeMap(int width, int height, int metatileGridSize, byte[]? tilemap = null, byte[]? tile8Bpp = null, List<SpritePlacement>? sprites = null) => new(width, height)
+    private static MapAsset MakeMap(int width, int height, int metatileGridSize, byte[]? tilemap = null, byte[]? tile8Bpp = null, List<SpritePlacement>? sprites = null, byte[]? cellAttributes = null) => new(width, height)
     {
         Name = "fixture",
         MetatileGridSize = metatileGridSize,
-        TilemapLayer = new MapGridLayer { MetatileIndices = tilemap ?? FullOfEmpty(width * height) },
+        TilemapLayer = new MapGridLayer
+        {
+            MetatileIndices = tilemap ?? FullOfEmpty(width * height),
+            CellAttributes = metatileGridSize == 1 ? cellAttributes ?? new byte[width * height] : []
+        },
         TileLayer8Bpp = new MapGridLayer { MetatileIndices = tile8Bpp ?? FullOfEmpty(width * height) },
         SpriteLayer = sprites ?? []
     };
@@ -52,6 +56,37 @@ public class MapResizeCalculatorTests
         var sprite = Assert.Single(plan.KeptSprites);
         Assert.Equal(21, sprite.X);
         Assert.Equal(21, sprite.Y);
+    }
+
+    [Fact]
+    public void Plan_GridSize1_CellAttributesMoveInSyncWithMetatileIndices()
+    {
+        // 2x2 map, distinct tile indices AND distinct attribute bytes, grown to 4x4 with old (0,0) landing at new (1,1).
+        var map = MakeMap(2, 2, metatileGridSize: 1,
+            tilemap: [10, 11, 12, 13],
+            cellAttributes: [1, 2, 3, 4]);
+
+        var plan = MapResizeCalculator.Plan(map, newWidth: 4, newHeight: 4, offsetX: 1, offsetY: 1, Blank, Blank);
+
+        Assert.Equal(16, plan.NewTilemapCellAttributes.Length);
+        // Each attribute byte lands at the SAME new position as its own cell's MetatileIndices byte.
+        Assert.Equal(1, plan.NewTilemapCellAttributes[1 * 4 + 1]);
+        Assert.Equal(2, plan.NewTilemapCellAttributes[1 * 4 + 2]);
+        Assert.Equal(3, plan.NewTilemapCellAttributes[2 * 4 + 1]);
+        Assert.Equal(4, plan.NewTilemapCellAttributes[2 * 4 + 2]);
+        // Every other (newly added) cell defaults to 0 (no mirror/rotate/palette override), not the tilemap's own blank sentinel.
+        Assert.Equal(12, plan.NewTilemapCellAttributes.Count(b => b == 0));
+    }
+
+    [Fact]
+    public void Plan_GridSize2_NeverPopulatesCellAttributes()
+    {
+        // GridSize=2/4 maps don't use CellAttributes at all — Plan must not touch/crash on it (it's `[]`, not sized to the map).
+        var map = MakeMap(2, 2, metatileGridSize: 2, tilemap: [1, 2, 3, 4]);
+
+        var plan = MapResizeCalculator.Plan(map, newWidth: 3, newHeight: 3, offsetX: 0, offsetY: 0, Blank, Blank);
+
+        Assert.Empty(plan.NewTilemapCellAttributes);
     }
 
     [Fact]

@@ -1,0 +1,39 @@
+<Window x:Class="ZxNext.App.Views.CellAttributeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
+        d:DataContext="{d:DesignInstance Type=vm:MetatileCellViewModel}"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008/design"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Edit Tile Attributes" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+    <StackPanel Margin="14" Width="220">
+        <Image Source="{Binding Preview}" Width="64" Height="64" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor"
+               HorizontalAlignment="Center" Margin="0,0,0,10" />
+
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+            <CheckBox Content="Mirror X" IsChecked="{Binding MirrorX}" Margin="0,0,8,0" />
+            <CheckBox Content="Mirror Y" IsChecked="{Binding MirrorY}" Margin="0,0,8,0" />
+            <CheckBox Content="Rotate" IsChecked="{Binding Rotate}"
+                      ToolTip="Transposes the tile (diagonal flip). Combined with Mirror X/Y this reaches all 8 possible orientations." />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,6" Visibility="{Binding CanOverridePalette, Converter={StaticResource BoolToVis}}">
+            <TextBlock Text="{Binding NativePaletteSlotLabel}" FontSize="9" VerticalAlignment="Center" Margin="0,0,4,0" />
+            <ComboBox ItemsSource="{Binding AvailablePaletteSlots}" SelectedItem="{Binding EffectivePaletteSlot}" Width="46" FontSize="9"
+                      ToolTip="Recolor: read this tile against a DIFFERENT palette slot than its own native one." />
+            <Button Content="&#8630;" Width="20" Margin="4,0,0,0" Command="{Binding ResetPaletteToNativeCommand}"
+                    Visibility="{Binding HasOverride, Converter={StaticResource BoolToVis}}"
+                    ToolTip="Reset to the tile's own native palette slot" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Cancel" Width="80" Margin="0,0,8,0" IsCancel="True" Click="Cancel_OnClick" />
+            <Button Content="OK" Width="80" IsDefault="True" Click="Ok_OnClick" />
+        </StackPanel>
+    </StackPanel>
+</Window>

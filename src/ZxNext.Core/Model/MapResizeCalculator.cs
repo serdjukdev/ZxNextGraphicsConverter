@@ -11,6 +11,7 @@ public record MapResizePlan(
     int NewWidth,
     int NewHeight,
     byte[] NewTilemapIndices,
+    byte[] NewTilemapCellAttributes,
     byte[] NewTileLayer8BppIndices,
     List<SpritePlacement> KeptSprites,
     int DroppedTileCount,
@@ -37,8 +38,14 @@ public static class MapResizeCalculator
     /// </summary>
     public static MapResizePlan Plan(MapAsset map, int newWidth, int newHeight, int offsetX, int offsetY, byte tilemapBlankValue, byte tileLayer8BppBlankValue)
     {
-        var (newTilemap, droppedTiles) = RemapGridLayer(map.TilemapLayer, map.Width, map.Height, newWidth, newHeight, offsetX, offsetY, tilemapBlankValue);
-        var (new8Bpp, dropped8Bpp) = RemapGridLayer(map.TileLayer8Bpp, map.Width, map.Height, newWidth, newHeight, offsetX, offsetY, tileLayer8BppBlankValue);
+        var (newTilemap, droppedTiles) = RemapGridLayer(map.TilemapLayer.MetatileIndices, map.Width, map.Height, newWidth, newHeight, offsetX, offsetY, tilemapBlankValue);
+        var (new8Bpp, dropped8Bpp) = RemapGridLayer(map.TileLayer8Bpp.MetatileIndices, map.Width, map.Height, newWidth, newHeight, offsetX, offsetY, tileLayer8BppBlankValue);
+        // Only a GridSize=1 map's Tilemap layer ever populates CellAttributes (see MapGridLayer's own doc
+        // comment) — everywhere else it's `[]`, which RemapGridLayer's oldWidth*oldHeight-indexed loop
+        // would index out of range on, so it's skipped entirely rather than remapped.
+        var newTilemapCellAttributes = map.MetatileGridSize == 1
+            ? RemapGridLayer(map.TilemapLayer.CellAttributes, map.Width, map.Height, newWidth, newHeight, offsetX, offsetY, blankValue: 0).NewIndices
+            : [];
 
         var cellPixelSize = map.MetatileGridSize * 8;
         var pixelOffsetX = offsetX * cellPixelSize;
@@ -80,7 +87,7 @@ public static class MapResizeCalculator
             }
         }
 
-        return new MapResizePlan(newWidth, newHeight, newTilemap, new8Bpp, keptSprites, droppedTiles, dropped8Bpp, droppedSprites);
+        return new MapResizePlan(newWidth, newHeight, newTilemap, newTilemapCellAttributes, new8Bpp, keptSprites, droppedTiles, dropped8Bpp, droppedSprites);
     }
 
     /// <summary>
@@ -135,7 +142,7 @@ public static class MapResizeCalculator
     }
 
     private static (byte[] NewIndices, int DroppedCount) RemapGridLayer(
-        MapGridLayer layer, int oldWidth, int oldHeight, int newWidth, int newHeight, int offsetX, int offsetY, byte blankValue)
+        byte[] indices, int oldWidth, int oldHeight, int newWidth, int newHeight, int offsetX, int offsetY, byte blankValue)
     {
         var newIndices = new byte[newWidth * newHeight];
         Array.Fill(newIndices, blankValue);
@@ -145,7 +152,7 @@ public static class MapResizeCalculator
         {
             for (var c = 0; c < oldWidth; c++)
             {
-                var oldValue = layer.MetatileIndices[r * oldWidth + c];
+                var oldValue = indices[r * oldWidth + c];
                 var newR = r + offsetY;
                 var newC = c + offsetX;
                 var inBounds = newR >= 0 && newR < newHeight && newC >= 0 && newC < newWidth;

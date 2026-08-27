@@ -21,13 +21,32 @@ namespace ZxNext.Core.Export;
 /// </summary>
 public static class MapExporter
 {
-    /// <summary>Width*Height budget per grid layer (1 byte/cell), independently re-checked here — the primary enforcement is the map create/resize dialog, this is a defensive re-check so a corrupted/hand-edited project can never silently produce a truncated or oversized export.</summary>
+    /// <summary>Width*Height budget per grid layer at 1 byte/cell — the baseline for every layer EXCEPT a GridSize=1 map's Tilemap layer, which is 2 bytes/cell (see <see cref="MaxGridCellsFor"/>). Independently re-checked here — the primary enforcement is the map create/resize dialog, this is a defensive re-check so a corrupted/hand-edited project can never silently produce a truncated or oversized export.</summary>
     public const int MaxGridCells = 16384;
 
-    public static (bool Success, string? Error) ValidateSize(MapAsset map) =>
-        (long)map.Width * map.Height <= MaxGridCells
+    /// <summary>
+    /// The actual Width*Height budget for a map of the given metatile GridSize — <see cref="MaxGridCells"/>
+    /// itself assumes 1 byte/cell, true for every grid layer except a GridSize=1 map's Tilemap layer, which
+    /// exports 2 bytes/cell directly (tile index + attribute — see <see cref="ExportGridLayerTileMode"/>,
+    /// no metatile-table indirection). Since one Width/Height pair is shared by both of a map's grid
+    /// layers, GridSize=1's tighter Tilemap budget becomes the whole map's effective cap, even though its
+    /// 8bpp layer (still 1 byte/cell always) alone could fit the full <see cref="MaxGridCells"/>.
+    /// </summary>
+    public static int MaxGridCellsFor(int metatileGridSize) => metatileGridSize == 1 ? MaxGridCells / 2 : MaxGridCells;
+
+    /// <summary>Appended to every "over the cell limit" message so the halved GridSize=1 figure is never a bare, unexplained number — see <see cref="MaxGridCellsFor"/>'s own doc comment for the full reasoning.</summary>
+    public static string GridCellLimitReasonFor(int metatileGridSize) =>
+        metatileGridSize == 1
+            ? " (GridSize=1's Tilemap layer stores 2 bytes/cell -- tile index + attribute byte, no metatile table -- so its limit is half of the normal 16384 that every 2x2/4x4 map gets)"
+            : "";
+
+    public static (bool Success, string? Error) ValidateSize(MapAsset map)
+    {
+        var limit = MaxGridCellsFor(map.MetatileGridSize);
+        return (long)map.Width * map.Height <= limit
             ? (true, null)
-            : (false, $"Map '{map.Name}' is {map.Width}x{map.Height} = {map.Width * map.Height} cells, over the {MaxGridCells}-cell-per-layer limit.");
+            : (false, $"Map '{map.Name}' is {map.Width}x{map.Height} = {map.Width * map.Height} cells, over the {limit}-cell-per-layer limit{GridCellLimitReasonFor(map.MetatileGridSize)}.");
+    }
 
     /// <summary><paramref name="Metatiles"/> is nullable for legacy reasons only — every grid layer now always references at least its Kind+GridSize's reserved blank metatile (see ReservedBlankAssetService), so this is never actually null anymore.</summary>
     public record GridLayerExportResult(FolderExportResult Grid, FolderExportResult? Metatiles);
@@ -98,15 +117,27 @@ public static class MapExporter
     }
 
     /// <summary>
-    /// GridSize=1's compact export path: each cell's own (single-cell) metatile is resolved and
-    /// serialized via <see cref="MetatileSerializer"/> exactly as a normal metatile-table entry would be,
-    /// but the bytes go straight into the grid array itself (tile index, then an attribute byte for
-    /// FourBpp — same layout <see cref="GenerateMetatilesAsm"/>'s header already documents) instead of a
-    /// separate table referenced by a local index. No metatiles file is produced (<see cref="GridLayerExportResult.Metatiles"/> is null) — <see cref="Export.ExportService"/> already skips adding a null one.
+    /// GridSize=1's compact export path: each cell's <see cref="MapGridLayer.MetatileIndices"/> entry
+    /// resolves to the tile's one fixed default metatile (see <see cref="Conversion.AssetImporter.Import"/>'s
+    /// auto-create hook — GridSize=1 metatiles never carry a real mirror/rotate/palette-override of their
+    /// own), while the ACTUAL per-cell attribute lives in <see cref="MapGridLayer.CellAttributes"/> — the
+    /// two are combined here into the exported tile-index + attribute-byte pair, straight into the grid
+    /// array itself, instead of a separate metatile table referenced by a local index. No metatiles file
+    /// is produced (<see cref="GridLayerExportResult.Metatiles"/> is null) — <see cref="Export.ExportService"/>
+    /// already skips adding a null one.
     /// </summary>
     private static GridLayerExportResult ExportGridLayerTileMode(MapAsset map, MetatileKind kind, MapGridLayer layer, string layerSuffix, ProjectState project)
     {
+        var tileCategory = kind == MetatileKind.FourBpp ? AssetCategory.Tile4Bpp : AssetCategory.Tile8Bpp;
+        if (AssetExportIndexer.ExceedsExportableCap(tileCategory, project.Assets))
+        {
+            throw new InvalidOperationException(
+                $"{tileCategory} has more than {AssetExportIndexer.MaxAssetsPerCategory} assets — reduce it below " +
+                $"{AssetExportIndexer.MaxAssetsPerCategory} to export map '{map.Name}''s {layerSuffix} layer.");
+        }
+
         var metatilesBySortIndex = project.Metatiles.Where(m => m.Kind == kind).ToDictionary(m => m.SortIndex);
+        var assetsById = project.Assets.ToDictionary(a => a.Id);
         var bytesPerCell = kind == MetatileKind.FourBpp ? 2 : 1;
         var gridBytes = new byte[layer.MetatileIndices.Length * bytesPerCell];
 
@@ -118,13 +149,25 @@ public static class MapExporter
                 throw new InvalidOperationException($"Map '{map.Name}' ({layerSuffix} layer) references metatile index {sortIndex} ({kind}) which no longer exists.");
             }
 
-            var serialized = MetatileSerializer.Serialize(metatile, project.Assets);
-            if (!serialized.Success)
+            var tileAssetId = metatile.Cells[0].TileAssetId;
+            if (!assetsById.TryGetValue(tileAssetId, out var tileAsset))
             {
-                throw new InvalidOperationException(serialized.Error);
+                throw new InvalidOperationException($"Map '{map.Name}' ({layerSuffix} layer) cell {i} references a tile that no longer exists.");
             }
 
-            Array.Copy(serialized.Data!, 0, gridBytes, i * bytesPerCell, bytesPerCell);
+            var tileIndex = (byte)AssetExportIndexer.IndexOf(tileAsset, project.Assets);
+            gridBytes[i * bytesPerCell] = tileIndex;
+
+            if (kind == MetatileKind.FourBpp)
+            {
+                var (mirrorX, mirrorY, rotate, paletteOverride) = CellAttributePacking.Unpack(layer.CellAttributes[i]);
+                var paletteSlot = paletteOverride ?? tileAsset.PaletteSlotIndex;
+                if (paletteSlot is < 0 or > 15)
+                {
+                    throw new InvalidOperationException($"Map '{map.Name}' ({layerSuffix} layer) cell {i}: palette slot override {paletteSlot} is out of the valid 0-15 range.");
+                }
+                gridBytes[i * bytesPerCell + 1] = CellAttributePacking.PackHardwareAttributeByte(paletteSlot, mirrorX, mirrorY, rotate);
+            }
         }
 
         var gridRowKey = ExportFileNaming.GridRowKey(map.Name, layerSuffix);

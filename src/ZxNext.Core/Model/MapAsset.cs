@@ -50,6 +50,7 @@ public class MapAsset
         Width = plan.NewWidth;
         Height = plan.NewHeight;
         TilemapLayer.MetatileIndices = plan.NewTilemapIndices;
+        TilemapLayer.CellAttributes = plan.NewTilemapCellAttributes;
         TileLayer8Bpp.MetatileIndices = plan.NewTileLayer8BppIndices;
         SpriteLayer.Clear();
         SpriteLayer.AddRange(plan.KeptSprites);

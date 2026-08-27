@@ -159,6 +159,45 @@ public class ProjectServiceTests : IDisposable
         Assert.Equal(16, loadedSprite.Y);
     }
 
+    [Fact]
+    public void SaveThenLoad_GridSize1Map_RoundTripsCellAttributes()
+    {
+        var project = new ProjectState();
+        var map = new MapAsset(2, 2)
+        {
+            Name = "level1",
+            MetatileGridSize = 1,
+            TilemapLayer = new MapGridLayer { MetatileIndices = [0, 0, 0, 0], CellAttributes = [0, 5, 9, 255] },
+            TileLayer8Bpp = new MapGridLayer { MetatileIndices = new byte[4] }
+        };
+        project.Maps.Add(map);
+
+        ProjectService.Save(project, _tempProjectFile);
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        var loadedMap = Assert.Single(loaded.Maps);
+        Assert.Equal(map.TilemapLayer.CellAttributes, loadedMap.TilemapLayer.CellAttributes);
+    }
+
+    [Fact]
+    public void SaveThenLoad_GridSize2Map_NeverWritesOrExpectsACellAttributesSidecar()
+    {
+        var project = new ProjectState();
+        var map = new MapAsset(2, 2)
+        {
+            Name = "level1",
+            MetatileGridSize = 2,
+            TilemapLayer = new MapGridLayer { MetatileIndices = new byte[4] },
+            TileLayer8Bpp = new MapGridLayer { MetatileIndices = new byte[4] }
+        };
+        project.Maps.Add(map);
+
+        ProjectService.Save(project, _tempProjectFile);
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        Assert.Empty(Assert.Single(loaded.Maps).TilemapLayer.CellAttributes);
+    }
+
     /// <summary>
     /// A project.json saved before Metatiles/Maps existed simply has no such keys at all (this is a
     /// brand-new pair of lists, not a new field bolted onto an existing entity — unlike

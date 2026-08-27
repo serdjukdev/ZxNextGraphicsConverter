@@ -176,7 +176,7 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="A metatile is a small square of individual tiles treated as one stamp on the Map Editor's grid layers. Every change here writes straight into the project immediately: there's no separate save inside this window, only File → Save Project in the main window later." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Metatile size (1x1 / 2x2 / 4x4)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="One fixed size for the WHOLE project: every metatile of either Kind, and every map's grid, shares it. Asked once, in the New Project dialog when the project is created. Fixed forever afterward; there is no per-metatile or per-map size choice anymore. 1x1 is a special 'no metatile' mode: every Tile4Bpp/Tile8Bpp tile automatically gets its own 1-cell metatile the moment it's imported, so this editor never needs to be opened at all — the Map Editor's palette already shows one paintable entry per tile." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="One fixed size for the WHOLE project: every metatile of either Kind, and every map's grid, shares it. Asked once, in the New Project dialog when the project is created. Fixed forever afterward; there is no per-metatile or per-map size choice anymore. 1x1 is a special 'no metatile' mode: every Tile4Bpp/Tile8Bpp tile automatically gets its own 1-cell metatile the moment it's imported, so this editor never needs to be opened at all — the Map Editor's palette already shows one paintable entry per tile, and its own 'Paint with' panel/right-click popup handle mirror/rotate/palette-slot instead (see the Map Editor section below). Note its Tilemap layer's grid file is 2 bytes/cell (not 1), so a 1x1 map's cell-count limit is half of a 2x2/4x4 map's." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Kind: 4bpp / 8bpp" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Which tile category this metatile draws from: 4bpp metatiles feed the hardware Tilemap layer (with real mirror/rotate/palette-slot hardware attributes); 8bpp metatiles feed the software 8bpp Tile layer (index only, no attributes)." />
@@ -231,7 +231,10 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="Clears the current selection's contents: grid cells become empty, selected sprites are removed." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Fill Selection' button" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Stamps the currently-selected palette metatile across every cell of the grid selection, as one undo step." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Stamps the currently-selected palette metatile across every cell of the grid selection, as one undo step. On a GridSize=1 map's Tilemap layer this also picks up whatever the 'Paint with' panel is currently set to, same as a plain paint stroke." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="'Paint with' panel (Tilemap layer, GridSize=1 only)" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Mirror X / Mirror Y / Rotate checkboxes plus a palette-slot picker for whichever tile is selected in the palette below: painting/Fill Selection uses this combination instead of the tile's plain default orientation. Resets to unmirrored/native-palette every time the palette selection changes — it never silently carries over from a previously picked tile. Behind the scenes this finds-or-creates a matching 1-cell metatile (reusing one if the exact same combination was already painted anywhere, never creating a duplicate for the same combination). Not shown for 2x2/4x4 maps (their metatiles carry their own baked-in per-cell attributes, set in the Metatile Editor) or the 8bpp layer (no attribute concept)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Mouse wheel / middle-drag" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Zooms in/out (25%-800%, stays anchored under the cursor) / pans the view." />
@@ -259,6 +262,9 @@
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Right-click an object (Sprite layer)" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Shows a small menu: Set User Byte / Link / Set Type: for whichever object you right-clicked, without needing to arm anything from the toolbar first. Only offered when no tool is currently armed (an armed tool already owns left-click for this) and when you actually click on an object. See the three entries above for what each one does." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Right-click a cell (Tilemap layer, GridSize=1 only)" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens a small dialog pre-filled with that ONE cell's current mirror/rotate/palette slot (and a live preview) — OK re-points just that cell at the matching metatile (find-or-create, same dedup as the 'Paint with' panel), Cancel discards. Every other cell painted with the same tile is untouched, even ones that currently happen to share this cell's exact metatile. Not offered for 2x2/4x4 maps or the 8bpp layer." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+Z: Undo" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="A local undo stack for this window: paint/erase strokes, Fill/Delete Selection, Move/Copy, Link, type assignment, and Resize/Trim each undo as one step." />

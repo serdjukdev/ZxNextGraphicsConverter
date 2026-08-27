@@ -131,6 +131,14 @@ public static class ProjectService
                     entryStream.Write(map.TileLayer8Bpp.MetatileIndices);
                 }
 
+                string? tilemapAttributesEntryName = null;
+                if (map.MetatileGridSize == 1)
+                {
+                    tilemapAttributesEntryName = $"maps/{map.Id}_tilemap_attrs.bin";
+                    using var entryStream = zip.CreateEntry(tilemapAttributesEntryName, CompressionLevel.Fastest).Open();
+                    entryStream.Write(map.TilemapLayer.CellAttributes);
+                }
+
                 dto.Maps.Add(new MapDto
                 {
                     Id = map.Id,
@@ -141,6 +149,7 @@ public static class ProjectService
                     MetatileGridSize = map.MetatileGridSize,
                     TilemapDataFile = tilemapEntryName,
                     TileLayer8BppDataFile = tileLayer8BppEntryName,
+                    TilemapAttributesDataFile = tilemapAttributesEntryName,
                     SpriteLayer = map.SpriteLayer.Select(s => new SpritePlacementDto
                     {
                         Id = s.Id,
@@ -284,7 +293,17 @@ public static class ProjectService
                 Name = mapDto.Name,
                 SortIndex = mapDto.SortIndex,
                 MetatileGridSize = mapDto.MetatileGridSize,
-                TilemapLayer = new MapGridLayer { MetatileIndices = ReadMapEntry(mapDto.TilemapDataFile) },
+                TilemapLayer = new MapGridLayer
+                {
+                    MetatileIndices = ReadMapEntry(mapDto.TilemapDataFile),
+                    // Missing for a non-GridSize=1 map (never had one) and for a GridSize=1 map saved
+                    // before this field existed (a legacy/mid-session project from before CellAttributes
+                    // was added) — an all-zero (no overrides) array of the right length is a safe default
+                    // for both, no migration logic needed.
+                    CellAttributes = mapDto.TilemapAttributesDataFile is { } attrsFile
+                        ? ReadMapEntry(attrsFile)
+                        : mapDto.MetatileGridSize == 1 ? new byte[mapDto.Width * mapDto.Height] : []
+                },
                 TileLayer8Bpp = new MapGridLayer { MetatileIndices = ReadMapEntry(mapDto.TileLayer8BppDataFile) },
                 SpriteLayer = mapDto.SpriteLayer.Select(s => new SpritePlacement
                 {

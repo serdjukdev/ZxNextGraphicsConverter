@@ -30,9 +30,12 @@ public class ProjectState
 
     /// <summary>
     /// The one metatile GridSize this whole project is locked to, for BOTH MetatileKinds and every map.
-    /// Restricted to 2 or 4 (powers of two) — nothing in the hardware demands that, but the arithmetic and
-    /// typical sprite sizes work out cleaner, and 3 turned out to be untested/unused dead weight in
-    /// practice, so it was dropped. There is no realistic reason within one game to want different metatile sizes for
+    /// Restricted to 1, 2, or 4. 2/4 are powers of two — nothing in the hardware demands that, but the
+    /// arithmetic and typical sprite sizes work out cleaner, and 3 turned out to be untested/unused dead
+    /// weight in practice, so it was dropped. 1 is a special "no metatile" mode: a 1x1 metatile is just a
+    /// thin wrapper around a single tile (auto-created per tile by <see cref="Conversion.AssetImporter.Import"/>,
+    /// never authored by hand), so painting a GridSize=1 map is really painting tiles directly. There is no
+    /// realistic reason within one game to want different metatile sizes for
     /// different maps (a project needing a genuinely different size is a different game/project); locking
     /// project-wide, once, up front, removes an entire axis of per-metatile/per-map choice (and per-map
     /// size mismatches) that never bought anything. Chosen once in the New Project dialog (see

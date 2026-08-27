@@ -8,7 +8,8 @@
         ResizeMode="NoResize">
     <StackPanel Margin="16" Width="300">
         <TextBlock TextWrapping="Wrap" FontSize="11" Margin="0,0,0,10"
-                   Text="Pick the metatile size for this project — every metatile and every map's grid shares this one size, fixed forever once chosen." />
+                   Text="Pick the metatile size for this project — every metatile and every map's grid shares this one size, fixed forever once chosen. 1x1 means no real metatiles at all: every tile paints directly." />
+        <RadioButton x:Name="Size1" Content="1x1" GroupName="GridSize" Margin="0,0,0,6" />
         <RadioButton x:Name="Size2" Content="2x2" GroupName="GridSize" IsChecked="True" Margin="0,0,0,6" />
         <RadioButton x:Name="Size4" Content="4x4" GroupName="GridSize" Margin="0,0,0,10" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

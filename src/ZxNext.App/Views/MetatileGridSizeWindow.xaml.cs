@@ -12,7 +12,7 @@ namespace ZxNext.App.Views;
 /// </summary>
 public partial class MetatileGridSizeWindow : Window
 {
-    public int SelectedGridSize => Size4.IsChecked == true ? 4 : 2;
+    public int SelectedGridSize => Size1.IsChecked == true ? 1 : Size4.IsChecked == true ? 4 : 2;
 
     public MetatileGridSizeWindow()
     {

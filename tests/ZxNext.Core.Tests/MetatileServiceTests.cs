@@ -98,7 +98,6 @@ public class MetatileServiceTests
     }
 
     [Theory]
-    [InlineData(1)]
     [InlineData(3)]
     [InlineData(5)]
     public void Create_InvalidGridSize_Rejected(int gridSize)
@@ -107,6 +106,20 @@ public class MetatileServiceTests
         var result = MetatileService.Create(project, "bad", MetatileKind.FourBpp, gridSize, MakeCells(2));
         Assert.False(result.Success);
         Assert.Empty(project.Metatiles);
+    }
+
+    [Fact]
+    public void Create_GridSize1_NeedsExactlyOneCell_AndLocksTheProject()
+    {
+        var project = new ProjectState();
+
+        var tooMany = MetatileService.Create(project, "bad", MetatileKind.FourBpp, 1, MakeCells(2));
+        Assert.False(tooMany.Success);
+
+        var result = MetatileService.Create(project, "grass", MetatileKind.FourBpp, 1, MakeCells(1));
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(1, project.MetatileGridSize);
+        Assert.Single(result.Metatile!.Cells);
     }
 
     [Fact]

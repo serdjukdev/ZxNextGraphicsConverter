@@ -380,6 +380,55 @@ public class AssetImporterTests
         Assert.Equal("hero", reQuantized.Asset!.Name);
     }
 
+    [Theory]
+    [InlineData(AssetCategory.Tile4Bpp)]
+    [InlineData(AssetCategory.Tile8Bpp)]
+    public void Import_GridSize1Project_AutoCreatesMatchingSingleCellMetatile(AssetCategory category)
+    {
+        var project = new ProjectState { MetatileGridSize = 1 };
+        var folderPath = category == AssetCategory.Tile4Bpp ? "tile/4bpp/images" : "tile/8bpp/images";
+        var source = MakeSource("grass", 8, 8);
+        var rgba = SolidColorWithTransparentCorner(8, 8, (10, 20, 30));
+
+        var result = AssetImporter.Import(project, source, rgba, category, folderPath, DitherMode.None);
+
+        Assert.True(result.Success, result.Error);
+        var kind = category == AssetCategory.Tile4Bpp ? MetatileKind.FourBpp : MetatileKind.EightBpp;
+        var metatile = Assert.Single(project.Metatiles, m => m.Kind == kind && !m.IsReservedBlank);
+        Assert.Equal(1, metatile.GridSize);
+        var cell = Assert.Single(metatile.Cells);
+        Assert.Equal(result.Asset!.Id, cell.TileAssetId);
+    }
+
+    [Fact]
+    public void ReQuantize_InGridSize1Project_DoesNotCreateASecondAutoMetatile()
+    {
+        var project = new ProjectState { MetatileGridSize = 1 };
+        var source = MakeSource("hero", 8, 8);
+        var rgba = SolidColorWithTransparentCorner(8, 8, (1, 2, 3));
+
+        var original = AssetImporter.Import(project, source, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
+        Assert.Single(project.Metatiles, m => m.Kind == MetatileKind.FourBpp && !m.IsReservedBlank);
+
+        AssetImporter.Import(project, source, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.OrderedBayer4X4,
+            excludeAssetIdFromNameCheck: original.Id);
+
+        Assert.Single(project.Metatiles, m => m.Kind == MetatileKind.FourBpp && !m.IsReservedBlank);
+    }
+
+    [Fact]
+    public void Import_GridSize2Project_DoesNotAutoCreateAnyMetatile()
+    {
+        var project = new ProjectState { MetatileGridSize = 2 };
+        var source = MakeSource("grass", 8, 8);
+        var rgba = SolidColorWithTransparentCorner(8, 8, (10, 20, 30));
+
+        var result = AssetImporter.Import(project, source, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Empty(project.Metatiles);
+    }
+
     private static byte[] AllTransparentRgba(int width, int height) => new byte[width * height * 4]; // all-zero bytes -> alpha 0 everywhere
 
     [Theory]

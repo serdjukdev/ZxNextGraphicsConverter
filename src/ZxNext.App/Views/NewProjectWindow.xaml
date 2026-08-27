@@ -28,8 +28,9 @@
         <StackPanel Visibility="{Binding ShowMetatileGridSizeOption, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
             <TextBlock Text="Metatile size" FontSize="11" />
             <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="Gray" Margin="0,2,0,6"
-                       Text="Every metatile and every map's grid in this project will share this one size, fixed forever once created." />
+                       Text="Every metatile and every map's grid in this project will share this one size, fixed forever once created. 1x1 means no real metatiles at all: every tile paints directly." />
             <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="Size1" Content="1x1" GroupName="NewProjectGridSize" Margin="0,0,14,0" />
                 <RadioButton x:Name="Size2" Content="2x2" GroupName="NewProjectGridSize" Margin="0,0,14,0" IsChecked="True" />
                 <RadioButton x:Name="Size4" Content="4x4" GroupName="NewProjectGridSize" />
             </StackPanel>

@@ -39,7 +39,6 @@ public class MapServiceTests
     }
 
     [Theory]
-    [InlineData(1)]
     [InlineData(3)]
     [InlineData(5)]
     public void Create_InvalidGridSize_Rejected(int gridSize)
@@ -48,6 +47,18 @@ public class MapServiceTests
         var result = MapService.Create(project, "bad", 4, 4, gridSize);
         Assert.False(result.Success);
         Assert.Empty(project.Maps);
+    }
+
+    [Fact]
+    public void Create_GridSize1_Succeeds()
+    {
+        var project = new ProjectState();
+
+        var result = MapService.Create(project, "level1", width: 4, height: 3, metatileGridSize: 1);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(1, result.Map!.MetatileGridSize);
+        Assert.Equal(1, project.MetatileGridSize);
     }
 
     [Theory]

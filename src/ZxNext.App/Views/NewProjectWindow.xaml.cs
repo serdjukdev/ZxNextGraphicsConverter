@@ -19,7 +19,7 @@ public partial class NewProjectWindow : Window
     {
         if (DataContext is NewProjectViewModel { ShowMetatileGridSizeOption: true } vm)
         {
-            vm.MetatileGridSize = Size4.IsChecked == true ? 4 : 2;
+            vm.MetatileGridSize = Size1.IsChecked == true ? 1 : Size4.IsChecked == true ? 4 : 2;
         }
 
         DialogResult = true;

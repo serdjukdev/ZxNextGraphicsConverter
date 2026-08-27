@@ -58,7 +58,7 @@ public partial class AtlasSlicerViewModel : ObservableObject
     [ObservableProperty]
     private int cellHeight;
 
-    /// <summary>Only Tile4Bpp/Tile8Bpp can slice straight into auto-created metatiles — sprites and Layer2 have no metatile concept.</summary>
+    /// <summary>Only Tile4Bpp/Tile8Bpp can slice straight into auto-created metatiles — sprites and Layer2 have no metatile concept. Also false for a GridSize=1 project — see the constructor.</summary>
     public bool SupportsMetatileBlockSlicing { get; }
 
     [ObservableProperty]
@@ -132,7 +132,10 @@ public partial class AtlasSlicerViewModel : ObservableObject
         _sourceRgba32 = sourceRgba32;
         _categoryAlreadyHasTransparentTile = TransparentTileDetector.CategoryAlreadyHasTransparentTile(project, category);
         _categoryHasReservedBlankConcept = category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp;
-        SupportsMetatileBlockSlicing = category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp;
+        // Not offered for GridSize=1: a 1x1 "block" is identical to a plain tile slice, and
+        // AssetImporter.Import already auto-creates the matching 1x1 metatile for every plain-sliced tile
+        // in that mode — block-mode would just create a second, duplicate metatile per tile.
+        SupportsMetatileBlockSlicing = category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp && project.MetatileGridSize != 1;
         ResolvedGridSize = project.MetatileGridSize;
 
         _remainingTileCapacity = category == AssetCategory.Tile4Bpp

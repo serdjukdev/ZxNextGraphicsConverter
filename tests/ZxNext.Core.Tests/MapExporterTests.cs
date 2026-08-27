@@ -161,6 +161,48 @@ public class MapExporterTests
     }
 
     [Fact]
+    public void ExportTilemapLayer_GridSize1_InlinesTileAndAttributeBytesDirectly_NoMetatilesFile()
+    {
+        var tileA = FakeTile("tileA", 0, AssetCategory.Tile4Bpp);
+        var tileB = FakeTile("tileB", 1, AssetCategory.Tile4Bpp);
+        var project = new ProjectState();
+        project.Assets.Add(tileA);
+        project.Assets.Add(tileB);
+        var metatileA = FakeMetatile("tileA_mt", MetatileKind.FourBpp, 1, sortIndex: 0, tileA.Id);
+        var metatileB = FakeMetatile("tileB_mt", MetatileKind.FourBpp, 1, sortIndex: 1, tileB.Id);
+        project.Metatiles.Add(metatileA);
+        project.Metatiles.Add(metatileB);
+
+        var map = FakeMap("level1", 2, 1, gridSize: 1, tilemap: [0, 1]);
+        project.Maps.Add(map);
+
+        var result = MapExporter.ExportTilemapLayer(map, project);
+
+        Assert.Null(result.Metatiles); // GridSize=1 never produces a separate metatiles file
+        Assert.Equal("level1_tilemap_grid", result.Grid.RowKey);
+        Assert.Contains("level1_tilemap_grid_width: equ 2", result.Grid.AsmText);
+        // 2 bytes/cell (tile index, attribute byte) inlined directly, no metatile-index indirection.
+        Assert.Equal([0, 0, 1, 0], ExtractDbBytes(result.Grid.AsmText, "level1_tilemap_grid"));
+    }
+
+    [Fact]
+    public void ExportTileLayer8Bpp_GridSize1_OneByteCellDirectly_NoMetatilesFile()
+    {
+        var tile = FakeTile("tile", 0, AssetCategory.Tile8Bpp);
+        var project = new ProjectState();
+        project.Assets.Add(tile);
+        var metatile = FakeMetatile("mt", MetatileKind.EightBpp, 1, sortIndex: 0, tile.Id);
+        project.Metatiles.Add(metatile);
+        var map = FakeMap("level1", 1, 1, gridSize: 1, tile8Bpp: [0]);
+        project.Maps.Add(map);
+
+        var result = MapExporter.ExportTileLayer8Bpp(map, project);
+
+        Assert.Null(result.Metatiles);
+        Assert.Equal([0], ExtractDbBytes(result.Grid.AsmText, "level1_8bpp_grid"));
+    }
+
+    [Fact]
     public void SharedMetatile_ExportedIndependentlyPerMap_NotAsAGlobalLibrary()
     {
         var tile = FakeTile("tile", 0, AssetCategory.Tile4Bpp);

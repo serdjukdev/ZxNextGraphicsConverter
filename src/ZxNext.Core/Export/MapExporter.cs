@@ -9,7 +9,10 @@ namespace ZxNext.Core.Export;
 /// Exports a <see cref="MapAsset"/>'s layers as asm-embedded rows (no separate `.bin` file — see
 /// <see cref="FolderExportResult.IsChunked"/>), per the 2026-08-23 export-format redesign: each grid
 /// layer (Tilemap, 8bpp) produces its own grid-data row PLUS (if it uses any metatiles) its own
-/// metatile-definitions row, and the Sprite layer produces one "objects" row. Everything is per-map and
+/// metatile-definitions row, and the Sprite layer produces one "objects" row. A GridSize=1 map never
+/// produces a metatile-definitions row (see <see cref="ExportGridLayerTileMode"/>) — its grid-data row
+/// contains each cell's tile index (+ attribute for 4bpp) directly, since GridSize=1's "metatiles" are
+/// only ever thin single-tile wrappers with nothing worth a separate table. Everything is per-map and
 /// self-contained — there is no project-wide metatile "library" row anymore; if two maps share a
 /// metatile, each map's own metatile-definitions row gets an independent copy of its data. None of the
 /// rows own a palette (<see cref="FolderExportResult.PaletteFile"/> is always null): grid cells and
@@ -45,6 +48,14 @@ public static class MapExporter
     /// </summary>
     private static GridLayerExportResult ExportGridLayer(MapAsset map, MetatileKind kind, MapGridLayer layer, string layerSuffix, ProjectState project)
     {
+        // GridSize=1 has no real metatile library to speak of (every metatile is a 1:1 auto-created
+        // wrapper around one tile, see ProjectState.MetatileGridSize) — the local-index + separate-table
+        // indirection below would be pure overhead, so that case gets its own compact format instead.
+        if (map.MetatileGridSize == 1)
+        {
+            return ExportGridLayerTileMode(map, kind, layer, layerSuffix, project);
+        }
+
         // Every cell always references a real metatile now — including a genuinely "empty-looking" one,
         // which references the Kind+GridSize's reserved blank metatile (see ReservedBlankAssetService) —
         // so there is no sentinel byte to filter out here anymore.
@@ -84,6 +95,43 @@ public static class MapExporter
             metatilesAsm, $"{SanitizeFileName(metatilesRowKey)}.asm", null, IsChunked: false);
 
         return new GridLayerExportResult(gridResult, metatilesResult);
+    }
+
+    /// <summary>
+    /// GridSize=1's compact export path: each cell's own (single-cell) metatile is resolved and
+    /// serialized via <see cref="MetatileSerializer"/> exactly as a normal metatile-table entry would be,
+    /// but the bytes go straight into the grid array itself (tile index, then an attribute byte for
+    /// FourBpp — same layout <see cref="GenerateMetatilesAsm"/>'s header already documents) instead of a
+    /// separate table referenced by a local index. No metatiles file is produced (<see cref="GridLayerExportResult.Metatiles"/> is null) — <see cref="Export.ExportService"/> already skips adding a null one.
+    /// </summary>
+    private static GridLayerExportResult ExportGridLayerTileMode(MapAsset map, MetatileKind kind, MapGridLayer layer, string layerSuffix, ProjectState project)
+    {
+        var metatilesBySortIndex = project.Metatiles.Where(m => m.Kind == kind).ToDictionary(m => m.SortIndex);
+        var bytesPerCell = kind == MetatileKind.FourBpp ? 2 : 1;
+        var gridBytes = new byte[layer.MetatileIndices.Length * bytesPerCell];
+
+        for (var i = 0; i < layer.MetatileIndices.Length; i++)
+        {
+            var sortIndex = layer.MetatileIndices[i];
+            if (!metatilesBySortIndex.TryGetValue(sortIndex, out var metatile))
+            {
+                throw new InvalidOperationException($"Map '{map.Name}' ({layerSuffix} layer) references metatile index {sortIndex} ({kind}) which no longer exists.");
+            }
+
+            var serialized = MetatileSerializer.Serialize(metatile, project.Assets);
+            if (!serialized.Success)
+            {
+                throw new InvalidOperationException(serialized.Error);
+            }
+
+            Array.Copy(serialized.Data!, 0, gridBytes, i * bytesPerCell, bytesPerCell);
+        }
+
+        var gridRowKey = ExportFileNaming.GridRowKey(map.Name, layerSuffix);
+        var gridResult = new FolderExportResult(gridRowKey, $"map/{map.Name}", [], [],
+            GenerateTileModeGridAsm(gridRowKey, map.Width, map.Height, kind, gridBytes), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false);
+
+        return new GridLayerExportResult(gridResult, null);
     }
 
     /// <summary>0xFF sentinel shared by both Type and Connect: "no type assigned" / "no link" respectively — resolved from the placement's Guid reference (<see cref="SpritePlacement.TypeId"/>/<see cref="SpritePlacement.LinkedPlacementId"/>) into this positional byte only here, at export time; the live app never stores or renumbers a raw index itself.</summary>
@@ -212,6 +260,24 @@ public static class MapExporter
         sb.Append('\n');
         sb.Append(rowKey).Append(":\n");
         AsmByteDataWriter.AppendDataBytes(sb, remappedGrid);
+        return sb.ToString();
+    }
+
+    /// <summary>GridSize=1's grid format — see <see cref="ExportGridLayerTileMode"/>: no metatile indirection, each cell IS its tile index (+ attribute byte for FourBpp) directly.</summary>
+    private static string GenerateTileModeGridAsm(string rowKey, int width, int height, MetatileKind kind, byte[] gridBytes)
+    {
+        var bytesPerCell = kind == MetatileKind.FourBpp ? 2 : 1;
+
+        var sb = new StringBuilder();
+        sb.Append("; ").Append(rowKey).Append(" -- map grid data (GridSize=1: no metatile table, cells are tiles directly)\n");
+        sb.Append("; ").Append(width).Append('x').Append(height).Append(" cells, ").Append(bytesPerCell).Append(" byte(s)/cell (")
+            .Append(kind == MetatileKind.FourBpp ? "tile index, then attribute byte: bits7:4 palette, bit3 MirrorX, bit2 MirrorY, bit1 Rotate" : "tile index only, no attribute")
+            .Append("); index 0 = the reserved blank/transparent tile\n");
+        sb.Append(rowKey).Append("_width: equ ").Append(width).Append('\n');
+        sb.Append(rowKey).Append("_height: equ ").Append(height).Append('\n');
+        sb.Append('\n');
+        sb.Append(rowKey).Append(":\n");
+        AsmByteDataWriter.AppendDataBytes(sb, gridBytes);
         return sb.ToString();
     }
 

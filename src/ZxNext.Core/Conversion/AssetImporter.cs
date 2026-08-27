@@ -93,9 +93,27 @@ public static class AssetImporter
             }
         }
 
-        return category.UsesPaletteBank()
+        var result = category.UsesPaletteBank()
             ? ImportFourBpp(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, excludeAssetIdFromNameCheck)
             : ImportFlatPalette(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, excludeAssetIdFromNameCheck, sourceCropWidth ?? width, sourceCropHeight ?? height);
+
+        // In a GridSize=1 ("no metatile") project, every real Tile4Bpp/Tile8Bpp tile needs its own 1x1
+        // metatile to be paintable on a map at all — see ProjectState.MetatileGridSize's own doc comment.
+        // Auto-creating it here, right after a successful brand-new import (excludeAssetIdFromNameCheck
+        // null — a re-quantize replaces an EXISTING tile's identity and already redirects that tile's
+        // existing metatile cells itself, so it must not get a second one here), covers every import path
+        // (single-tile drop, Atlas Slicer plain slice) from this one choke point. Best-effort: if it fails
+        // (e.g. the 255-per-Kind cap is already hit), the tile import itself still succeeds — the tile just
+        // isn't paintable on the map yet, which is an acceptable edge case, not worth failing the import over.
+        if (result.Success && excludeAssetIdFromNameCheck is null
+            && category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp
+            && project.MetatileGridSize == 1)
+        {
+            var kind = category == AssetCategory.Tile4Bpp ? MetatileKind.FourBpp : MetatileKind.EightBpp;
+            MetatileService.Create(project, result.Asset!.Name, kind, 1, [new MetatileCell { TileAssetId = result.Asset.Id }]);
+        }
+
+        return result;
     }
 
     /// <summary>Asset names double as ASM export labels, so they must be unique project-wide. A brand-new import that collides gets an auto "_2", "_3", ... suffix; a re-quantize (which re-imports under the SAME name as the asset it's about to replace) passes that asset's own id via <paramref name="excludeAssetId"/> so it doesn't collide with itself.</summary>

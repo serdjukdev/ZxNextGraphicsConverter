@@ -19,9 +19,9 @@ public static class MetatileService
 
     public static MetatileCreateResult Create(ProjectState project, string name, MetatileKind kind, int gridSize, List<MetatileCell> cells)
     {
-        if (gridSize is not (2 or 4))
+        if (gridSize is not (1 or 2 or 4))
         {
-            return new MetatileCreateResult(false, null, $"GridSize must be 2 or 4 (got {gridSize}).");
+            return new MetatileCreateResult(false, null, $"GridSize must be 1, 2, or 4 (got {gridSize}).");
         }
 
         if (cells.Count != gridSize * gridSize)

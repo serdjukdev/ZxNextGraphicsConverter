@@ -2,8 +2,9 @@
 
 ## Unreleased
 
-- Changed: the project's metatile grid size (2x2/4x4) is now chosen once, up front, in the New Project dialog instead of lazily the first time it's actually needed (opening the Metatile Editor, checking Atlas Slicer's "slice into metatile blocks", or creating the first map). A project saved before this existed still resolves it once, right after it finishes loading, if it doesn't already have one locked.
+- Changed: the project's metatile grid size (1x1/2x2/4x4) is now chosen once, up front, in the New Project dialog instead of lazily the first time it's actually needed (opening the Metatile Editor, checking Atlas Slicer's "slice into metatile blocks", or creating the first map). A project saved before this existed still resolves it once, right after it finishes loading, if it doesn't already have one locked.
 - Removed: 3x3 metatiles. Nothing on this platform actually needs a non-power-of-two metatile size (no hardware requirement forces it), 2x2/4x4 keep the arithmetic and typical sprite-size alignment cleaner, and 3x3 turned out to be broken (silently created 2x2 metatiles instead) and unused in practice, so it's gone rather than fixed.
+- Added: a 1x1 "no metatile" project mode — every Tile4Bpp/Tile8Bpp tile automatically gets its own single-cell metatile the moment it's imported (any import path: single drop or Atlas Slicer plain slice), so a GridSize=1 map's palette shows one paintable entry per tile with no metatile-authoring step at all; Atlas Slicer's "slice into metatile blocks" checkbox is hidden in this mode since a 1x1 block is identical to a plain tile slice. Export skips the metatile-table indirection entirely for these maps: each grid cell holds its tile's own index (+ attribute byte for the Tilemap layer) directly, and no `_metatiles.asm` file is produced. Per-placed-cell attribute editing (mirror/rotate/palette slot) is not implemented yet — every 1x1 tile currently paints with default attributes.
 
 ## v0.3.0 (2026-08-27)
 

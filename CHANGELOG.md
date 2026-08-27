@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.4.0 (2026-08-27)
+
 - Added: a Settings screen (File → Settings...). General tab: export filename postfixes (the previously-promised configurable ones: graphics data, tilemap/8bpp grid and metatiles, objects), default dither mode for new imports, default export chunk size for a new row, New Map's default starting size, New Project's default metatile size, and the Map Editor's grid overlay colours/opacity. Shortcuts tab: every keyboard shortcut and mouse gesture in the app (including drag-to-reorder in the Project Tree and the Metatile Editor), grouped by area, with a tooltip per row for the full explanation. Real keyboard shortcuts (Ctrl+S, Ctrl+Z, Delete, Ctrl+R) now come from one shared registry that both the actual key bindings and this list read from, so the two can't drift apart.
 - Fixed: the F1 (Help) shortcut only worked while focus happened to be in the Project Tree or Source Images panel: clicking into the Pixel Editor, Image Viewer, or Palette Strip first meant F1 stopped responding until you clicked back into one of those two panels. F1 is now intercepted at the Windows-message level for the whole main window, independent of which control currently holds keyboard focus.
 

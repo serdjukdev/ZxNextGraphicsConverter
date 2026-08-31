@@ -5,6 +5,7 @@
 - Added: a live cursor-position status line under the Map Editor's canvas, showing the raw map pixel X/Y plus the tile cell (col,row, in the 8x8 tile grid) as you move the mouse. On a 2x2/4x4 project it also shows the metatile cell (col,row); on a 1x1 project there's no separate metatile concept, so only the tile position is shown. Updates live on mouse move and clears when the cursor leaves the canvas.
 - Added: the Map Editor now reopens on whichever map you last had selected, instead of always starting with no map selected.
 - Added: each map in the Map Editor now remembers its own view (scroll position, zoom) and active layer as you leave it (switching to another map, or closing the window), and restores it the next time that particular map is reopened.
+- Added: the Metatile Editor's tile palette can now be dragged straight onto a draft cell to paint it, alongside the existing click-a-tile-then-click-a-cell flow (both work interchangeably; Ctrl+click still clears a cell).
 
 ## v0.4.0 (2026-08-27)
 

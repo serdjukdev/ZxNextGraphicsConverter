@@ -269,7 +269,13 @@ public partial class MetatileEditorViewModel : ObservableObject
         }
 
         if (SelectedPaletteTile is null) return;
-        cell.TileAsset = SelectedPaletteTile.Asset;
+        AssignTileToCell(cell, SelectedPaletteTile.Asset);
+    }
+
+    /// <summary>Shared by the click-to-paint command above and drag-and-drop from the tile palette (MetatileEditorWindow.xaml.cs's drop handler) — the one real assignment, so the two entry points can never diverge.</summary>
+    public void AssignTileToCell(MetatileCellViewModel cell, GraphicsAsset asset)
+    {
+        cell.TileAsset = asset;
         cell.PaletteSlotOverride = null; // a newly-assigned tile always starts at its own native slot — an override left over from whatever tile occupied this cell before would very likely point at the wrong colours for the new one
     }
 

@@ -55,11 +55,13 @@
             <ComboBox Grid.Row="1" ItemsSource="{Binding AvailableKinds}" DisplayMemberPath="Label"
                       SelectedValuePath="Kind" SelectedValue="{Binding SelectedKind}" Margin="0,0,0,8" />
 
-            <TextBlock Grid.Row="2" Text="Tile palette — click a tile, then click a cell on the right to paint it" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,2" />
+            <TextBlock Grid.Row="2" Text="Tile palette — click a tile, then click a cell on the right to paint it (or drag a tile straight onto a cell)" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,2" />
             <Border Grid.Row="3" BorderBrush="#999" BorderThickness="1">
-                <ListBox ItemsSource="{Binding TilePalette}" SelectedItem="{Binding SelectedPaletteTile}"
+                <ListBox x:Name="TilePaletteList" ItemsSource="{Binding TilePalette}" SelectedItem="{Binding SelectedPaletteTile}"
                          BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}">
+                         ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}"
+                         PreviewMouseLeftButtonDown="TilePaletteList_OnPreviewMouseLeftButtonDown"
+                         PreviewMouseMove="TilePaletteList_OnPreviewMouseMove">
                     <ListBox.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel />
@@ -196,7 +198,11 @@
                                     <Button Width="72" Height="72" Padding="0" BorderThickness="0" Background="#EEE"
                                             Command="{Binding DataContext.AssignSelectedTileToCellCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                             CommandParameter="{Binding}"
-                                            ToolTip="Click to paint this cell with the tile selected in the palette on the left">
+                                            ToolTip="Click to paint this cell with the tile selected in the palette on the left, or drag a tile from the palette onto it"
+                                            AllowDrop="True"
+                                            DragOver="DraftCell_OnDragOver"
+                                            DragLeave="DraftCell_OnDragLeave"
+                                            Drop="DraftCell_OnDrop">
                                         <Grid>
                                             <TextBlock Text="+" FontSize="32" Foreground="#BBB" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" />

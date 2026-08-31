@@ -13,6 +13,12 @@ public partial class MetatileEditorWindow : Window
     /// <summary>Drag format for reordering a metatile within the "Existing metatiles" gallery — carries the dragged MetatileListItemViewModel itself.</summary>
     private const string DragFormat = "ZxNext.MetatileReorder";
 
+    /// <summary>Drag format for dragging a tile straight from the palette onto a draft cell — carries the dragged TilePaletteItemViewModel. Deliberately a different format string from <see cref="DragFormat"/> above so the two drag sources (this window has two separate drag-and-drop features) can never be mistaken for each other.</summary>
+    private const string TilePaletteDragFormat = "ZxNext.MetatileTilePaletteDrag";
+
+    private static readonly SolidColorBrush DraftCellDefaultBackground = new(Color.FromRgb(0xEE, 0xEE, 0xEE));
+    private static readonly SolidColorBrush DraftCellDropHighlightBackground = new(Color.FromRgb(0xCC, 0xE4, 0xFF));
+
     /// <summary>Armed in <see cref="MetatileList_OnPreviewMouseLeftButtonDown"/> when the click landed on a draggable item (not the reserved blank) — same "record start position, only actually start DoDragDrop once the mouse clears the OS drag threshold" pattern as SourceImagesPanelView/ProjectTreeView's own drag sources.</summary>
     private Point _dragStart;
     private bool _dragArmed;
@@ -24,6 +30,11 @@ public partial class MetatileEditorWindow : Window
     /// <summary>Runs only while a reorder drag from this list is in progress — same "ticks during the blocking DoDragDrop call" approach as ProjectTreeView's own auto-scroll.</summary>
     private DispatcherTimer? _autoScrollTimer;
     private Point _lastDragPosition;
+
+    /// <summary>Same "record start position, only actually start DoDragDrop once past the OS drag threshold" arming as <see cref="_dragStart"/>/<see cref="_dragArmed"/>/<see cref="_dragCandidate"/> above, for dragging a tile out of the palette instead — kept as separate fields since the two drags are otherwise independent (different source list, no reorder/indicator/auto-scroll needed for a palette that's rarely long enough to need it).</summary>
+    private Point _tileDragStart;
+    private bool _tileDragArmed;
+    private TilePaletteItemViewModel? _tileDragCandidate;
 
     public MetatileEditorWindow()
     {
@@ -179,6 +190,57 @@ public partial class MetatileEditorWindow : Window
         if (target!.IsReservedBlank && !insertAfter) return; // never allowed to bump it out of the first slot
 
         vm.ReorderMetatile(dragged.Metatile.Id, target.Metatile.Id, insertAfter);
+    }
+
+    /// <summary>Drag source: dragging a tile out of the palette — same arm-on-down/start-past-threshold pattern as <see cref="MetatileList_OnPreviewMouseLeftButtonDown"/>/<see cref="MetatileList_OnPreviewMouseMove"/> above, just without any reorder/indicator/auto-scroll machinery (nothing here reorders the palette itself). Doesn't suppress the ListBox's own click-to-select — a drag naturally starts from an item MouseDown already selected on its way through, exactly like the existing reorder drag coexists with MetatileList's own selection.</summary>
+    private void TilePaletteList_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var originalSource = e.OriginalSource as DependencyObject;
+        if (FindAncestorDataContext<TilePaletteItemViewModel>(originalSource) is not { } item) return;
+
+        _tileDragStart = e.GetPosition(null);
+        _tileDragCandidate = item;
+        _tileDragArmed = true;
+    }
+
+    private void TilePaletteList_OnPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_tileDragArmed || e.LeftButton != MouseButtonState.Pressed || _tileDragCandidate is not { } dragged) return;
+
+        var current = e.GetPosition(null);
+        if (Math.Abs(current.X - _tileDragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(current.Y - _tileDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        _tileDragArmed = false;
+        DragDrop.DoDragDrop(TilePaletteList, new DataObject(TilePaletteDragFormat, dragged), DragDropEffects.Copy);
+    }
+
+    /// <summary>Drop target: one draft cell's paint Button (see the DataTemplate in MetatileEditorWindow.xaml) — DataContext is the MetatileCellViewModel itself, same as the Button's existing Command/CommandParameter binding, so no ancestor lookup is needed here unlike the reorder feature's list-item search.</summary>
+    private void DraftCell_OnDragOver(object sender, DragEventArgs e)
+    {
+        var valid = e.Data.GetDataPresent(TilePaletteDragFormat);
+        e.Effects = valid ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+
+        if (sender is Button button) button.Background = valid ? DraftCellDropHighlightBackground : DraftCellDefaultBackground;
+    }
+
+    private void DraftCell_OnDragLeave(object sender, DragEventArgs e)
+    {
+        if (sender is Button button) button.Background = DraftCellDefaultBackground;
+    }
+
+    private void DraftCell_OnDrop(object sender, DragEventArgs e)
+    {
+        if (sender is Button button) button.Background = DraftCellDefaultBackground;
+        if (!e.Data.GetDataPresent(TilePaletteDragFormat) || e.Data.GetData(TilePaletteDragFormat) is not TilePaletteItemViewModel dragged) return;
+        if (sender is not Button { DataContext: MetatileCellViewModel cell }) return;
+        if (DataContext is not MetatileEditorViewModel vm) return;
+
+        vm.AssignTileToCell(cell, dragged.Asset);
     }
 
     /// <summary>See ProjectTreeView's own copy of this same helper for why non-Visual OriginalSource nodes (e.g. a Run inside rendered text) need the LogicalTreeHelper fallback.</summary>

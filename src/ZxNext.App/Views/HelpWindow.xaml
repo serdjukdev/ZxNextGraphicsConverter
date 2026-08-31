@@ -185,7 +185,7 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="Which tile category this metatile draws from: 4bpp metatiles feed the hardware Tilemap layer (with real mirror/rotate/palette-slot hardware attributes); 8bpp metatiles feed the software 8bpp Tile layer (index only, no attributes)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Tile palette (left) → click to arm it" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Click a tile thumbnail, then click a cell in the draft grid on the right to stamp that tile into it. An unfilled cell shows a grey '+' placeholder. Ctrl+click a cell to clear it back to unfilled, to correct a mistake." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Click a tile thumbnail, then click a cell in the draft grid on the right to stamp that tile into it. An unfilled cell shows a grey '+' placeholder. Ctrl+click a cell to clear it back to unfilled, to correct a mistake. You can also drag a tile straight from the palette onto a cell instead of the click-click sequence: both work interchangeably, cell by cell." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Per-cell controls (4bpp metatiles only)" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Mirror X, Mirror Y, Rotate (transposes the tile: combined with the two mirrors this reaches all 8 possible orientations, since the hardware has no separate 90/180/270° rotation), and an optional palette-slot override (read this cell's tile against a different bank slot than its own, with a '↺' button to reset back to native)." />

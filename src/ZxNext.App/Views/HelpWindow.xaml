@@ -278,8 +278,8 @@
                         <TextBlock Style="{StaticResource TermStyle}" Text="Right-click a cell with an active selection" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Same dialog, but Mirror X/Mirror Y/Rotate now apply to every tile in the current selection, not just the clicked one, as soon as you click OK, no extra step needed. The preview image always shows just the clicked cell (a reference for how your changes look), even though other selected tiles end up looking different. If the selected tiles don't all already agree on one of the three checkboxes, that checkbox starts on a dash instead of checked/unchecked (Windows' standard 'mixed values' display): leave a dashed checkbox alone and every tile keeps its own value for that setting; click it (checked or unchecked) and that value is set on every tile in the selection. Palette slot is never part of this: it always applies to just the one clicked tile, selection or not." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+Z: Undo" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="A local undo stack for this window: paint/erase strokes, Fill/Delete Selection, Move/Copy, Link, type assignment, and Resize/Trim each undo as one step." />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+Z: Undo / Ctrl+Y: Redo" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="A local undo/redo stack for this window: paint/erase strokes, Fill/Delete Selection, Move/Copy, Link, type assignment, and Resize/Trim each undo (and redo) as one step. A new edit after an Undo clears whatever Redo history existed, same as every other editor." />
                     </StackPanel>
                 </Expander>
 

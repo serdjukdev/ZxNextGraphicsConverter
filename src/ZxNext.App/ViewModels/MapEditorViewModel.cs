@@ -72,7 +72,11 @@ public partial class MapEditorViewModel : ObservableObject
     /// <summary>Guards the visibility-sync-on-map-selection code path so just clicking through the map list never spuriously marks the project dirty — see <see cref="OnSelectedMapChanged"/>.</summary>
     private bool _isSyncingFromMap;
 
-    private readonly Stack<Action> _undoStack = new();
+    /// <summary>One entry in this window's local undo/redo history — a paired inverse/reapply closure for one already-applied edit. Every call site that used to push a bare undo <see cref="Action"/> now builds both halves (via <see cref="PushUndo"/>) so Undo and Redo can never drift apart: Redo is never "replay the original user gesture", only "reapply the exact same already-computed final state Undo would otherwise discard".</summary>
+    private readonly record struct UndoEntry(Action Undo, Action Redo);
+
+    private readonly Stack<UndoEntry> _undoStack = new();
+    private readonly Stack<UndoEntry> _redoStack = new();
     private readonly Dictionary<int, byte> _strokeOriginalCellValues = new();
     private readonly Dictionary<int, byte> _strokeOriginalAttributes = new();
     private readonly List<SpritePlacement> _strokeRemovedSprites = new();
@@ -348,14 +352,24 @@ public partial class MapEditorViewModel : ObservableObject
         map.ApplyResizePlan(plan);
         ClearSelection(); // old selection coordinates are almost certainly meaningless against the new bounds
 
-        _undoStack.Push(() =>
-        {
-            map.ApplyResizePlan(previousPlan);
-            mapItem.NotifySizeChanged();
-            RenderPreview();
-            RefreshSelectedMapThumbnail();
-            MapResized?.Invoke();
-        });
+        PushUndo(
+            undo: () =>
+            {
+                map.ApplyResizePlan(previousPlan);
+                mapItem.NotifySizeChanged();
+                RenderPreview();
+                RefreshSelectedMapThumbnail();
+                MapResized?.Invoke();
+            },
+            redo: () =>
+            {
+                map.ApplyResizePlan(plan);
+                ClearSelection();
+                mapItem.NotifySizeChanged();
+                RenderPreview();
+                RefreshSelectedMapThumbnail();
+                MapResized?.Invoke();
+            });
 
         HasChanges = true;
         mapItem.NotifySizeChanged();
@@ -389,11 +403,31 @@ public partial class MapEditorViewModel : ObservableObject
         PersistLayerOrder();
     }
 
+    /// <summary>Records one already-applied edit's inverse (<paramref name="undo"/>) and reapply (<paramref name="redo"/>) actions — the one place every undo-producing call site funnels through, so pushing a new edit always correctly invalidates whatever redo history existed before it (a fresh edit after an Undo makes the old "future" unreachable, exactly like every other editor's undo/redo).</summary>
+    private void PushUndo(Action undo, Action redo)
+    {
+        _undoStack.Push(new UndoEntry(undo, redo));
+        _redoStack.Clear();
+    }
+
     [RelayCommand]
     private void Undo()
     {
         if (_undoStack.Count == 0) return;
-        _undoStack.Pop().Invoke();
+        var entry = _undoStack.Pop();
+        entry.Undo();
+        _redoStack.Push(entry);
+        HasChanges = true;
+        RefreshSelectedMapThumbnail();
+    }
+
+    [RelayCommand]
+    private void Redo()
+    {
+        if (_redoStack.Count == 0) return;
+        var entry = _redoStack.Pop();
+        entry.Redo();
+        _undoStack.Push(entry);
         HasChanges = true;
         RefreshSelectedMapThumbnail();
     }
@@ -425,6 +459,7 @@ public partial class MapEditorViewModel : ObservableObject
         }
 
         _undoStack.Clear(); // a stroke's undo closures capture the previously-selected map's arrays — never valid across a map switch
+        _redoStack.Clear(); // same reasoning — a redo closure captures the same previously-selected map's arrays
         ClearSelection();
         CancelLinkTool(); // LinkSource points at a placement on the map we're leaving
         CancelSetTypeTool();
@@ -531,11 +566,9 @@ public partial class MapEditorViewModel : ObservableObject
 
         var previous = sprite.UserByte;
         sprite.UserByte = value;
-        _undoStack.Push(() =>
-        {
-            sprite.UserByte = previous;
-            RenderPreview();
-        });
+        PushUndo(
+            undo: () => { sprite.UserByte = previous; RenderPreview(); },
+            redo: () => { sprite.UserByte = value; RenderPreview(); });
 
         HasChanges = true;
         RenderPreview();
@@ -549,11 +582,9 @@ public partial class MapEditorViewModel : ObservableObject
 
         var previous = sprite.TypeId;
         sprite.TypeId = newTypeId;
-        _undoStack.Push(() =>
-        {
-            sprite.TypeId = previous;
-            RenderPreview();
-        });
+        PushUndo(
+            undo: () => { sprite.TypeId = previous; RenderPreview(); },
+            redo: () => { sprite.TypeId = newTypeId; RenderPreview(); });
 
         HasChanges = true;
         RenderPreview();
@@ -573,13 +604,11 @@ public partial class MapEditorViewModel : ObservableObject
 
         var source = LinkSource;
         var previousLink = source.LinkedPlacementId;
-        source.LinkedPlacementId = clicked.Id;
-        _undoStack.Push(() =>
-        {
-            source.LinkedPlacementId = previousLink;
-            RenderPreview();
-            RefreshSelectedMapThumbnail();
-        });
+        var newLink = clicked.Id;
+        source.LinkedPlacementId = newLink;
+        PushUndo(
+            undo: () => { source.LinkedPlacementId = previousLink; RenderPreview(); RefreshSelectedMapThumbnail(); },
+            redo: () => { source.LinkedPlacementId = newLink; RenderPreview(); RefreshSelectedMapThumbnail(); });
 
         LinkSource = null;
         IsLinkToolActive = false;
@@ -721,7 +750,9 @@ public partial class MapEditorViewModel : ObservableObject
                 var placeY = snapToGrid ? (pixelY / TileSnapSize) * TileSnapSize : pixelY;
                 var placement = new SpritePlacement { SpriteAssetId = SelectedPaletteSprite.Asset.Id, X = placeX, Y = placeY };
                 map.SpriteLayer.Add(placement);
-                _undoStack.Push(() => { map.SpriteLayer.Remove(placement); RenderPreview(); RefreshSelectedMapThumbnail(); });
+                PushUndo(
+                    undo: () => { map.SpriteLayer.Remove(placement); RenderPreview(); RefreshSelectedMapThumbnail(); },
+                    redo: () => { map.SpriteLayer.Add(placement); RenderPreview(); RefreshSelectedMapThumbnail(); });
                 affectedRect = new Int32Rect(placeX, placeY, SpritePixelSize, SpritePixelSize);
             }
             else
@@ -813,12 +844,9 @@ public partial class MapEditorViewModel : ObservableObject
 
         var previous = layer.CellAttributes[cellIndex];
         layer.CellAttributes[cellIndex] = newAttr;
-        _undoStack.Push(() =>
-        {
-            layer.CellAttributes[cellIndex] = previous;
-            RenderPreview();
-            RefreshSelectedMapThumbnail();
-        });
+        PushUndo(
+            undo: () => { layer.CellAttributes[cellIndex] = previous; RenderPreview(); RefreshSelectedMapThumbnail(); },
+            redo: () => { layer.CellAttributes[cellIndex] = newAttr; RenderPreview(); RefreshSelectedMapThumbnail(); });
 
         HasChanges = true;
         RenderPreview();
@@ -946,23 +974,32 @@ public partial class MapEditorViewModel : ObservableObject
             var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
             var indexSnapshot = new Dictionary<int, byte>(_strokeOriginalCellValues);
             var attributeSnapshot = new Dictionary<int, byte>(_strokeOriginalAttributes);
-            _undoStack.Push(() =>
-            {
-                foreach (var (index, originalValue) in indexSnapshot) layer.MetatileIndices[index] = originalValue;
-                foreach (var (index, originalAttr) in attributeSnapshot) layer.CellAttributes[index] = originalAttr;
-                RenderPreview();
-                RefreshSelectedMapThumbnail();
-            });
+            // Redo needs the stroke's FINAL values too — read them now, at EndStroke time, from the same
+            // touched indices: the layer already holds the post-stroke result at this point.
+            var finalIndexSnapshot = indexSnapshot.Keys.ToDictionary(i => i, i => layer.MetatileIndices[i]);
+            var finalAttributeSnapshot = attributeSnapshot.Keys.ToDictionary(i => i, i => layer.CellAttributes[i]);
+            PushUndo(
+                undo: () =>
+                {
+                    foreach (var (index, originalValue) in indexSnapshot) layer.MetatileIndices[index] = originalValue;
+                    foreach (var (index, originalAttr) in attributeSnapshot) layer.CellAttributes[index] = originalAttr;
+                    RenderPreview();
+                    RefreshSelectedMapThumbnail();
+                },
+                redo: () =>
+                {
+                    foreach (var (index, finalValue) in finalIndexSnapshot) layer.MetatileIndices[index] = finalValue;
+                    foreach (var (index, finalAttr) in finalAttributeSnapshot) layer.CellAttributes[index] = finalAttr;
+                    RenderPreview();
+                    RefreshSelectedMapThumbnail();
+                });
         }
         else if (_strokeRemovedSprites.Count > 0)
         {
             var removed = _strokeRemovedSprites.ToList();
-            _undoStack.Push(() =>
-            {
-                map.SpriteLayer.AddRange(removed);
-                RenderPreview();
-                RefreshSelectedMapThumbnail();
-            });
+            PushUndo(
+                undo: () => { map.SpriteLayer.AddRange(removed); RenderPreview(); RefreshSelectedMapThumbnail(); },
+                redo: () => { foreach (var sprite in removed) map.SpriteLayer.Remove(sprite); RenderPreview(); RefreshSelectedMapThumbnail(); });
         }
         // A Sprite+Paint click already pushed its own single-placement undo action immediately in PaintOrEraseAt.
 
@@ -1051,13 +1088,21 @@ public partial class MapEditorViewModel : ObservableObject
             var clearedLinks = danglingLinks.Select(s => (Sprite: s, s.LinkedPlacementId)).ToList();
             foreach (var sprite in danglingLinks) sprite.LinkedPlacementId = null;
 
-            _undoStack.Push(() =>
-            {
-                map.SpriteLayer.AddRange(removed);
-                foreach (var (sprite, linkId) in clearedLinks) sprite.LinkedPlacementId = linkId;
-                RenderPreview();
-                RefreshSelectedMapThumbnail();
-            });
+            PushUndo(
+                undo: () =>
+                {
+                    map.SpriteLayer.AddRange(removed);
+                    foreach (var (sprite, linkId) in clearedLinks) sprite.LinkedPlacementId = linkId;
+                    RenderPreview();
+                    RefreshSelectedMapThumbnail();
+                },
+                redo: () =>
+                {
+                    foreach (var sprite in removed) map.SpriteLayer.Remove(sprite);
+                    foreach (var (sprite, _) in clearedLinks) sprite.LinkedPlacementId = null;
+                    RenderPreview();
+                    RefreshSelectedMapThumbnail();
+                });
             SelectedSprites.Clear();
             HasChanges = true;
             RenderPreview();
@@ -1171,12 +1216,16 @@ public partial class MapEditorViewModel : ObservableObject
             // LinkedPlacementId is deliberately NOT carried over — a copy starts unlinked (see design discussion 2026-08-23).
             var copies = SelectedSprites.Select(s => new SpritePlacement { SpriteAssetId = s.SpriteAssetId, X = s.X + deltaX, Y = s.Y + deltaY, TypeId = s.TypeId, UserByte = s.UserByte }).ToList();
             map.SpriteLayer.AddRange(copies);
-            _undoStack.Push(() =>
-            {
-                foreach (var copy in copies) map.SpriteLayer.Remove(copy);
-                RenderPreview();
-                RefreshSelectedMapThumbnail();
-            });
+            PushUndo(
+                undo: () => { foreach (var copy in copies) map.SpriteLayer.Remove(copy); RenderPreview(); RefreshSelectedMapThumbnail(); },
+                redo: () =>
+                {
+                    map.SpriteLayer.AddRange(copies);
+                    SelectedSprites.Clear();
+                    foreach (var copy in copies) SelectedSprites.Add(copy);
+                    RenderPreview();
+                    RefreshSelectedMapThumbnail();
+                });
             SelectedSprites.Clear();
             foreach (var copy in copies) SelectedSprites.Add(copy);
         }
@@ -1188,12 +1237,20 @@ public partial class MapEditorViewModel : ObservableObject
                 sprite.X += deltaX;
                 sprite.Y += deltaY;
             }
-            _undoStack.Push(() =>
-            {
-                foreach (var (sprite, originalX, originalY) in originalPositions) { sprite.X = originalX; sprite.Y = originalY; }
-                RenderPreview();
-                RefreshSelectedMapThumbnail();
-            });
+            var finalPositions = SelectedSprites.Select(s => (Sprite: s, s.X, s.Y)).ToList();
+            PushUndo(
+                undo: () =>
+                {
+                    foreach (var (sprite, originalX, originalY) in originalPositions) { sprite.X = originalX; sprite.Y = originalY; }
+                    RenderPreview();
+                    RefreshSelectedMapThumbnail();
+                },
+                redo: () =>
+                {
+                    foreach (var (sprite, finalX, finalY) in finalPositions) { sprite.X = finalX; sprite.Y = finalY; }
+                    RenderPreview();
+                    RefreshSelectedMapThumbnail();
+                });
         }
 
         HasChanges = true;

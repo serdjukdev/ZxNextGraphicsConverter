@@ -6,6 +6,7 @@
 - Added: the Map Editor now reopens on whichever map you last had selected, instead of always starting with no map selected.
 - Added: each map in the Map Editor now remembers its own view (scroll position, zoom) and active layer as you leave it (switching to another map, or closing the window), and restores it the next time that particular map is reopened.
 - Added: the Metatile Editor's tile palette can now be dragged straight onto a draft cell to paint it, alongside the existing click-a-tile-then-click-a-cell flow (both work interchangeably; Ctrl+click still clears a cell).
+- Added: Redo (Ctrl+Y) in the Map Editor, alongside the existing Undo (Ctrl+Z) — a new edit after an Undo clears whatever Redo history existed, same as every other editor.
 
 ## v0.4.0 (2026-08-27)
 

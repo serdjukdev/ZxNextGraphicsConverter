@@ -18,6 +18,10 @@ public static class Shortcuts
     public static readonly Key UndoKey = Key.Z;
     public static readonly ModifierKeys UndoModifiers = ModifierKeys.Control;
 
+    /// <summary>Map Editor only — the only window in the app with a Redo command (the main window's own undo stack, and the Metatile Editor, currently have no Redo).</summary>
+    public static readonly Key RedoKey = Key.Y;
+    public static readonly ModifierKeys RedoModifiers = ModifierKeys.Control;
+
     public static readonly Key DeleteKey = Key.Delete;
 
     public static readonly Key ReQuantizeKey = Key.R;
@@ -58,6 +62,7 @@ public static class ShortcutReference
         new("Metatile Editor", "Ctrl+click a cell (draft grid)", "Clear cell", "Clears that cell back to unfilled, to correct a mistake."),
 
         new("Map Editor", "Ctrl+Z", "Undo", "A local undo stack for this window: paint/erase strokes, Fill/Delete Selection, Move/Copy, Link, type assignment, and Resize/Trim each undo as one step."),
+        new("Map Editor", "Ctrl+Y", "Redo", "Reapplies the last undone step. A new edit after an Undo clears whatever Redo history existed — same as every other editor."),
         new("Map Editor", "Delete", "Delete selection", "Clears the current selection's contents: grid cells become empty, selected sprites are removed."),
         new("Map Editor", "Ctrl+click/drag", "Force-erase", "Erases on the active layer no matter what else you're doing, including mid-drag."),
         new("Map Editor", "Shift (placing a sprite)", "Snap to grid", "Snaps the new sprite's position to the faint 8x8 tile grid."),

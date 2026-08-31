@@ -11,6 +11,7 @@
         Closing="MapEditorWindow_OnClosing">
     <Window.InputBindings>
         <KeyBinding Key="{x:Static local:Shortcuts.UndoKey}" Modifiers="{x:Static local:Shortcuts.UndoModifiers}" Command="{Binding UndoCommand}" />
+        <KeyBinding Key="{x:Static local:Shortcuts.RedoKey}" Modifiers="{x:Static local:Shortcuts.RedoModifiers}" Command="{Binding RedoCommand}" />
         <KeyBinding Key="{x:Static local:Shortcuts.DeleteKey}" Command="{Binding DeleteSelectionCommand}" />
     </Window.InputBindings>
     <Window.Resources>
@@ -253,7 +254,8 @@
                             </Style>
                         </Button.Style>
                     </Button>
-                    <Button Content="Undo (Ctrl+Z)" Command="{Binding UndoCommand}" Width="110" />
+                    <Button Content="Undo (Ctrl+Z)" Command="{Binding UndoCommand}" Width="110" Margin="0,0,6,0" />
+                    <Button Content="Redo (Ctrl+Y)" Command="{Binding RedoCommand}" Width="110" />
                 </StackPanel>
             </StackPanel>
         </Grid>

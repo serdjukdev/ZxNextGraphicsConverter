@@ -4,6 +4,7 @@ using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ZxNext.App.Rendering;
+using ZxNext.App.Views;
 using ZxNext.Core.Conversion;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
@@ -360,7 +361,7 @@ public partial class MetatileEditorViewModel : ObservableObject
             DeleteOneMetatile(metatiles[0]);
             return;
         }
-        DeleteMetatilesBatch(metatiles.ToList(), $"Delete {metatiles.Count} metatile(s)? This cannot be undone.", "Delete metatiles");
+        DeleteMetatilesBatch(metatiles.ToList(), $"Delete {metatiles.Count} metatile(s)?", "Delete metatiles");
     }
 
     private void DeleteOneMetatile(Metatile metatile)
@@ -399,7 +400,7 @@ public partial class MetatileEditorViewModel : ObservableObject
         if (maps.Count > 0)
         {
             var detail = string.Join(", ", maps.Select(x => $"{x.Map.Name} ({x.CellCount} cell(s))"));
-            var confirm = MessageBox.Show(
+            var confirm = ScrollableMessageWindow.Show(
                 $"'{metatile.Name}' is placed on map(s) {detail}. Those cells will become Blank. This cannot be undone.\n\nDelete anyway?",
                 "Delete metatile", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (confirm != MessageBoxResult.Yes) return;
@@ -444,7 +445,7 @@ public partial class MetatileEditorViewModel : ObservableObject
         }
         confirmLines.Add("This cannot be undone.");
 
-        var confirm = MessageBox.Show(string.Join("\n", confirmLines), "Delete tile", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        var confirm = ScrollableMessageWindow.Show(string.Join("\n", confirmLines), "Delete tile", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes) return;
 
         ExecuteTileDeletion(tileAsset, impact);
@@ -515,21 +516,57 @@ public partial class MetatileEditorViewModel : ObservableObject
             return;
         }
 
-        DeleteMetatilesBatch(toDelete, $"Delete {toDelete.Count} unused metatile(s)? This cannot be undone.", "Delete unused metatiles");
+        DeleteMetatilesBatch(toDelete, $"Delete {toDelete.Count} unused metatile(s)?", "Delete unused metatiles");
     }
 
     /// <summary>
     /// Shared batch-delete core for <see cref="DeleteUnused"/> and <see cref="DeleteMetatile"/> (when one
     /// or more metatiles are Ctrl+click multi-selected) — one confirmation for the whole group, then the
     /// same GridSize=1-aware tile-vs-metatile routing <see cref="DeleteMetatile"/>'s single-item path uses.
-    /// Re-checks each metatile is still actually present before deleting it, since deleting one GridSize=1
-    /// entry can cascade-remove a sibling metatile too (an obscure duplicate-wrapper edge case — see
-    /// <see cref="DeleteUnused"/>'s own doc comment). Multi-selection flags need no explicit clearing —
-    /// <see cref="RefreshMetatileList"/> rebuilds every item fresh (defaulting to unselected).
+    /// The confirmation aggregates map-cell impact across EVERY metatile in the batch into one combined
+    /// per-map breakdown (same shape as <see cref="DeleteOneMetatile"/>'s own single-item detail, and as
+    /// MainViewModel's own multi-asset delete confirmation) — for <see cref="DeleteUnused"/> specifically
+    /// this is always empty by construction (nothing "unused" can have map impact), but a hand-picked
+    /// multi-selection can very much include metatiles still placed on maps, and the caller has no way to
+    /// know that without this. Re-checks each metatile is still actually present before deleting it, since
+    /// deleting one GridSize=1 entry can cascade-remove a sibling metatile too (an obscure duplicate-wrapper
+    /// edge case — see <see cref="DeleteUnused"/>'s own doc comment). Multi-selection flags need no explicit
+    /// clearing — <see cref="RefreshMetatileList"/> rebuilds every item fresh (defaulting to unselected).
     /// </summary>
-    private void DeleteMetatilesBatch(List<Metatile> metatiles, string confirmMessage, string confirmTitle)
+    private void DeleteMetatilesBatch(List<Metatile> metatiles, string headline, string confirmTitle)
     {
-        var confirm = MessageBox.Show(confirmMessage, confirmTitle, MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        var perMapCells = new Dictionary<MapAsset, int>();
+        foreach (var metatile in metatiles)
+        {
+            if (metatile.IsReservedBlank) continue;
+
+            if (metatile.GridSize == 1)
+            {
+                var tileAsset = _project.Assets.FirstOrDefault(a => a.Id == metatile.Cells[0].TileAssetId);
+                if (tileAsset is null || tileAsset.IsReservedBlank) continue;
+                foreach (var (map, count) in CascadeDeletionService.PlanAssetDeletion(_project, [tileAsset]).AffectedMapCells)
+                {
+                    perMapCells[map] = perMapCells.GetValueOrDefault(map) + count;
+                }
+            }
+            else
+            {
+                foreach (var (map, count) in ReferenceIntegrityService.FindMapsReferencingMetatile(_project, metatile))
+                {
+                    perMapCells[map] = perMapCells.GetValueOrDefault(map) + count;
+                }
+            }
+        }
+
+        var confirmLines = new List<string> { headline };
+        if (perMapCells.Count > 0)
+        {
+            var detail = string.Join(", ", perMapCells.Select(kv => $"{kv.Key.Name} ({kv.Value} cell(s))"));
+            confirmLines.Add($"{perMapCells.Values.Sum()} map cell(s) will become Blank: {detail}.");
+        }
+        confirmLines.Add("This cannot be undone.");
+
+        var confirm = ScrollableMessageWindow.Show(string.Join("\n", confirmLines), confirmTitle, MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes) return;
 
         var deletedCount = 0;

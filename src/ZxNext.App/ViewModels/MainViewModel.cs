@@ -968,7 +968,7 @@ public partial class MainViewModel : ObservableObject
         if (reservedBlanks.Count > 0)
         {
             var reasons = reservedBlanks.Select(a => $"Cannot delete '{a.Name}': it's the reserved blank tile every map's grid layer relies on.");
-            MessageBox.Show(string.Join("\n", reasons), "Cannot delete", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ScrollableMessageWindow.Show(string.Join("\n", reasons), "Cannot delete", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -1001,7 +1001,7 @@ public partial class MainViewModel : ObservableObject
             confirmLines.Add("This cannot be undone.");
         }
 
-        var confirm = MessageBox.Show(string.Join("\n", confirmLines), "Delete", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        var confirm = ScrollableMessageWindow.Show(string.Join("\n", confirmLines), "Delete", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes) return;
 
         if (!impact.IsEmpty)
@@ -1084,14 +1084,14 @@ public partial class MainViewModel : ObservableObject
             .ToList();
         if (blockingReasons.Count > 0)
         {
-            MessageBox.Show(string.Join("\n", blockingReasons), "Cannot delete folder", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ScrollableMessageWindow.Show(string.Join("\n", blockingReasons), "Cannot delete folder", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         var message = affected.Count == 0
             ? $"Delete empty folder \"{folderNode.Name}\"?"
             : $"Delete folder \"{folderNode.Name}\" and its {affected.Count} tile(s)/sprite(s)? This cannot be undone.";
-        if (MessageBox.Show(message, "Delete folder", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        if (ScrollableMessageWindow.Show(message, "Delete folder", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
 
         foreach (var asset in affected) _project.RemoveAsset(asset.Id);
         _project.FolderPalettesFor(category).Remove(folderPath);
@@ -1124,14 +1124,14 @@ public partial class MainViewModel : ObservableObject
             .ToList();
         if (blockingReasons.Count > 0)
         {
-            MessageBox.Show(string.Join("\n", blockingReasons), "Cannot delete source image", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ScrollableMessageWindow.Show(string.Join("\n", blockingReasons), "Cannot delete source image", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         var message = affected.Count == 0
             ? $"Delete source image \"{source.FileName}\"?"
             : $"Delete source image \"{source.FileName}\"? This will also delete the {affected.Count} tile(s)/sprite(s) placed from it. This cannot be undone.";
-        if (MessageBox.Show(message, "Delete source image", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        if (ScrollableMessageWindow.Show(message, "Delete source image", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
 
         var affectedFlatFolders = new HashSet<(AssetCategory Category, string FolderPath)>();
         var affectedBankCategories = new HashSet<AssetCategory>();

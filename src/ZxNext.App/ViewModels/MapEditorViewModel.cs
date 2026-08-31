@@ -8,6 +8,7 @@ using ZxNext.App.Rendering;
 using ZxNext.Core.Conversion;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
+using ZxNext.Core.Settings;
 
 namespace ZxNext.App.ViewModels;
 
@@ -265,6 +266,14 @@ public partial class MapEditorViewModel : ObservableObject
         SelectedLayerRow = LayerOrder.First(r => r.Kind == MapLayerKind.Tilemap);
         RefreshObjectTypePalette();
         RefreshMapList();
+
+        // Reopen on whichever map was last worked with, if it still exists — a stale/foreign id (a
+        // different project, or a map since deleted) just fails to match and leaves SelectedMap null,
+        // same as before this existed.
+        if (AppSettingsStore.Load().LastSelectedMapId is { } lastId)
+        {
+            SelectedMap = Maps.FirstOrDefault(m => m.Map.Id == lastId);
+        }
     }
 
     partial void OnSelectedLayerRowChanged(LayerRowViewModel? value)
@@ -396,6 +405,10 @@ public partial class MapEditorViewModel : ObservableObject
             MapPreview = null;
             return;
         }
+
+        var settings = AppSettingsStore.Load();
+        settings.LastSelectedMapId = value.Map.Id;
+        AppSettingsStore.Save(settings);
 
         _isSyncingFromMap = true;
         try

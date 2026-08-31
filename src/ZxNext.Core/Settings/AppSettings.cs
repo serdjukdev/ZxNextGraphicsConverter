@@ -42,4 +42,7 @@ public class AppSettings
     public double? MapEditorTileGridOpacity { get; set; }
     public string? MapEditorCellGridColorHex { get; set; }
     public double? MapEditorCellGridOpacity { get; set; }
+
+    /// <summary>The map last selected in the Map Editor, restored on next open. Global (not per-project) like the other "Last..." fields above — a stale id from a different/previous project just fails to match and falls back to no selection, same as before this existed.</summary>
+    public Guid? LastSelectedMapId { get; set; }
 }

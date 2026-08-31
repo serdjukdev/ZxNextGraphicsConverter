@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added: a live cursor-position status line under the Map Editor's canvas, showing the raw map pixel X/Y plus the tile cell (col,row, in the 8x8 tile grid) as you move the mouse. On a 2x2/4x4 project it also shows the metatile cell (col,row); on a 1x1 project there's no separate metatile concept, so only the tile position is shown. Updates live on mouse move and clears when the cursor leaves the canvas.
+- Added: the Map Editor now reopens on whichever map you last had selected, instead of always starting with no map selected.
 
 ## v0.4.0 (2026-08-27)
 

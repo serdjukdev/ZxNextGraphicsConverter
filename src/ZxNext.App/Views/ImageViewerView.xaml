@@ -10,6 +10,8 @@
         <DockPanel>
             <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedAssetName}"
                        HorizontalAlignment="Center" FontSize="13" Margin="4" />
+            <TextBlock DockPanel.Dock="Top" Text="{Binding UsageInfo}"
+                       HorizontalAlignment="Center" FontSize="11" Foreground="#666" Margin="4,0,4,4" TextWrapping="Wrap" />
             <Image x:Name="PixelImage" Source="{Binding Bitmap}" Stretch="Uniform" MaxWidth="256" MaxHeight="256"
                    RenderOptions.BitmapScalingMode="NearestNeighbor"
                    MouseLeftButtonDown="PixelImage_OnMouseLeftButtonDown"

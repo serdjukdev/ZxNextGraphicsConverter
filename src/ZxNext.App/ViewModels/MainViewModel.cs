@@ -1480,10 +1480,44 @@ public partial class MainViewModel : ObservableObject
         _undoStack.Clear();
         ImageViewer.Bitmap = null;
         ImageViewer.SelectedAssetName = "(no selection)";
+        ImageViewer.UsageInfo = null;
         PixelEditor.Bitmap = null;
         PixelEditor.AssetWidth = 0;
         PixelEditor.AssetHeight = 0;
         PaletteStrip.Clear();
+    }
+
+    /// <summary>
+    /// Read-only "where is this actually used" summary for the Image Viewer panel — a tile's usage is
+    /// two hops (tile → metatiles containing it → maps placing one of those), a sprite's is one hop
+    /// (sprite → maps placing it directly). Null for Layer2 categories: those are exported as whole
+    /// standalone images, never placed via a metatile/map grid, so "usage" has no meaning for them.
+    /// Deliberately informational only — see <see cref="ImageViewerViewModel.UsageInfo"/>'s own doc comment
+    /// for why this is never used to gate or drive a delete decision (unlike the metatile "unused" check).
+    /// </summary>
+    private string? ComputeUsageInfo(GraphicsAsset asset)
+    {
+        if (asset.Category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp)
+        {
+            var mapCount = ReferenceIntegrityService.FindMapsReferencingSprite(_project, asset.Id).Count;
+            return mapCount == 0 ? "Not placed on any map." : $"Placed on {mapCount} map(s).";
+        }
+
+        if (asset.Category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp)
+        {
+            var metatiles = ReferenceIntegrityService.FindMetatilesReferencingTile(_project, asset.Id);
+            if (metatiles.Count == 0) return "Not used in any metatile.";
+
+            var mapCount = metatiles
+                .SelectMany(m => ReferenceIntegrityService.FindMapsReferencingMetatile(_project, m).Select(x => x.Map))
+                .Distinct()
+                .Count();
+            return mapCount == 0
+                ? $"Used in {metatiles.Count} metatile(s), not placed on any map."
+                : $"Used in {metatiles.Count} metatile(s), {mapCount} map(s).";
+        }
+
+        return null;
     }
 
     /// <summary>Used only for a brand-new (always-empty) project — no images to decode, so no async/busy-indicator machinery is needed.</summary>
@@ -1542,6 +1576,7 @@ public partial class MainViewModel : ObservableObject
             var rendered = NextBitmapRenderer.Render(asset, _project);
             ImageViewer.Bitmap = rendered;
             ImageViewer.SelectedAssetName = asset.Name;
+            ImageViewer.UsageInfo = ComputeUsageInfo(asset);
 
             PixelEditor.Bitmap = rendered;
             PixelEditor.AssetWidth = asset.Width;
@@ -1568,6 +1603,7 @@ public partial class MainViewModel : ObservableObject
         {
             ImageViewer.Bitmap = null;
             ImageViewer.SelectedAssetName = "(no selection)";
+            ImageViewer.UsageInfo = null;
             PixelEditor.Bitmap = null;
             PixelEditor.AssetWidth = 0;
             PixelEditor.AssetHeight = 0;
@@ -1597,6 +1633,7 @@ public partial class MainViewModel : ObservableObject
         {
             ImageViewer.Bitmap = null;
             ImageViewer.SelectedAssetName = "(no selection)";
+            ImageViewer.UsageInfo = null;
             PixelEditor.Bitmap = null;
             PixelEditor.AssetWidth = 0;
             PixelEditor.AssetHeight = 0;

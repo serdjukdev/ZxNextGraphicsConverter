@@ -66,6 +66,7 @@ public static class ShortcutReference
         new("Pixel & Palette Editor", "Ctrl+click/drag (editable) or plain click/drag (preview)", "Eyedropper", "Picks the colour under the cursor and selects that palette swatch. Ctrl is only needed in the editable pixel editor, where a plain click paints instead."),
         new("Pixel & Palette Editor", "Double-click a palette swatch", "Edit colour", "Opens the colour picker for that slot. Changes it everywhere it's used, live, and pushes one undo step. Blocked on the transparent-index slot."),
 
+        new("Metatile Editor", "Drag a tile from the palette onto a draft cell", "Paint", "Stamps that tile into the cell, same as click-a-tile-then-click-a-cell — both work interchangeably."),
         new("Metatile Editor", "Drag a metatile onto another", "Reorder", "Drop on the left/right half of the target to land before/after it. Reassigns real export indices AND rewrites every map cell placing an affected metatile under its old index. The reserved Blank metatile can never be dragged, or have anything dropped before it."),
         new("Metatile Editor", "Ctrl+click a cell (draft grid)", "Clear cell", "Clears that cell back to unfilled, to correct a mistake."),
         new("Metatile Editor", "Ctrl+click / Shift+click a metatile (existing metatiles list)", "Multi-select", "Selects several metatiles at once (same as the Project Tree) for bulk delete via 'Delete selected'."),

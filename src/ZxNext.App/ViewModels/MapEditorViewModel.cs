@@ -303,17 +303,21 @@ public partial class MapEditorViewModel : ObservableObject
         IsStatusError = false;
     }
 
+    /// <summary>Unlike deleting a tile/sprite/metatile, deleting a map has no cascade — nothing else in the project references a map — so a plain Yes/No confirmation is enough, no need for the scrollable multi-line dialog those use.</summary>
     [RelayCommand]
     private void DeleteMap()
     {
         if (SelectedMap is null) return;
 
-        var deletedName = SelectedMap.Map.Name;
+        var name = SelectedMap.Map.Name;
+        var confirm = MessageBox.Show($"Delete '{name}'? This cannot be undone.", "Delete map", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.Yes) return;
+
         _project.Maps.Remove(SelectedMap.Map);
         HasChanges = true;
         SelectedMap = null;
         RefreshMapList();
-        StatusText = $"Deleted '{deletedName}'.";
+        StatusText = $"Deleted '{name}'.";
         IsStatusError = false;
     }
 

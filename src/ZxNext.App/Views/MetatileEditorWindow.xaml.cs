@@ -59,14 +59,30 @@ public partial class MetatileEditorWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>
+    /// Ctrl/Shift+click builds a multi-selection using the ListBox's own native SelectionMode="Extended"
+    /// handling (nothing to do here for that — it just works once that's set) — this only needs to make
+    /// sure a Ctrl/Shift-click never ALSO arms a reorder drag: without the modifier check below, a slightly
+    /// jittery Ctrl-click could cross the OS drag-distance threshold before mouse-up and start reordering
+    /// instead of just toggling that item's selection.
+    /// </summary>
     private void MetatileList_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         var originalSource = e.OriginalSource as DependencyObject;
         if (FindAncestorDataContext<MetatileListItemViewModel>(originalSource) is not { } item) return;
+        if (Keyboard.Modifiers != ModifierKeys.None) return; // Ctrl/Shift-click: let native multi-select handle it, never a drag source
 
         _dragStart = e.GetPosition(null);
         _dragCandidate = item;
         _dragArmed = !item.IsReservedBlank; // the reserved blank must always stay first — never a valid drag source
+    }
+
+    /// <summary>Reads whatever's currently selected in the "Existing metatiles" ListBox (native multi-select — Ctrl/Shift+click) and hands the underlying Metatiles to the ViewModel. Not a bound Command: ListBox.SelectedItems isn't a bindable dependency property, so the View has to read it directly.</summary>
+    private void DeleteSelectedMetatiles_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MetatileEditorViewModel vm) return;
+        var selected = MetatileList.SelectedItems.Cast<MetatileListItemViewModel>().Select(i => i.Metatile).ToList();
+        vm.DeleteMetatiles(selected);
     }
 
     /// <summary>Fires continuously while a mouse button is held over the list — only actually starts a drag once armed and past the OS's drag distance threshold, same pattern as ProjectTreeView's own drag source.</summary>

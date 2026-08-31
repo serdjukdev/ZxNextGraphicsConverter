@@ -12,6 +12,7 @@
 - Added: the Map Editor's "Delete selected" button (for a map) now asks for confirmation first, instead of deleting immediately.
 - Fixed: on a 1x1 ("no metatile") project, deleting a metatile in the Metatile Editor only removed the metatile wrapper, leaving its one underlying tile behind with no way to place it on a map again while still using up palette/bank space. Deleting a metatile now deletes the underlying tile too on a 1x1 project (same cascade already used when deleting a tile from the Project Tree), correctly updating the tree and freeing palette space.
 - Added: a "Delete Unused" button in the Metatile Editor, next to "Delete selected" — deletes every metatile of the current Kind that no map places, with one confirmation for the whole group. Works the same way on a 1x1 project (deletes the underlying tile, same as the single-delete fix above).
+- Added: multi-select (Ctrl+click / Shift+click, same as the Project Tree) in the Metatile Editor's "Existing metatiles" list — "Delete selected" now deletes every selected metatile with one confirmation for the group.
 
 ## v0.4.0 (2026-08-27)
 

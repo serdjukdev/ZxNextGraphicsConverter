@@ -68,6 +68,7 @@ public static class ShortcutReference
 
         new("Metatile Editor", "Drag a metatile onto another", "Reorder", "Drop on the left/right half of the target to land before/after it. Reassigns real export indices AND rewrites every map cell placing an affected metatile under its old index. The reserved Blank metatile can never be dragged, or have anything dropped before it."),
         new("Metatile Editor", "Ctrl+click a cell (draft grid)", "Clear cell", "Clears that cell back to unfilled, to correct a mistake."),
+        new("Metatile Editor", "Ctrl+click / Shift+click a metatile (existing metatiles list)", "Multi-select", "Selects several metatiles at once (same as the Project Tree) for bulk delete via 'Delete selected'."),
 
         new("Map Editor", "Ctrl+Z", "Undo", "A local undo stack for this window: paint/erase strokes, Fill/Delete Selection, Move/Copy, Link, type assignment, and Resize/Trim each undo as one step."),
         new("Map Editor", "Ctrl+Y", "Redo", "Reapplies the last undone step. A new edit after an Undo clears whatever Redo history existed — same as every other editor."),

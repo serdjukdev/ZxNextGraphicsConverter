@@ -81,9 +81,10 @@
             <TextBlock Grid.Row="4" FontSize="11" FontWeight="Bold" Margin="0,4,0,0"
                        Text="{Binding SelectedPaletteTile.Name, StringFormat='Painting with: {0}', TargetNullValue='Painting with: (click a tile above)'}" />
 
-            <TextBlock Grid.Row="6" Text="Existing metatiles" FontSize="11" Margin="0,0,0,2" />
+            <TextBlock Grid.Row="6" Text="Existing metatiles — Ctrl+click / Shift+click to select several for bulk delete" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,2" />
             <Border Grid.Row="7" BorderBrush="#999" BorderThickness="1">
                 <ListBox x:Name="MetatileList" ItemsSource="{Binding Metatiles}" SelectedItem="{Binding SelectedMetatile}"
+                         SelectionMode="Extended"
                          BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                          ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}"
                          PreviewMouseLeftButtonDown="MetatileList_OnPreviewMouseLeftButtonDown"
@@ -114,7 +115,8 @@
                 </ListBox>
             </Border>
             <StackPanel Grid.Row="8" Orientation="Horizontal" Margin="0,6,0,0">
-                <Button Content="Delete selected" Command="{Binding DeleteMetatileCommand}" Width="120" Margin="0,0,6,0" />
+                <Button Content="Delete selected" Click="DeleteSelectedMetatiles_OnClick" Width="120" Margin="0,0,6,0"
+                        ToolTip="Deletes every metatile currently selected in the list above (Ctrl/Shift+click for more than one)." />
                 <Button Content="Delete Unused" Command="{Binding DeleteUnusedCommand}" Width="120"
                         ToolTip="Deletes every metatile of the current Kind that no map places. On a 1x1 project this deletes the underlying tile too." />
             </StackPanel>

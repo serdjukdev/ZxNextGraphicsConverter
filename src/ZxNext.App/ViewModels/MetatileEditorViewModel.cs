@@ -67,7 +67,6 @@ public partial class MetatileEditorViewModel : ObservableObject
     private ObservableCollection<MetatileListItemViewModel> metatiles = [];
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(DeleteMetatileCommand))]
     [NotifyPropertyChangedFor(nameof(IsEditingExisting))]
     [NotifyPropertyChangedFor(nameof(CreateOrSaveButtonText))]
     private MetatileListItemViewModel? selectedMetatile;
@@ -347,12 +346,25 @@ public partial class MetatileEditorViewModel : ObservableObject
         ResetDraft();
     }
 
-    [RelayCommand(CanExecute = nameof(CanDeleteMetatile))]
-    private void DeleteMetatile()
+    /// <summary>
+    /// Called by the View with whatever's currently selected in the "Existing metatiles" ListBox (native
+    /// WPF multi-select — Ctrl/Shift+click; not a bound Command since SelectedItems isn't a bindable
+    /// property). Exactly one selected uses <see cref="DeleteOneMetatile"/>'s detailed per-map confirmation;
+    /// two or more use <see cref="DeleteMetatilesBatch"/>'s single "delete N?" confirmation instead.
+    /// </summary>
+    public void DeleteMetatiles(IReadOnlyList<Metatile> metatiles)
     {
-        if (SelectedMetatile is null) return;
-        var metatile = SelectedMetatile.Metatile;
+        if (metatiles.Count == 0) return;
+        if (metatiles.Count == 1)
+        {
+            DeleteOneMetatile(metatiles[0]);
+            return;
+        }
+        DeleteMetatilesBatch(metatiles.ToList(), $"Delete {metatiles.Count} metatile(s)? This cannot be undone.", "Delete metatiles");
+    }
 
+    private void DeleteOneMetatile(Metatile metatile)
+    {
         // The reserved blank metatile stays unconditionally undeletable — unrelated to the cascade below.
         if (metatile.IsReservedBlank)
         {
@@ -503,22 +515,32 @@ public partial class MetatileEditorViewModel : ObservableObject
             return;
         }
 
-        var confirm = MessageBox.Show($"Delete {toDelete.Count} unused metatile(s)? This cannot be undone.",
-            "Delete unused metatiles", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        DeleteMetatilesBatch(toDelete, $"Delete {toDelete.Count} unused metatile(s)? This cannot be undone.", "Delete unused metatiles");
+    }
+
+    /// <summary>
+    /// Shared batch-delete core for <see cref="DeleteUnused"/> and <see cref="DeleteMetatile"/> (when one
+    /// or more metatiles are Ctrl+click multi-selected) — one confirmation for the whole group, then the
+    /// same GridSize=1-aware tile-vs-metatile routing <see cref="DeleteMetatile"/>'s single-item path uses.
+    /// Re-checks each metatile is still actually present before deleting it, since deleting one GridSize=1
+    /// entry can cascade-remove a sibling metatile too (an obscure duplicate-wrapper edge case — see
+    /// <see cref="DeleteUnused"/>'s own doc comment). Multi-selection flags need no explicit clearing —
+    /// <see cref="RefreshMetatileList"/> rebuilds every item fresh (defaulting to unselected).
+    /// </summary>
+    private void DeleteMetatilesBatch(List<Metatile> metatiles, string confirmMessage, string confirmTitle)
+    {
+        var confirm = MessageBox.Show(confirmMessage, confirmTitle, MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes) return;
 
         var deletedCount = 0;
-        foreach (var metatile in toDelete)
+        foreach (var metatile in metatiles)
         {
-            // Deleting one GridSize=1 entry can cascade-remove a sibling metatile too (the same obscure
-            // duplicate-wrapper case noted above) — re-check it's still actually there before touching it.
-            if (!_project.Metatiles.Contains(metatile)) continue;
-            deletedCount++;
+            if (!_project.Metatiles.Contains(metatile) || metatile.IsReservedBlank) continue;
 
             if (metatile.GridSize == 1)
             {
                 var tileAsset = _project.Assets.FirstOrDefault(a => a.Id == metatile.Cells[0].TileAssetId);
-                if (tileAsset is null) continue;
+                if (tileAsset is null || tileAsset.IsReservedBlank) continue;
                 ExecuteTileDeletion(tileAsset, CascadeDeletionService.PlanAssetDeletion(_project, [tileAsset]));
             }
             else
@@ -526,6 +548,7 @@ public partial class MetatileEditorViewModel : ObservableObject
                 MetatileService.DeleteCascading(_project, metatile);
                 HasChanges = true;
             }
+            deletedCount++;
         }
 
         SelectedMetatile = null;
@@ -533,9 +556,7 @@ public partial class MetatileEditorViewModel : ObservableObject
         ResetDraft();
         RefreshMetatileList();
         RefreshTilePalette();
-        StatusText = $"Deleted {deletedCount} unused metatile(s).";
+        StatusText = $"Deleted {deletedCount} metatile(s).";
         IsStatusError = false;
     }
-
-    private bool CanDeleteMetatile() => SelectedMetatile is not null;
 }

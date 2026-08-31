@@ -685,7 +685,7 @@ public partial class MapEditorViewModel : ObservableObject
         MetatilePalette = new ObservableCollection<MetatileListItemViewModel>(
             _project.Metatiles.Where(m => m.Kind == kind && m.GridSize == gridSize)
                 .OrderBy(m => m.SortIndex)
-                .Select(m => new MetatileListItemViewModel(m, _project)));
+                .Select(m => new MetatileListItemViewModel(m, _project, _renderCache)));
     }
 
     /// <summary>
@@ -713,7 +713,7 @@ public partial class MapEditorViewModel : ObservableObject
         SpritePalette = new ObservableCollection<TilePaletteItemViewModel>(
             _project.Assets.Where(a => a.Category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp)
                 .OrderBy(a => a.Category).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(a => new TilePaletteItemViewModel(a, _project)));
+                .Select(a => new TilePaletteItemViewModel(a, _project, _renderCache)));
     }
 
     public void BeginStroke()

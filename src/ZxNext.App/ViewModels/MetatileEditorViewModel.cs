@@ -25,6 +25,19 @@ public partial class MetatileEditorViewModel : ObservableObject
 {
     private readonly ProjectState _project;
 
+    /// <summary>
+    /// Memoizes per-tile decode work (see <see cref="TilePaletteItemViewModel"/>/<see cref="MetatileListItemViewModel"/>'s
+    /// own doc comments) across every gallery rebuild in this modal session — RefreshMetatileList/RefreshTilePalette
+    /// run after every Create/Update/Delete/reorder, and without this each rerun re-decoded every tile's
+    /// raw pixels+palette from scratch, most visibly on a GridSize=1 project where the gallery can hold
+    /// hundreds of trivial one-tile metatiles. Safe with no invalidation for the same reason
+    /// <c>MapEditorViewModel</c>'s own identically-shaped cache is: this window never mutates a tile/sprite
+    /// asset's own pixel data (only which tile a metatile cell references, or a metatile's own cells) —
+    /// only ONE of Map Editor or Metatile Editor can ever be open at a time (both reached only via
+    /// MainWindow's own buttons, both modal), so there's no cross-window staleness risk either.
+    /// </summary>
+    private readonly MapRenderCache _renderCache = new();
+
     public IReadOnlyList<MetatileKindOption> AvailableKinds { get; } =
     [
         new(MetatileKind.FourBpp, "4bpp (hardware Tilemap)"),
@@ -156,12 +169,12 @@ public partial class MetatileEditorViewModel : ObservableObject
     {
         var category = SelectedKind == MetatileKind.FourBpp ? AssetCategory.Tile4Bpp : AssetCategory.Tile8Bpp;
         TilePalette = new ObservableCollection<TilePaletteItemViewModel>(
-            _project.Assets.Where(a => a.Category == category).OrderBy(a => a.SortIndex).Select(a => new TilePaletteItemViewModel(a, _project)));
+            _project.Assets.Where(a => a.Category == category).OrderBy(a => a.SortIndex).Select(a => new TilePaletteItemViewModel(a, _project, _renderCache)));
     }
 
     private void RefreshMetatileList() =>
         Metatiles = new ObservableCollection<MetatileListItemViewModel>(
-            _project.Metatiles.Where(m => m.Kind == SelectedKind).OrderBy(m => m.SortIndex).Select(m => new MetatileListItemViewModel(m, _project)));
+            _project.Metatiles.Where(m => m.Kind == SelectedKind).OrderBy(m => m.SortIndex).Select(m => new MetatileListItemViewModel(m, _project, _renderCache)));
 
     /// <summary>
     /// Drag-and-drop reorder: moves <paramref name="dragged"/> to sit immediately before/after

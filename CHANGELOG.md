@@ -16,6 +16,7 @@
 - Fixed: deleting a tile/sprite/folder/source image/metatile with a long cascade description (e.g. hundreds of affected tiles) could make the confirmation dialog grow past the screen with no way to scroll and read the rest. These confirmations now use a fixed-size, scrollable dialog instead.
 - Fixed: bulk-deleting metatiles (multi-select or "Delete Unused") showed a generic "Delete N metatile(s)?" with no detail, unlike deleting one at a time — it now shows the same per-map cell-count breakdown as a single delete, aggregated across the whole batch.
 - Added: selecting a tile or sprite in the Project Tree now shows a read-only usage summary (e.g. "Used in 3 metatile(s), 2 map(s)." or "Not placed on any map.") under its name in the Image Viewer panel. Informational only — never used to gate a delete, since a tile/sprite can be referenced by game code (e.g. animation frames) with no way for the app to know.
+- Fixed: the Metatile Editor's tile palette and "existing metatiles" gallery, and the Map Editor's own metatile/sprite palettes, re-decoded every thumbnail's raw pixels from scratch on every refresh (after every Create/Update/Delete/reorder, or every map/layer switch) — most noticeable on a 1x1 project's gallery, which can hold hundreds of tiles. These now reuse a per-session render cache instead.
 
 ## v0.4.0 (2026-08-27)
 

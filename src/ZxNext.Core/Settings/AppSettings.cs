@@ -1,4 +1,5 @@
 using ZxNext.Core.Export;
+using ZxNext.Core.Model;
 using ZxNext.Core.Quantization;
 
 namespace ZxNext.Core.Settings;
@@ -45,4 +46,25 @@ public class AppSettings
 
     /// <summary>The map last selected in the Map Editor, restored on next open. Global (not per-project) like the other "Last..." fields above — a stale id from a different/previous project just fails to match and falls back to no selection, same as before this existed.</summary>
     public Guid? LastSelectedMapId { get; set; }
+
+    /// <summary>
+    /// Per-map Map Editor viewport snapshot (scroll position, zoom, active layer), keyed by the map's Id
+    /// (string form — a Guid dictionary key would need a custom converter for System.Text.Json here, since
+    /// this store isn't configured with one), restored whenever that specific map is reopened (window
+    /// reopen, or switching back to it within the same session). Deliberately kept out of the project file
+    /// itself (unlike, say, MetatileGridSize) — the same reasoning as LastSelectedMapId above: it changes
+    /// on every pan/zoom/layer click, not just real edits, and marking the project dirty just from browsing
+    /// would be user-hostile. Grows one stale entry per deleted map over a project's lifetime; never
+    /// pruned, same accepted trade-off as LastSelectedMapId's own staleness.
+    /// </summary>
+    public Dictionary<string, MapViewState> MapViewStates { get; set; } = [];
+}
+
+/// <summary>One <see cref="AppSettings.MapViewStates"/> entry — see that property's doc comment for why this lives in global settings rather than the project file.</summary>
+public class MapViewState
+{
+    public double ScrollX { get; set; }
+    public double ScrollY { get; set; }
+    public double Zoom { get; set; } = 1.0;
+    public MapLayerKind ActiveLayer { get; set; } = MapLayerKind.Tilemap;
 }

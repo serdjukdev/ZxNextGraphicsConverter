@@ -212,6 +212,9 @@
                     <StackPanel Style="{StaticResource SectionContentStyle}">
                         <TextBlock Style="{StaticResource DescStyle}" Text="A map has 3 layers sharing the same size: a 4bpp Tilemap grid, an 8bpp Tile grid, and a freeform Sprite layer: painted with metatiles/sprites from the side palette. The selected row in the Layers list is both the front-to-back display order AND which layer painting/selection targets." />
 
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Reopening the editor / switching maps" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="The editor reopens on whichever map you last had selected. Each individual map also remembers its own scroll position, zoom, and active layer as you leave it (switching to another map, or closing the window) and restores them the next time you come back to that particular map." />
+
                         <TextBlock Style="{StaticResource TermStyle}" Text="Plain click/drag on the canvas" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Paints with whichever metatile/sprite is selected in the palette. Sprite placement is click-only (no drag-stamping)." />
 

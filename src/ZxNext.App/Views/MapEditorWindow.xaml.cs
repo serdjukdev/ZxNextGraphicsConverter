@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using ZxNext.App.ViewModels;
 using ZxNext.Core.Model;
 using ZxNext.Core.Settings;
@@ -35,6 +36,9 @@ public partial class MapEditorWindow : Window
     /// <summary>Which object <see cref="ObjectActionPopup"/> (the right-click Set User Byte/Link/Set Type menu) is currently open for — set right before opening it, read by whichever of its three Click handlers fires.</summary>
     private SpritePlacement? _objectActionPopupTarget;
 
+    /// <summary>Which map <see cref="SaveMapViewState"/>/<see cref="RestoreMapViewState"/> currently track — the map a SelectedMap change is switching AWAY FROM (its viewport is still live in MapScrollViewer/MapZoomTransform at that point, before anything re-renders for the new map), and the map to persist a final snapshot for on window close.</summary>
+    private Guid? _viewStateMapId;
+
     public MapEditorWindow()
     {
         InitializeComponent();
@@ -45,6 +49,9 @@ public partial class MapEditorWindow : Window
                 vm.PropertyChanged += MapEditorVm_OnPropertyChanged;
                 vm.SelectedSprites.CollectionChanged += (_, _) => DrawSelectionOverlay();
                 vm.MapResized += () => { DrawGrid(); DrawSelectionOverlay(); DrawLinksOverlay(); DrawObjectToolOverlay(); };
+
+                _viewStateMapId = vm.SelectedMap?.Map.Id;
+                if (_viewStateMapId is { } initialMapId) RestoreMapViewState(initialMapId, vm);
             }
             DrawGrid();
             DrawSelectionOverlay();
@@ -53,8 +60,57 @@ public partial class MapEditorWindow : Window
         };
     }
 
+    private void MapEditorWindow_OnClosing(object sender, CancelEventArgs e)
+    {
+        if (DataContext is MapEditorViewModel vm && _viewStateMapId is { } mapId) SaveMapViewState(mapId, vm);
+    }
+
+    /// <summary>Snapshots the given map's current viewport (scroll offset, zoom) and active layer into settings.json, keyed by its id — see <see cref="ZxNext.Core.Settings.MapViewState"/>'s doc comment for why this lives outside the project file.</summary>
+    private void SaveMapViewState(Guid mapId, MapEditorViewModel vm)
+    {
+        var settings = AppSettingsStore.Load();
+        settings.MapViewStates[mapId.ToString()] = new MapViewState
+        {
+            ScrollX = MapScrollViewer.HorizontalOffset,
+            ScrollY = MapScrollViewer.VerticalOffset,
+            Zoom = MapZoomTransform.ScaleX,
+            ActiveLayer = vm.ActiveLayer
+        };
+        AppSettingsStore.Save(settings);
+    }
+
+    /// <summary>Restores a previously-saved viewport/active-layer snapshot for the given map — a no-op (keeps whatever the window currently has) for a map with no saved entry yet, e.g. a brand-new map or one never closed/switched away from before. Scroll offset is applied on a deferred dispatcher callback since ScrollViewer needs a completed layout pass against the (possibly just-changed) map's own content size before ScrollToHorizontalOffset/Vertical actually takes effect.</summary>
+    private void RestoreMapViewState(Guid mapId, MapEditorViewModel vm)
+    {
+        var settings = AppSettingsStore.Load();
+        if (!settings.MapViewStates.TryGetValue(mapId.ToString(), out var state)) return;
+
+        var row = vm.LayerOrder.FirstOrDefault(r => r.Kind == state.ActiveLayer);
+        if (row is not null) vm.SelectedLayerRow = row;
+
+        MapZoomTransform.ScaleX = state.Zoom;
+        MapZoomTransform.ScaleY = state.Zoom;
+        DrawGrid(); // grid hairline thickness is scale-dependent, same as the wheel-zoom handler
+        DrawSelectionOverlay();
+
+        var scrollX = state.ScrollX;
+        var scrollY = state.ScrollY;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            MapScrollViewer.ScrollToHorizontalOffset(scrollX);
+            MapScrollViewer.ScrollToVerticalOffset(scrollY);
+        }), DispatcherPriority.Loaded);
+    }
+
     private void MapEditorVm_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(MapEditorViewModel.SelectedMap) && DataContext is MapEditorViewModel mapVm)
+        {
+            if (_viewStateMapId is { } oldId) SaveMapViewState(oldId, mapVm);
+            _viewStateMapId = mapVm.SelectedMap?.Map.Id;
+            if (_viewStateMapId is { } newId) RestoreMapViewState(newId, mapVm);
+        }
+
         if (e.PropertyName is nameof(MapEditorViewModel.SelectedMap) or nameof(MapEditorViewModel.IsGridVisible))
         {
             DrawGrid();

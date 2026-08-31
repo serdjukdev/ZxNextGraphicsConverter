@@ -7,7 +7,8 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008/design"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Map Editor" Height="760" Width="1320" MinWidth="900" MinHeight="500" WindowStartupLocation="CenterOwner">
+        Title="Map Editor" Height="760" Width="1320" MinWidth="900" MinHeight="500" WindowStartupLocation="CenterOwner"
+        Closing="MapEditorWindow_OnClosing">
     <Window.InputBindings>
         <KeyBinding Key="{x:Static local:Shortcuts.UndoKey}" Modifiers="{x:Static local:Shortcuts.UndoModifiers}" Command="{Binding UndoCommand}" />
         <KeyBinding Key="{x:Static local:Shortcuts.DeleteKey}" Command="{Binding DeleteSelectionCommand}" />

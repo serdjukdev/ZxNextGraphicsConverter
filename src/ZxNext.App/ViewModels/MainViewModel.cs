@@ -165,6 +165,18 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Removes the tree nodes for assets deleted from OUTSIDE the main tree — currently only the Metatile
+    /// Editor's GridSize=1 "deleting a metatile really means deleting its one tile" path (see
+    /// MetatileEditorViewModel.DeletedTileAssetIds), which has no Project Tree of its own to update
+    /// directly. Mirrors Tree.RemoveAssetNode's own use in this class's ordinary asset-delete flow; safe to
+    /// call with an empty list (every real deletion path already synced itself before this exists).
+    /// </summary>
+    public void SyncDeletedAssetNodes(IReadOnlyList<Guid> deletedAssetIds)
+    {
+        foreach (var id in deletedAssetIds) Tree.RemoveAssetNode(id, _project);
+    }
+
     /// <summary>Called by the tree view when a source image dropped onto a category folder (or 8bpp sub-folder) already matches the target cell size exactly.</summary>
     public ImportOutcome ImportIntoCategory(SourceImageViewModel source, AssetCategory category, string folderPath, int? maxColors = null)
     {

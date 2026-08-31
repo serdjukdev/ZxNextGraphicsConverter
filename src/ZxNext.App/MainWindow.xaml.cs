@@ -428,6 +428,10 @@ public partial class MainWindow : Window
         // reserved blank TILE too (if this project never had one) — the Metatile Editor's own list
         // refreshes itself from the project directly, but the main tree does not, on its own.
         _viewModel.SyncReservedBlankAssetNodes();
+        // A GridSize=1 project's "delete metatile" can delete the underlying TILE instead (see
+        // MetatileEditorViewModel.DeleteUnderlyingTile) — this window has no tree of its own to drop the
+        // node from, so it's removed here once the dialog closes.
+        _viewModel.SyncDeletedAssetNodes(vm.DeletedTileAssetIds);
     }
 
     private void MapEditor_OnClick(object sender, RoutedEventArgs e)

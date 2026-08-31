@@ -33,6 +33,9 @@ public partial class MetatileEditorViewModel : ObservableObject
     /// <summary>Set true by a successful Create or Delete — read once by the caller (MainWindow) after the dialog closes, to decide whether to mark the project as having unsaved changes.</summary>
     public bool HasChanges { get; private set; }
 
+    /// <summary>Tile assets removed via <see cref="DeleteUnderlyingTile"/> (the GridSize=1 "deleting a metatile really means deleting its one tile" path) — this window has no Project Tree of its own to keep in sync, so MainWindow reads this once the dialog closes and removes the matching tree nodes itself, the same way it already does for a tile deleted directly from the tree.</summary>
+    public List<Guid> DeletedTileAssetIds { get; } = [];
+
     [ObservableProperty]
     private MetatileKind selectedKind = MetatileKind.FourBpp;
 
@@ -358,6 +361,26 @@ public partial class MetatileEditorViewModel : ObservableObject
             return;
         }
 
+        // GridSize=1 metatiles are thin 1:1 wrappers around a single tile (see ProjectState.MetatileGridSize's
+        // own doc comment: "painting a GridSize=1 map is really painting tiles directly"). Deleting just the
+        // wrapper here would leave the tile itself behind with no metatile to reference it — permanently
+        // unpaintable on any map (the Map Editor's palette is driven by the metatile list, not the raw tile
+        // list) while still occupying palette/bank space. So for GridSize=1, "delete this metatile" really
+        // means "delete the underlying tile", routed through the SAME cascade the Project Tree's own tile
+        // delete already uses (CascadeDeletionService), which already correctly removes this wrapper
+        // metatile as part of that cascade. Falls through to the plain metatile-only delete below only for
+        // the (never created by this app's own UI) case of a non-reserved 1x1 metatile whose cell happens
+        // to reference the reserved blank tile — that tile itself must never become deletable.
+        if (metatile.GridSize == 1)
+        {
+            var tileAsset = _project.Assets.FirstOrDefault(a => a.Id == metatile.Cells[0].TileAssetId);
+            if (tileAsset is not null && !tileAsset.IsReservedBlank)
+            {
+                DeleteUnderlyingTile(tileAsset);
+                return;
+            }
+        }
+
         // Being placed on a map is no longer a hard block — confirm the cascade instead (affected cells
         // become Blank, see MetatileService.DeleteCascading).
         var maps = ReferenceIntegrityService.FindMapsReferencingMetatile(_project, metatile);
@@ -381,6 +404,51 @@ public partial class MetatileEditorViewModel : ObservableObject
         ResetDraft();
         RefreshMetatileList();
         StatusText = $"Deleted '{deletedName}'.";
+        IsStatusError = false;
+    }
+
+    /// <summary>
+    /// GridSize=1's real delete target — see the comment where this is called from. Mirrors MainViewModel's
+    /// own tile-delete flow (CascadeDeletionService plan/execute, RemoveAsset, palette compaction) but
+    /// scoped to exactly one tile and without any Project Tree of its own to update — <see cref="DeletedTileAssetIds"/>
+    /// carries the id back to MainWindow for that, once this dialog closes.
+    /// </summary>
+    private void DeleteUnderlyingTile(GraphicsAsset tileAsset)
+    {
+        var impact = CascadeDeletionService.PlanAssetDeletion(_project, [tileAsset]);
+
+        var confirmLines = new List<string> { $"Delete '{tileAsset.Name}'?" };
+        if (!impact.IsEmpty)
+        {
+            if (impact.AffectedMetatiles.Count > 0)
+            {
+                confirmLines.Add($"Also deletes {impact.AffectedMetatiles.Count} metatile(s) that use it: {string.Join(", ", impact.AffectedMetatiles.Select(m => m.Name))}.");
+            }
+            if (impact.AffectedMapCells.Count > 0)
+            {
+                var cellDetail = string.Join(", ", impact.AffectedMapCells.Select(x => $"{x.Map.Name} ({x.CellCount} cell(s))"));
+                confirmLines.Add($"{impact.AffectedMapCells.Sum(x => x.CellCount)} map cell(s) will become Blank: {cellDetail}.");
+            }
+        }
+        confirmLines.Add("This cannot be undone.");
+
+        var confirm = MessageBox.Show(string.Join("\n", confirmLines), "Delete tile", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        if (!impact.IsEmpty) CascadeDeletionService.ExecuteAssetDeletion(_project, [tileAsset], impact);
+
+        _project.RemoveAsset(tileAsset.Id);
+        if (tileAsset.Category.UsesPaletteBank()) _project.CompactPaletteBank(tileAsset.Category);
+        else _project.CompactFlatPalette(tileAsset.Category, tileAsset.FolderPath);
+
+        DeletedTileAssetIds.Add(tileAsset.Id);
+        HasChanges = true;
+        SelectedMetatile = null;
+        DraftName = "metatile";
+        ResetDraft();
+        RefreshMetatileList();
+        RefreshTilePalette();
+        StatusText = $"Deleted '{tileAsset.Name}'.";
         IsStatusError = false;
     }
 

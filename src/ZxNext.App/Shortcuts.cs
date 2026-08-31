@@ -22,6 +22,14 @@ public static class Shortcuts
     public static readonly Key RedoKey = Key.Y;
     public static readonly ModifierKeys RedoModifiers = ModifierKeys.Control;
 
+    /// <summary>Map Editor only — copies the current grid/sprite selection to the shared clipboard. A real declarative KeyBinding (see MapEditorWindow.xaml), unlike Paste below.</summary>
+    public static readonly Key CopyKey = Key.C;
+    public static readonly ModifierKeys CopyModifiers = ModifierKeys.Control;
+
+    /// <summary>Map Editor only — pastes the last Ctrl+C'd selection under the cursor. NOT a declarative KeyBinding: Paste needs the View's own last-known cursor position, which isn't naturally bindable from XAML, so it's handled via PreviewKeyDown in MapEditorWindow.xaml.cs — that handler checks against these same constants so it can't drift from what Settings/Help documents.</summary>
+    public static readonly Key PasteKey = Key.V;
+    public static readonly ModifierKeys PasteModifiers = ModifierKeys.Control;
+
     public static readonly Key DeleteKey = Key.Delete;
 
     public static readonly Key ReQuantizeKey = Key.R;
@@ -63,6 +71,8 @@ public static class ShortcutReference
 
         new("Map Editor", "Ctrl+Z", "Undo", "A local undo stack for this window: paint/erase strokes, Fill/Delete Selection, Move/Copy, Link, type assignment, and Resize/Trim each undo as one step."),
         new("Map Editor", "Ctrl+Y", "Redo", "Reapplies the last undone step. A new edit after an Undo clears whatever Redo history existed — same as every other editor."),
+        new("Map Editor", "Ctrl+C", "Copy selection", "Copies the current grid-cell or sprite selection to the clipboard."),
+        new("Map Editor", "Ctrl+V", "Paste", "Pastes the last Ctrl+C'd selection under the cursor, snapped to the tile grid, and selects it immediately so it can be Alt-dragged into place. Works across maps: switch to a different map, then Ctrl+V, to copy a piece from one map to another — no remapping needed, since metatiles/tiles/sprites are project-wide. A pasted sprite's link (if any) is not carried over, same as a same-map copy."),
         new("Map Editor", "Delete", "Delete selection", "Clears the current selection's contents: grid cells become empty, selected sprites are removed."),
         new("Map Editor", "Ctrl+click/drag", "Force-erase", "Erases on the active layer no matter what else you're doing, including mid-drag."),
         new("Map Editor", "Shift (placing a sprite)", "Snap to grid", "Snaps the new sprite's position to the faint 8x8 tile grid."),

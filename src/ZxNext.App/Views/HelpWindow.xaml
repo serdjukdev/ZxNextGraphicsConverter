@@ -280,6 +280,9 @@
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+Z: Undo / Ctrl+Y: Redo" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="A local undo/redo stack for this window: paint/erase strokes, Fill/Delete Selection, Move/Copy, Link, type assignment, and Resize/Trim each undo (and redo) as one step. A new edit after an Undo clears whatever Redo history existed, same as every other editor." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+C: Copy / Ctrl+V: Paste" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Copies the current grid-cell or sprite selection; Ctrl+V pastes it under the cursor (snapped to the tile grid) and selects the pasted result immediately, so it can be Alt-dragged into place. Works across maps: copy, switch to a different map in the list on the left, then paste — no remapping needed, since metatiles/tiles/sprites are shared project-wide. Pasting auto-switches to whichever layer was copied from. A pasted sprite's link (if it had one) is not carried over, same as a same-map Alt+Shift+drag copy." />
                     </StackPanel>
                 </Expander>
 

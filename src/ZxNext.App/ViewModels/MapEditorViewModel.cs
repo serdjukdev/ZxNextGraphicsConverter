@@ -1042,6 +1042,202 @@ public partial class MapEditorViewModel : ObservableObject
     public bool IsPixelInSpriteSelection(int pixelX, int pixelY) =>
         SelectedSprites.Any(s => pixelX >= s.X && pixelX < s.X + SpritePixelSize && pixelY >= s.Y && pixelY < s.Y + SpritePixelSize);
 
+    /// <summary>
+    /// One Ctrl+C snapshot of a grid-layer selection (Tilemap or 8bpp) — raw per-cell values, tagged with
+    /// which layer they came from so Ctrl+V can target the matching layer on the destination map (which
+    /// may not be whichever layer is currently active there). A Metatile's SortIndex — and, for a
+    /// GridSize=1 Tilemap, a cell's packed attribute byte — are meaningful PROJECT-WIDE, not per-map (see
+    /// <see cref="ZxNext.Core.Project.ProjectState.Metatiles"/>'s own doc comment), so pasting onto any
+    /// other map in the same project needs no remapping at all.
+    /// </summary>
+    private sealed class GridClipboard
+    {
+        public required MapLayerKind Layer { get; init; }
+        public required int Width { get; init; }
+        public required int Height { get; init; }
+        public required byte[] MetatileIndices { get; init; }
+        public byte[]? CellAttributes { get; init; }
+    }
+
+    /// <summary>One Ctrl+C'd sprite's snapshot — position stored as an OFFSET from the copied selection's own top-left corner, so Ctrl+V can re-anchor the whole group under the cursor on any map. <see cref="SpritePlacement.LinkedPlacementId"/> is deliberately never carried — same established rule as a same-map Alt+Shift+drag copy (see <see cref="MoveSpriteSelection"/>): the link's partner almost certainly doesn't exist at the paste destination.</summary>
+    private sealed class SpriteClipboardEntry
+    {
+        public required Guid SpriteAssetId { get; init; }
+        public required int OffsetX { get; init; }
+        public required int OffsetY { get; init; }
+        public Guid? TypeId { get; init; }
+        public byte UserByte { get; init; }
+    }
+
+    /// <summary>
+    /// The Map Editor's Ctrl+C/Ctrl+V clipboard — deliberately STATIC (survives closing and reopening this
+    /// modal window within the same app run, since a fresh <see cref="MapEditorViewModel"/> is constructed
+    /// every time the window opens) but never persisted to disk: clipboard content is inherently transient
+    /// by convention in every other app, and nothing here needs to survive an app restart. Mutually
+    /// exclusive with each other (Copy always clears the other) — Paste checks the sprite slot first, then
+    /// the grid slot, so at most one is ever actually populated at a time.
+    /// </summary>
+    private static GridClipboard? _gridClipboard;
+    private static List<SpriteClipboardEntry>? _spriteClipboard;
+
+    private void SetActiveLayer(MapLayerKind kind)
+    {
+        if (ActiveLayer == kind) return;
+        SelectedLayerRow = LayerOrder.First(r => r.Kind == kind);
+    }
+
+    /// <summary>Ctrl+C — copies the current grid-cell or sprite selection into the shared clipboard above. A no-op (with a status message) when there's nothing selected to copy.</summary>
+    [RelayCommand]
+    private void CopySelection()
+    {
+        if (SelectedMap is null) return;
+        var map = SelectedMap.Map;
+
+        if (ActiveLayer == MapLayerKind.Sprites)
+        {
+            if (SelectedSprites.Count == 0)
+            {
+                StatusText = "Nothing selected to copy.";
+                IsStatusError = false;
+                return;
+            }
+
+            var minX = SelectedSprites.Min(s => s.X);
+            var minY = SelectedSprites.Min(s => s.Y);
+            var entries = SelectedSprites.Select(s => new SpriteClipboardEntry
+            {
+                SpriteAssetId = s.SpriteAssetId,
+                OffsetX = s.X - minX,
+                OffsetY = s.Y - minY,
+                TypeId = s.TypeId,
+                UserByte = s.UserByte
+            }).ToList();
+
+            _spriteClipboard = entries;
+            _gridClipboard = null;
+            StatusText = $"Copied {entries.Count} sprite(s).";
+            IsStatusError = false;
+            return;
+        }
+
+        if (GridSelection is not { } rect)
+        {
+            StatusText = "Nothing selected to copy.";
+            IsStatusError = false;
+            return;
+        }
+
+        var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
+        var isTileMode = ActiveLayer == MapLayerKind.Tilemap && map.MetatileGridSize == 1;
+        var width = rect.Width;
+        var height = rect.Height;
+        var indices = new byte[width * height];
+        var attributes = isTileMode ? new byte[width * height] : null;
+
+        for (var row = 0; row < height; row++)
+        {
+            for (var col = 0; col < width; col++)
+            {
+                var srcIndex = (rect.Row0 + row) * map.Width + (rect.Col0 + col);
+                indices[row * width + col] = layer.MetatileIndices[srcIndex];
+                if (attributes is not null) attributes[row * width + col] = layer.CellAttributes[srcIndex];
+            }
+        }
+
+        _gridClipboard = new GridClipboard { Layer = ActiveLayer, Width = width, Height = height, MetatileIndices = indices, CellAttributes = attributes };
+        _spriteClipboard = null;
+        StatusText = $"Copied {width}x{height} tiles.";
+        IsStatusError = false;
+    }
+
+    /// <summary>
+    /// Ctrl+V — called by the View with the last-known cursor pixel position over the canvas (not a plain
+    /// RelayCommand: unlike every other command here, Paste needs that View-owned mouse state, which isn't
+    /// naturally bindable from XAML). Auto-switches <see cref="ActiveLayer"/> to match whichever layer the
+    /// clipboard came from first, since the destination map's currently-active layer may not match — then
+    /// pastes anchored under the cursor (snapped to the tile grid) and selects the pasted result
+    /// immediately, so it can be Alt-dragged into place exactly like any other selection. A no-op (with a
+    /// status message) when the clipboard is empty.
+    /// </summary>
+    public void PasteClipboardAt(int pixelX, int pixelY)
+    {
+        if (SelectedMap is null) return;
+
+        if (_spriteClipboard is { Count: > 0 } spriteClipboard)
+        {
+            SetActiveLayer(MapLayerKind.Sprites);
+            var map = SelectedMap.Map;
+            var anchorX = (pixelX / TileSnapSize) * TileSnapSize;
+            var anchorY = (pixelY / TileSnapSize) * TileSnapSize;
+            var pasted = spriteClipboard.Select(e => new SpritePlacement
+            {
+                SpriteAssetId = e.SpriteAssetId,
+                X = anchorX + e.OffsetX,
+                Y = anchorY + e.OffsetY,
+                TypeId = e.TypeId,
+                UserByte = e.UserByte
+            }).ToList();
+
+            map.SpriteLayer.AddRange(pasted);
+            PushUndo(
+                undo: () => { foreach (var sprite in pasted) map.SpriteLayer.Remove(sprite); RenderPreview(); RefreshSelectedMapThumbnail(); },
+                redo: () =>
+                {
+                    map.SpriteLayer.AddRange(pasted);
+                    SelectedSprites.Clear();
+                    foreach (var sprite in pasted) SelectedSprites.Add(sprite);
+                    RenderPreview();
+                    RefreshSelectedMapThumbnail();
+                });
+
+            SelectedSprites.Clear();
+            foreach (var sprite in pasted) SelectedSprites.Add(sprite);
+            HasChanges = true;
+            RenderPreview();
+            RefreshSelectedMapThumbnail();
+            StatusText = $"Pasted {pasted.Count} sprite(s).";
+            IsStatusError = false;
+            return;
+        }
+
+        if (_gridClipboard is { } gridClipboard)
+        {
+            SetActiveLayer(gridClipboard.Layer);
+            var map = SelectedMap.Map;
+            var cellPixelSize = map.MetatileGridSize * 8;
+            var anchorCol = pixelX / cellPixelSize;
+            var anchorRow = pixelY / cellPixelSize;
+
+            var layer = gridClipboard.Layer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
+            var isTileMode = gridClipboard.Layer == MapLayerKind.Tilemap && map.MetatileGridSize == 1;
+
+            BeginStroke();
+            for (var row = 0; row < gridClipboard.Height; row++)
+            {
+                var destRow = anchorRow + row;
+                if (destRow < 0 || destRow >= map.Height) continue;
+                for (var col = 0; col < gridClipboard.Width; col++)
+                {
+                    var destCol = anchorCol + col;
+                    if (destCol < 0 || destCol >= map.Width) continue;
+                    var destIndex = destRow * map.Width + destCol;
+                    SetGridCell(layer, destIndex, gridClipboard.MetatileIndices[row * gridClipboard.Width + col]);
+                    if (isTileMode) SetCellAttribute(layer, destIndex, gridClipboard.CellAttributes?[row * gridClipboard.Width + col] ?? 0);
+                }
+            }
+            RenderPreviewRegion(new Int32Rect(anchorCol * cellPixelSize, anchorRow * cellPixelSize, gridClipboard.Width * cellPixelSize, gridClipboard.Height * cellPixelSize));
+            EndStroke();
+
+            SetGridSelection(anchorCol, anchorRow, anchorCol + gridClipboard.Width - 1, anchorRow + gridClipboard.Height - 1);
+            StatusText = $"Pasted {gridClipboard.Width}x{gridClipboard.Height} tiles.";
+            IsStatusError = false;
+            return;
+        }
+
+        StatusText = "Nothing to paste — Ctrl+C a selection first.";
+        IsStatusError = false;
+    }
+
     /// <summary>Stamps the selected palette metatile across every cell of the current grid selection — one undo step, reusing the same BeginStroke/SetGridCell/EndStroke machinery a paint stroke uses.</summary>
     [RelayCommand]
     private void FillSelection()

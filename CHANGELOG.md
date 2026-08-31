@@ -8,6 +8,7 @@
 - Added: the Metatile Editor's tile palette can now be dragged straight onto a draft cell to paint it, alongside the existing click-a-tile-then-click-a-cell flow (both work interchangeably; Ctrl+click still clears a cell).
 - Added: Redo (Ctrl+Y) in the Map Editor, alongside the existing Undo (Ctrl+Z) — a new edit after an Undo clears whatever Redo history existed, same as every other editor.
 - Fixed: a full map re-render (Undo/Redo, the map-list thumbnail, opening a map) was noticeably slow on large maps — it rebuilt one full-size bitmap per layer and wrote pixels one map cell at a time instead of batching the whole map into a single write. Now uses the same batched-write path already used for fast incremental repaint while painting.
+- Added: Ctrl+C/Ctrl+V in the Map Editor — copies the current grid-cell or sprite selection and pastes it under the cursor, snapped to the tile grid, selecting the pasted result immediately so it can be Alt-dragged into place. Works across maps (copy on one map, switch to another, paste) with no remapping needed, since metatiles/tiles/sprites are shared project-wide; a pasted sprite's link, if any, is not carried over, same as a same-map copy.
 
 ## v0.4.0 (2026-08-27)
 

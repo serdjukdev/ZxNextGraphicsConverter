@@ -8,10 +8,12 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Map Editor" Height="760" Width="1320" MinWidth="900" MinHeight="500" WindowStartupLocation="CenterOwner"
-        Closing="MapEditorWindow_OnClosing">
+        Closing="MapEditorWindow_OnClosing"
+        PreviewKeyDown="MapEditorWindow_OnPreviewKeyDown">
     <Window.InputBindings>
         <KeyBinding Key="{x:Static local:Shortcuts.UndoKey}" Modifiers="{x:Static local:Shortcuts.UndoModifiers}" Command="{Binding UndoCommand}" />
         <KeyBinding Key="{x:Static local:Shortcuts.RedoKey}" Modifiers="{x:Static local:Shortcuts.RedoModifiers}" Command="{Binding RedoCommand}" />
+        <KeyBinding Key="{x:Static local:Shortcuts.CopyKey}" Modifiers="{x:Static local:Shortcuts.CopyModifiers}" Command="{Binding CopySelectionCommand}" />
         <KeyBinding Key="{x:Static local:Shortcuts.DeleteKey}" Command="{Binding DeleteSelectionCommand}" />
     </Window.InputBindings>
     <Window.Resources>

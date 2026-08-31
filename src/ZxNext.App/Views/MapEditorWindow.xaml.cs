@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using ZxNext.App;
 using ZxNext.App.ViewModels;
 using ZxNext.Core.Model;
 using ZxNext.Core.Settings;
@@ -39,6 +40,9 @@ public partial class MapEditorWindow : Window
     /// <summary>Which map <see cref="SaveMapViewState"/>/<see cref="RestoreMapViewState"/> currently track — the map a SelectedMap change is switching AWAY FROM (its viewport is still live in MapScrollViewer/MapZoomTransform at that point, before anything re-renders for the new map), and the map to persist a final snapshot for on window close.</summary>
     private Guid? _viewStateMapId;
 
+    /// <summary>Last-known cursor pixel position over the canvas (updated unconditionally at the top of <see cref="MapCanvasHost_OnMouseMove"/>) — Ctrl+V (see <see cref="MapEditorWindow_OnPreviewKeyDown"/>) has no mouse event of its own to read a position from, so it reads this instead. Stays at its default (0,0) if Ctrl+V is pressed before the mouse has ever moved over the canvas this session — a harmless top-left paste in that edge case, not a crash.</summary>
+    private Point _lastCursorPixel;
+
     public MapEditorWindow()
     {
         InitializeComponent();
@@ -58,6 +62,22 @@ public partial class MapEditorWindow : Window
             DrawLinksOverlay();
             DrawObjectToolOverlay();
         };
+    }
+
+    /// <summary>
+    /// Ctrl+V (Paste): not a declarative KeyBinding like Copy/Undo/Redo/Delete — Paste needs
+    /// <see cref="_lastCursorPixel"/>, which isn't naturally bindable from XAML, so it's handled directly
+    /// here instead. PreviewKeyDown on the Window tunnels from the root first, so it fires regardless of
+    /// which (if any) descendant currently holds keyboard focus — same reliability as this window's
+    /// existing KeyBindings, none of which have needed MainWindow's own F1-specific raw Win32 hook.
+    /// </summary>
+    private void MapEditorWindow_OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Shortcuts.PasteKey || Keyboard.Modifiers != Shortcuts.PasteModifiers) return;
+        if (DataContext is not MapEditorViewModel vm) return;
+
+        vm.PasteClipboardAt((int)_lastCursorPixel.X, (int)_lastCursorPixel.Y);
+        e.Handled = true;
     }
 
     private void MapEditorWindow_OnClosing(object sender, CancelEventArgs e)
@@ -322,6 +342,7 @@ public partial class MapEditorWindow : Window
         var pixelX = (int)position.X;
         var pixelY = (int)position.Y;
 
+        _lastCursorPixel = new Point(pixelX, pixelY);
         UpdateCursorPositionText(vm, pixelX, pixelY);
 
         if (_selectDragMode != SelectDragMode.None)

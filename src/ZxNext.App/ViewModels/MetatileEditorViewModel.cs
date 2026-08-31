@@ -435,6 +435,19 @@ public partial class MetatileEditorViewModel : ObservableObject
         var confirm = MessageBox.Show(string.Join("\n", confirmLines), "Delete tile", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes) return;
 
+        ExecuteTileDeletion(tileAsset, impact);
+        SelectedMetatile = null;
+        DraftName = "metatile";
+        ResetDraft();
+        RefreshMetatileList();
+        RefreshTilePalette();
+        StatusText = $"Deleted '{tileAsset.Name}'.";
+        IsStatusError = false;
+    }
+
+    /// <summary>The actual mutation shared by <see cref="DeleteUnderlyingTile"/> (single item, its own confirmation) and <see cref="DeleteUnused"/> (a whole batch, confirmed once for the group) — cascade execute, RemoveAsset, palette compaction, and recording the id for MainWindow's Project Tree sync. No confirmation and no StatusText/list-refresh here — each caller owns those on its own terms.</summary>
+    private void ExecuteTileDeletion(GraphicsAsset tileAsset, CascadeDeletionImpact impact)
+    {
         if (!impact.IsEmpty) CascadeDeletionService.ExecuteAssetDeletion(_project, [tileAsset], impact);
 
         _project.RemoveAsset(tileAsset.Id);
@@ -443,12 +456,84 @@ public partial class MetatileEditorViewModel : ObservableObject
 
         DeletedTileAssetIds.Add(tileAsset.Id);
         HasChanges = true;
+    }
+
+    /// <summary>
+    /// Deletes every metatile of the current <see cref="SelectedKind"/> that no map places — the reserved
+    /// blank is never a candidate (it's never "used" by a map cell reference in the first place, but is
+    /// excluded explicitly rather than relying on that). On a GridSize=1 project this deletes the
+    /// underlying tile instead, same as a single "Delete selected" now does (see <see cref="DeleteMetatile"/>) —
+    /// but the "unused" check there is stricter than a plain <see cref="ReferenceIntegrityService.FindMapsReferencingMetatile"/>
+    /// call: it asks <see cref="CascadeDeletionService.PlanAssetDeletion"/> whether deleting the TILE would
+    /// blank any real map cell, which also catches the (obscure, never producible via this app's own UI)
+    /// case of a second 1x1 metatile manually created to wrap the same tile — if THAT sibling is placed on
+    /// a map, the tile itself is not actually safe to delete even though the one metatile being considered
+    /// here is. Deliberately checks <see cref="CascadeDeletionImpact.AffectedMapCells"/>, NOT
+    /// <see cref="CascadeDeletionImpact.IsEmpty"/> — IsEmpty only looks at AffectedMetatiles/AffectedSpritePlacements,
+    /// and AffectedMetatiles always includes the tile's own wrapper (itself), so IsEmpty is never true for
+    /// any tile that has a metatile at all and would wrongly skip every single candidate. One confirmation
+    /// for the whole batch, not one per metatile.
+    /// </summary>
+    [RelayCommand]
+    private void DeleteUnused()
+    {
+        var toDelete = new List<Metatile>();
+        foreach (var item in Metatiles)
+        {
+            var metatile = item.Metatile;
+            if (metatile.IsReservedBlank) continue;
+
+            if (metatile.GridSize == 1)
+            {
+                var tileAsset = _project.Assets.FirstOrDefault(a => a.Id == metatile.Cells[0].TileAssetId);
+                if (tileAsset is null || tileAsset.IsReservedBlank) continue;
+                if (CascadeDeletionService.PlanAssetDeletion(_project, [tileAsset]).AffectedMapCells.Count > 0) continue;
+                toDelete.Add(metatile);
+            }
+            else if (ReferenceIntegrityService.FindMapsReferencingMetatile(_project, metatile).Count == 0)
+            {
+                toDelete.Add(metatile);
+            }
+        }
+
+        if (toDelete.Count == 0)
+        {
+            StatusText = "No unused metatiles to delete.";
+            IsStatusError = false;
+            return;
+        }
+
+        var confirm = MessageBox.Show($"Delete {toDelete.Count} unused metatile(s)? This cannot be undone.",
+            "Delete unused metatiles", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        var deletedCount = 0;
+        foreach (var metatile in toDelete)
+        {
+            // Deleting one GridSize=1 entry can cascade-remove a sibling metatile too (the same obscure
+            // duplicate-wrapper case noted above) — re-check it's still actually there before touching it.
+            if (!_project.Metatiles.Contains(metatile)) continue;
+            deletedCount++;
+
+            if (metatile.GridSize == 1)
+            {
+                var tileAsset = _project.Assets.FirstOrDefault(a => a.Id == metatile.Cells[0].TileAssetId);
+                if (tileAsset is null) continue;
+                ExecuteTileDeletion(tileAsset, CascadeDeletionService.PlanAssetDeletion(_project, [tileAsset]));
+            }
+            else
+            {
+                MetatileService.DeleteCascading(_project, metatile);
+                HasChanges = true;
+            }
+        }
+
         SelectedMetatile = null;
         DraftName = "metatile";
         ResetDraft();
         RefreshMetatileList();
         RefreshTilePalette();
-        StatusText = $"Deleted '{tileAsset.Name}'.";
+        StatusText = $"Deleted {deletedCount} unused metatile(s).";
         IsStatusError = false;
     }
 

@@ -113,8 +113,11 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
             </Border>
-            <Button Grid.Row="8" Content="Delete selected" Command="{Binding DeleteMetatileCommand}"
-                    HorizontalAlignment="Left" Width="120" Margin="0,6,0,0" />
+            <StackPanel Grid.Row="8" Orientation="Horizontal" Margin="0,6,0,0">
+                <Button Content="Delete selected" Command="{Binding DeleteMetatileCommand}" Width="120" Margin="0,0,6,0" />
+                <Button Content="Delete Unused" Command="{Binding DeleteUnusedCommand}" Width="120"
+                        ToolTip="Deletes every metatile of the current Kind that no map places. On a 1x1 project this deletes the underlying tile too." />
+            </StackPanel>
         </Grid>
 
         <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="#CCC"

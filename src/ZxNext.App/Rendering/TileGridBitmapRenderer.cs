@@ -159,6 +159,21 @@ public static class TileGridBitmapRenderer
 
         var composite = new WriteableBitmap(pixelWidth, pixelHeight, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null);
 
+        if (cache is not null && pixelWidth > 0 && pixelHeight > 0)
+        {
+            // Fast path: builds the whole map into ONE shared pixel buffer and calls WritePixels ONCE,
+            // via the same machinery RenderMapRegionInto already uses for a small incremental region —
+            // just scoped here to the entire map. The per-layer path below instead allocates a full-size
+            // intermediate WriteableBitmap per layer AND calls Blit/BlitOver once per CELL (each its own
+            // small allocation + WritePixels call) — correct, but on a map with tens of thousands of
+            // cells that's thousands of tiny WPF bitmap operations where one big one would do, the same
+            // class of slowdown the incremental live-paint path was already fixed for. Every real caller
+            // in this app always passes a cache (see this class's own doc comment), so this is the path
+            // Undo/Redo, the map-list thumbnail, and the main canvas actually take in practice.
+            RenderMapRegionInto(composite, map, project, cache, drawOrderBackToFront, new Int32Rect(0, 0, pixelWidth, pixelHeight));
+            return composite;
+        }
+
         foreach (var layerKind in drawOrderBackToFront)
         {
             switch (layerKind)

@@ -7,6 +7,7 @@
 - Added: each map in the Map Editor now remembers its own view (scroll position, zoom) and active layer as you leave it (switching to another map, or closing the window), and restores it the next time that particular map is reopened.
 - Added: the Metatile Editor's tile palette can now be dragged straight onto a draft cell to paint it, alongside the existing click-a-tile-then-click-a-cell flow (both work interchangeably; Ctrl+click still clears a cell).
 - Added: Redo (Ctrl+Y) in the Map Editor, alongside the existing Undo (Ctrl+Z) — a new edit after an Undo clears whatever Redo history existed, same as every other editor.
+- Fixed: a full map re-render (Undo/Redo, the map-list thumbnail, opening a map) was noticeably slow on large maps — it rebuilt one full-size bitmap per layer and wrote pixels one map cell at a time instead of batching the whole map into a single write. Now uses the same batched-write path already used for fast incremental repaint while painting.
 
 ## v0.4.0 (2026-08-27)
 

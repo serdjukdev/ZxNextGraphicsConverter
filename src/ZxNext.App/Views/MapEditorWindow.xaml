@@ -281,6 +281,9 @@
                 </TextBlock>
                 <CheckBox Grid.Column="1" Content="Show grid" IsChecked="{Binding IsGridVisible}" VerticalAlignment="Center" />
             </Grid>
+            <Border DockPanel.Dock="Bottom" Margin="0,6,0,0" Padding="4,2" BorderBrush="#999" BorderThickness="1" Background="#F5F5F5">
+                <TextBlock x:Name="CursorPositionText" FontFamily="Consolas" FontSize="11" Text="" />
+            </Border>
             <Border Style="{StaticResource CanvasBorderStyle}" Background="#333">
                 <ScrollViewer x:Name="MapScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
                               PreviewMouseWheel="MapScrollViewer_OnPreviewMouseWheel"
@@ -295,7 +298,8 @@
                           MouseLeftButtonUp="MapCanvasHost_OnMouseLeftButtonUp"
                           MouseRightButtonDown="MapCanvasHost_OnMouseRightButtonDown"
                           MouseRightButtonUp="MapCanvasHost_OnMouseRightButtonUp"
-                          LostMouseCapture="MapCanvasHost_OnLostMouseCapture">
+                          LostMouseCapture="MapCanvasHost_OnLostMouseCapture"
+                          MouseLeave="MapCanvasHost_OnMouseLeave">
                         <Grid.LayoutTransform>
                             <ScaleTransform x:Name="MapZoomTransform" ScaleX="1" ScaleY="1" />
                         </Grid.LayoutTransform>

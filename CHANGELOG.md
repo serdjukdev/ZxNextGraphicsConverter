@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added: a live cursor-position status line under the Map Editor's canvas, showing the raw map pixel X/Y plus the tile cell (col,row, in the 8x8 tile grid) as you move the mouse. On a 2x2/4x4 project it also shows the metatile cell (col,row); on a 1x1 project there's no separate metatile concept, so only the tile position is shown. Updates live on mouse move and clears when the cursor leaves the canvas.
+
 ## v0.4.0 (2026-08-27)
 
 - Added: a Settings screen (File → Settings...). General tab: export filename postfixes (the previously-promised configurable ones: graphics data, tilemap/8bpp grid and metatiles, objects), default dither mode for new imports, default export chunk size for a new row, New Map's default starting size, New Project's default metatile size, and the Map Editor's grid overlay colours/opacity. Shortcuts tab: every keyboard shortcut and mouse gesture in the app (including drag-to-reorder in the Project Tree and the Metatile Editor), grouped by area, with a tooltip per row for the full explanation. Real keyboard shortcuts (Ctrl+S, Ctrl+Z, Delete, Ctrl+R) now come from one shared registry that both the actual key bindings and this list read from, so the two can't drift apart.

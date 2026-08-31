@@ -245,6 +245,9 @@
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Show grid' checkbox" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Toggles a faint 8x8 tile grid plus a brighter metatile-size grid, shared by all layers. This is a per-session preference, not saved with the map or project." />
 
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Cursor position readout (under the canvas)" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Shows the cursor's raw map pixel X/Y, plus its tile cell (col,row) in the 8x8 tile grid, live as you move over the canvas. On a 2x2/4x4 map it also shows the metatile cell (col,row); on a 1x1 map there is no separate metatile concept, so only Tile is shown. Clears when the cursor leaves the canvas." />
+
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Resize...' button" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Opens a dialog: new Width/Height plus a 3x3 anchor (which corner/edge of the current content stays put): shows exactly how many tilemap cells, 8bpp cells, and sprites would be dropped before you apply." />
 

@@ -266,6 +266,8 @@ public partial class MapEditorWindow : Window
         var pixelX = (int)position.X;
         var pixelY = (int)position.Y;
 
+        UpdateCursorPositionText(vm, pixelX, pixelY);
+
         if (_selectDragMode != SelectDragMode.None)
         {
             if (e.LeftButton == MouseButtonState.Pressed)
@@ -588,6 +590,42 @@ public partial class MapEditorWindow : Window
             if (pixelX < 0 || pixelY < 0 || col >= map.Width || row >= map.Height) return;
             DrawHighlightRect(col * cellPixelSize, row * cellPixelSize, cellPixelSize, cellPixelSize, Brushes.Red, Color.FromArgb(64, 255, 0, 0));
         }
+    }
+
+    /// <summary>
+    /// Live cursor-position readout under the canvas: raw map pixel X/Y, plus the metatile cell (col,row) —
+    /// only when the map actually uses metatiles (GridSize>1) — and the raw 8x8 tile cell (col,row), both in
+    /// their own grid units rather than pixels. At GridSize=1 there is no separate metatile concept (one cell
+    /// IS one tile), so the Metatile segment is omitted entirely rather than duplicating the Tile segment.
+    /// </summary>
+    private void UpdateCursorPositionText(MapEditorViewModel vm, int pixelX, int pixelY)
+    {
+        if (vm.SelectedMap is null)
+        {
+            CursorPositionText.Text = "";
+            return;
+        }
+
+        var map = vm.SelectedMap.Map;
+        var tileCol = FloorDivCell(pixelX, 8);
+        var tileRow = FloorDivCell(pixelY, 8);
+
+        var text = $"X: {pixelX}  Y: {pixelY}";
+        if (map.MetatileGridSize > 1)
+        {
+            var cellSize = GetCellPixelSize(vm);
+            var metaCol = FloorDivCell(pixelX, cellSize);
+            var metaRow = FloorDivCell(pixelY, cellSize);
+            text += $"    Metatile: ({metaCol}, {metaRow})";
+        }
+        text += $"    Tile: ({tileCol}, {tileRow})";
+
+        CursorPositionText.Text = text;
+    }
+
+    private void MapCanvasHost_OnMouseLeave(object sender, MouseEventArgs e)
+    {
+        CursorPositionText.Text = "";
     }
 
     private void DrawHighlightRect(int x, int y, int width, int height, Brush stroke, Color fill)

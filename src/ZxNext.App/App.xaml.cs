@@ -46,6 +46,13 @@ public partial class App : Application
             var mainViewModel = _services.GetRequiredService<MainViewModel>();
             _ = mainViewModel.LoadProjectFromAsync(lastProject);
         }
+        else
+        {
+            // No recent project to reopen (genuine first run, or every recent entry was dead) — force
+            // New/Open Project before anything is usable, instead of leaving a bare in-memory project
+            // with no file location and no metatile size around for the user to import/slice into.
+            mainWindow.EnsureProjectOnFirstRun();
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

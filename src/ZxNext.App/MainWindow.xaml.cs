@@ -110,6 +110,58 @@ public partial class MainWindow : Window
         if (MetatileGridSizeWindow.EnsureChosen(_viewModel.Project, this)) _viewModel.HasUnsavedChanges = true;
     }
 
+    /// <summary>
+    /// Called once at startup only when there's no recent project to auto-reopen (a genuine first run,
+    /// or every recent entry turned out to be dead). Without this, the bare in-memory ProjectState the
+    /// window starts with has no file location and no MetatileGridSize, but nothing stops the user from
+    /// importing/slicing into it anyway — only to find the Metatile Editor silently locks the project to
+    /// a default 2x2 the moment the first metatile is created, or the Map Editor's New Map refuses to work
+    /// at all with a "close and reopen" message that's a dead end for a project that was never saved.
+    /// Loops the New/Open Project dialogs (both modal to this window, so nothing here is usable meanwhile)
+    /// until a real project exists; the only way out without one is closing the app.
+    /// </summary>
+    public async void EnsureProjectOnFirstRun()
+    {
+        while (_viewModel.CurrentProjectPath is null)
+        {
+            var vm = new NewProjectViewModel();
+            var dialog = new NewProjectWindow { DataContext = vm, Owner = this };
+            if (dialog.ShowDialog() == true)
+            {
+                _viewModel.CreateNewProject(vm.FullPath, vm.MetatileGridSize);
+                SaveLastProjectDirectory(vm.ParentFolder);
+                return;
+            }
+
+            var choice = MessageBox.Show(
+                "ZxNext Studio needs a project to work with.\n\nYes = open an existing .zxngc project\nNo = back to New Project\nCancel = exit",
+                "Project Required", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+
+            if (choice == MessageBoxResult.Cancel)
+            {
+                Application.Current.Shutdown();
+                return;
+            }
+
+            if (choice == MessageBoxResult.Yes)
+            {
+                var settings = AppSettingsStore.Load();
+                var openDialog = new OpenFileDialog
+                {
+                    Title = "Open project",
+                    Filter = $"ZX Next Project (*{ProjectService.FileExtension})|*{ProjectService.FileExtension}",
+                    InitialDirectory = settings.LastProjectDirectory ?? ""
+                };
+                if (openDialog.ShowDialog() == true)
+                {
+                    await _viewModel.LoadProjectFromAsync(openDialog.FileName);
+                    if (_viewModel.CurrentProjectPath is not null) SaveLastProjectDirectory(Path.GetDirectoryName(openDialog.FileName));
+                }
+            }
+            // choice == No: loop back around to the New Project dialog
+        }
+    }
+
     /// <summary>Applies the saved window size/position, falling back to the XAML defaults if nothing was saved yet or the saved bounds no longer fit any screen.</summary>
     private void RestoreWindowGeometry()
     {

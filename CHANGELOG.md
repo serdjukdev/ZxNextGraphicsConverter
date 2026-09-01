@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: on a genuine first run (no recent project to reopen), the app started with a bare in-memory project that had no file location and no metatile size — nothing stopped you from importing/slicing images into it, only to hit a silent 2x2 default the moment you created your first metatile, or a dead-end "close and reopen" message the moment you tried New Map (there was nothing to reopen: the project had never been saved). The app now forces New/Open Project up front whenever there's no recent project, looping until one exists.
+
 ## v0.5.0 (2026-08-31)
 
 - Added: a live cursor-position status line under the Map Editor's canvas, showing the raw map pixel X/Y plus the tile cell (col,row, in the 8x8 tile grid) as you move the mouse. On a 2x2/4x4 project it also shows the metatile cell (col,row); on a 1x1 project there's no separate metatile concept, so only the tile position is shown. Updates live on mouse move and clears when the cursor leaves the canvas.

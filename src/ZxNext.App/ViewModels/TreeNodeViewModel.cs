@@ -35,6 +35,10 @@ public partial class TreeNodeViewModel : ObservableObject
     /// <summary>Mirrors <see cref="ZxNext.Core.Model.GraphicsAsset.IsReservedBlank"/> — false for folder nodes. Drives whether this row can be a drag SOURCE for reordering (never — it must stay first) and, as a drop TARGET, whether "insert before" is refused (would bump it out of the first slot).</summary>
     public bool IsReservedBlank { get; init; }
 
+    /// <summary>Mirrors <see cref="ZxNext.Core.Model.GraphicsAsset.IsLocked"/> — false for folder nodes and the reserved blank. Drives the row's padlock icon (open/closed) and the "Lock"/"Unlock" context-menu label.</summary>
+    [ObservableProperty]
+    private bool isLocked;
+
     /// <summary>Drag-and-drop reorder feedback (ProjectTreeView's code-behind) — a thin line above/below this row showing exactly where the dragged item will land. At most one node in the whole tree has either set true at any time; cleared on drag-leave/drop.</summary>
     [ObservableProperty]
     private bool showDropIndicatorAbove;

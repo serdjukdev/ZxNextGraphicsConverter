@@ -23,6 +23,15 @@ public partial class ProjectTreeViewModel : ObservableObject
     [ObservableProperty]
     private TreeNodeViewModel? selectedNode;
 
+    /// <summary>
+    /// Raised by <see cref="ReplaceAssetNode"/> when it swaps out the CURRENTLY SELECTED node's tree
+    /// item (re-quantize) — the view uses it to recover keyboard focus that WPF drops when the old
+    /// container is torn down. Deliberately not tied to <see cref="SelectedNode"/> changes in general
+    /// (see <c>ProjectTreeView.OnNodeReplacedInPlace</c> for why re-focusing on every selection change
+    /// was a bug).
+    /// </summary>
+    public event Action<TreeNodeViewModel>? NodeReplacedInPlace;
+
     public ProjectTreeViewModel()
     {
         foreach (var category in Enum.GetValues<AssetCategory>())
@@ -103,7 +112,8 @@ public partial class ProjectTreeViewModel : ObservableObject
             FolderPath = asset.FolderPath,
             Category = asset.Category,
             Thumbnail = NextBitmapRenderer.Render(asset, project),
-            IsReservedBlank = asset.IsReservedBlank
+            IsReservedBlank = asset.IsReservedBlank,
+            IsLocked = asset.IsLocked
         };
         if (insertAtFront) folder.Children.Insert(0, node);
         else folder.Children.Add(node);
@@ -225,10 +235,15 @@ public partial class ProjectTreeViewModel : ObservableObject
                 Category = newAsset.Category,
                 IsMultiSelected = wasMultiSelected,
                 Thumbnail = NextBitmapRenderer.Render(newAsset, project),
-                IsReservedBlank = newAsset.IsReservedBlank
+                IsReservedBlank = newAsset.IsReservedBlank,
+                IsLocked = newAsset.IsLocked
             };
             folder.Children.Insert(index, node);
-            if (wasSelected) SelectedNode = node;
+            if (wasSelected)
+            {
+                SelectedNode = node;
+                NodeReplacedInPlace?.Invoke(node); // let the view recover focus the Remove+Insert above just dropped
+            }
             RefreshExportIndices(newAsset.Category, project); // a fresh node instance starts with no IndexLabel of its own, even though SortIndex (so rank) is unchanged
             return;
         }

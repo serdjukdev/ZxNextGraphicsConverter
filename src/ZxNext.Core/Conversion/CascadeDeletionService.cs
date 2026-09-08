@@ -26,6 +26,32 @@ public record CascadeDeletionImpact(
 /// </summary>
 public static class CascadeDeletionService
 {
+    /// <summary>
+    /// True when <paramref name="asset"/> is a tile/sprite that nothing in the project actually places —
+    /// no map cell places it (via any metatile, for a tile) and no sprite placement references it (for a
+    /// sprite). This is the gate for the Project Tree's bulk "Delete unused" sweep, so it also returns
+    /// false for anything that sweep must never touch: the reserved blank, a locked asset, and every
+    /// Layer2 category (whole standalone images — "placed" has no meaning for them).
+    ///
+    /// For a tile this deliberately checks <see cref="CascadeDeletionImpact.AffectedMapCells"/>, NOT
+    /// <see cref="CascadeDeletionImpact.IsEmpty"/>: a tile that only lives in an UNPLACED metatile still
+    /// has a non-empty <c>AffectedMetatiles</c> (so <c>IsEmpty</c> is false) yet is genuinely unused and
+    /// safe to sweep — those unplaced metatiles cascade away with it.
+    /// </summary>
+    public static bool IsAssetUnused(ProjectState project, GraphicsAsset asset)
+    {
+        if (asset.IsReservedBlank || asset.IsLocked) return false;
+
+        return asset.Category switch
+        {
+            AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp
+                => PlanAssetDeletion(project, [asset]).AffectedMapCells.Count == 0,
+            AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp
+                => ReferenceIntegrityService.FindMapsReferencingSprite(project, asset.Id).Count == 0,
+            _ => false, // Layer2: "unused" is undefined (never placed via a metatile/map grid)
+        };
+    }
+
     public static CascadeDeletionImpact PlanAssetDeletion(ProjectState project, IReadOnlyList<GraphicsAsset> assetsToDelete)
     {
         var tileIds = assetsToDelete.Where(a => a.Category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp).Select(a => a.Id).ToHashSet();

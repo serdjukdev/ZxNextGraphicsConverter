@@ -53,4 +53,14 @@ public class GraphicsAsset
     /// it currently has. Never true for Sprite4Bpp/Sprite8Bpp/Layer2 categories, which have no such concept.
     /// </summary>
     public bool IsReservedBlank { get; init; }
+
+    /// <summary>
+    /// User-set "never delete this, under any circumstances" flag, toggled from the project tree. Independent
+    /// of the reference-integrity checks — a locked asset is blocked from every delete path (single, bulk,
+    /// folder/source-image cascade, the Metatile Editor's 1x1 tile delete, and "Delete unused") even when
+    /// nothing in the project references it. Exists because "not used on any map / in any metatile" does NOT
+    /// mean "not used in the build": animation frames and procedurally drawn tiles are commonly referenced
+    /// straight from game code by export index, which this app cannot see. Does NOT affect reorder or export.
+    /// </summary>
+    public bool IsLocked { get; set; }
 }

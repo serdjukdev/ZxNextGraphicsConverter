@@ -68,6 +68,26 @@ public class ProjectServiceTests : IDisposable
         }
     }
 
+    [Fact]
+    public void SaveThenLoad_RoundTripsAssetIsLockedFlag()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "hero", FilePath = _tempSourceFile, Width = 16, Height = 16 };
+        project.SourceImages.Add(source);
+
+        var rgba = new byte[16 * 16 * 4];
+        for (var i = 0; i < 16 * 16; i++) { rgba[i * 4] = 200; rgba[i * 4 + 3] = 255; }
+
+        var importResult = AssetImporter.Import(project, source, rgba, AssetCategory.Sprite4Bpp, "sprite/4bpp/images", DitherMode.None, null);
+        Assert.True(importResult.Success, importResult.Error);
+        importResult.Asset!.IsLocked = true;
+
+        ProjectService.Save(project, _tempProjectFile);
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        Assert.True(Assert.Single(loaded.Assets).IsLocked);
+    }
+
     private static int NextPalette_Capacity(NextPalette p) => p.Capacity;
 
     [Fact]

@@ -87,6 +87,62 @@ public class CascadeDeletionServiceTests
     }
 
     [Fact]
+    public void IsAssetUnused_TileInUnplacedMetatile_IsUnused()
+    {
+        var project = new ProjectState();
+        var tile = FakeAsset("grass_tile", AssetCategory.Tile4Bpp);
+        project.Assets.Add(tile);
+        MetatileService.Create(project, "grass_block", MetatileKind.FourBpp, 2, MakeCells(tile.Id));
+        // Metatile exists but no map places it -> the tile is still unused (IsEmpty would say false here
+        // because AffectedMetatiles is non-empty; AffectedMapCells is the right check).
+        Assert.True(CascadeDeletionService.IsAssetUnused(project, tile));
+    }
+
+    [Fact]
+    public void IsAssetUnused_TileInMetatilePlacedOnMap_IsUsed()
+    {
+        var project = new ProjectState();
+        var tile = FakeAsset("grass_tile", AssetCategory.Tile4Bpp);
+        project.Assets.Add(tile);
+        var metatile = MetatileService.Create(project, "grass_block", MetatileKind.FourBpp, 2, MakeCells(tile.Id)).Metatile!;
+        var map = FakeMap("level1", width: 1, height: 1);
+        map.TilemapLayer.MetatileIndices[0] = (byte)metatile.SortIndex;
+        project.Maps.Add(map);
+
+        Assert.False(CascadeDeletionService.IsAssetUnused(project, tile));
+    }
+
+    [Fact]
+    public void IsAssetUnused_SpritePlacedVsNotPlaced()
+    {
+        var project = new ProjectState();
+        var placed = FakeAsset("hero", AssetCategory.Sprite4Bpp);
+        var loose = FakeAsset("unused_frame", AssetCategory.Sprite4Bpp);
+        project.Assets.Add(placed);
+        project.Assets.Add(loose);
+        var map = FakeMap("level1");
+        map.SpriteLayer.Add(new SpritePlacement { SpriteAssetId = placed.Id, X = 0, Y = 0 });
+        project.Maps.Add(map);
+
+        Assert.False(CascadeDeletionService.IsAssetUnused(project, placed));
+        Assert.True(CascadeDeletionService.IsAssetUnused(project, loose));
+    }
+
+    [Fact]
+    public void IsAssetUnused_LockedOrReservedBlankOrLayer2_NeverUnused()
+    {
+        var project = new ProjectState();
+        var locked = FakeAsset("protected", AssetCategory.Tile4Bpp);
+        locked.IsLocked = true;
+        var layer2 = FakeAsset("screen", AssetCategory.Layer2_256x192);
+        project.Assets.Add(locked);
+        project.Assets.Add(layer2);
+
+        Assert.False(CascadeDeletionService.IsAssetUnused(project, locked));
+        Assert.False(CascadeDeletionService.IsAssetUnused(project, layer2));
+    }
+
+    [Fact]
     public void ExecuteAssetDeletion_RedirectsAffectedMapCellsToBlank_AndDeletesTheMetatile()
     {
         var project = new ProjectState();

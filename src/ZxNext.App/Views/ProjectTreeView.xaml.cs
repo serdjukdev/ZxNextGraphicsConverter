@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -41,6 +40,15 @@ public partial class ProjectTreeView : UserControl
     /// <summary>Raised from a folder's (root or sub-folder) right-click "Re-quantize folder..." menu item.</summary>
     public event Action<TreeNodeViewModel>? ReQuantizeFolderRequested;
 
+    /// <summary>Raised from a folder's (category root or sub-folder) right-click "Delete unused..." menu item.</summary>
+    public event Action<TreeNodeViewModel>? DeleteUnusedRequested;
+
+    /// <summary>Raised from the row's padlock button — toggles the "never delete" lock on that one asset (bool = the new locked state).</summary>
+    public event Action<Guid, bool>? SetAssetLockRequested;
+
+    /// <summary>Raised from the right-click "Lock"/"Unlock" menu item — applies to the current multi-selection, or else the single clicked asset (bool = lock vs unlock). Target resolution mirrors <see cref="DeleteRequested"/>.</summary>
+    public event Action<bool>? SetLockOnSelectionRequested;
+
     /// <summary>
     /// The last plain- or Ctrl-clicked leaf — the anchor a following Shift-click ranges from.
     /// Cleared whenever selection collapses to a single node (plain click, or a folder click).
@@ -49,7 +57,7 @@ public partial class ProjectTreeView : UserControl
 
     /// <summary>
     /// True whenever WE are the ones calling `.Focus()` on a TreeViewItem (from a mouse click, or from
-    /// <see cref="OnTreeViewModelPropertyChanged"/>'s re-focus) — set because focusing a TreeViewItem
+    /// <see cref="OnNodeReplacedInPlace"/>'s re-focus) — set because focusing a TreeViewItem
     /// can itself flip that item's NATIVE IsSelected to true (a documented WPF TreeView quirk), which
     /// bubbles into TreeView.SelectedItemChanged firing SYNCHRONOUSLY, re-entering
     /// <see cref="Tree_OnSelectedItemChanged"/> mid-click. Without this guard, that echo called
@@ -57,9 +65,6 @@ public partial class ProjectTreeView : UserControl
     /// multi-selection down to one node on every single click.
     /// </summary>
     private bool _suppressNativeSelectionSync;
-
-    /// <summary>Coalesces <see cref="OnTreeViewModelPropertyChanged"/>'s deferred re-focus so a burst of SelectedNode changes (e.g. holding an arrow key) schedules only ONE pending action instead of one per change.</summary>
-    private bool _focusFollowScheduled;
 
     /// <summary>Armed in <see cref="Tree_OnPreviewMouseLeftButtonDown"/> when the click landed on a draggable leaf (not a folder, not the reserved blank) — same "record start position, only actually start DoDragDrop once the mouse clears the OS drag threshold" pattern as <see cref="SourceImagesPanelView"/>'s own drag source.</summary>
     private Point _dragStart;
@@ -81,43 +86,40 @@ public partial class ProjectTreeView : UserControl
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        if (e.OldValue is ProjectTreeViewModel oldVm) oldVm.PropertyChanged -= OnTreeViewModelPropertyChanged;
-        if (e.NewValue is ProjectTreeViewModel newVm) newVm.PropertyChanged += OnTreeViewModelPropertyChanged;
+        if (e.OldValue is ProjectTreeViewModel oldVm) oldVm.NodeReplacedInPlace -= OnNodeReplacedInPlace;
+        if (e.NewValue is ProjectTreeViewModel newVm) newVm.NodeReplacedInPlace += OnNodeReplacedInPlace;
     }
 
     /// <summary>
-    /// Keeps keyboard focus following whichever node is actually selected — needed because
-    /// replacing a node in place (re-quantize) destroys the old TreeViewItem container via
-    /// Remove+Insert, and WPF falls back focus to the nearest surviving ancestor (the containing
-    /// folder) when the focused element is torn down. Runs at Background priority so the
-    /// ObservableCollection change that triggered this has already flowed through to a freshly
-    /// generated container by the time <see cref="FindContainer"/> looks for it.
-    /// Deliberately does NOT capture "which node" up front, and coalesces via
-    /// <see cref="_focusFollowScheduled"/> to at most one pending action — a burst of SelectedNode
-    /// changes (holding an arrow key through a folder with hundreds/thousands of items) used to
-    /// schedule one of these PER change, each capturing whatever was selected at that instant; by the
-    /// time they all finally ran (Background priority runs after the whole keystroke burst), they
-    /// replayed the ENTIRE selection history one Focus() call at a time — visually indistinguishable
-    /// from the tree scrolling back through every item the user had just scrolled past. Re-reading
-    /// SelectedNode fresh inside the deferred action instead makes every one of them converge on
-    /// whatever is ACTUALLY selected by the time it runs, so at most one real re-focus ever happens
-    /// per burst, however many change notifications fired during it.
+    /// Recovers keyboard focus after <see cref="ProjectTreeViewModel.ReplaceAssetNode"/> (re-quantize)
+    /// swaps the selected node's container via Remove+Insert — WPF drops focus onto the nearest
+    /// surviving ancestor (the containing folder) when the focused container is torn down, so without
+    /// this the whole tree loses focus for keyboard nav after a re-quantize.
+    ///
+    /// This is fired ONLY from that one node-replacement path, NOT from every SelectedNode change: an
+    /// ordinary mouse click already focuses the row synchronously in <see cref="Tree_OnPreviewMouseLeftButtonDown"/>,
+    /// and keyboard arrow-nav already leaves native focus on the right container. An earlier version
+    /// hooked SelectedNode itself and re-focused (at Background priority) on any selection change —
+    /// which then ate the user's very next click after selecting a row: the first hit on the row's
+    /// padlock button or the first grab of the tree's scrollbar thumb was consumed by that deferred
+    /// Focus() yanking focus (and mouse capture) back, so they only responded on the second click.
+    ///
+    /// Runs at Background priority so the ObservableCollection Insert has already produced a fresh
+    /// container by the time <see cref="FindContainer"/> looks for it.
     /// </summary>
-    private void OnTreeViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnNodeReplacedInPlace(TreeNodeViewModel node)
     {
-        if (e.PropertyName != nameof(ProjectTreeViewModel.SelectedNode)) return;
-        if (_focusFollowScheduled) return;
-        _focusFollowScheduled = true;
-
         Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
         {
-            _focusFollowScheduled = false;
-            if (DataContext is not ProjectTreeViewModel { SelectedNode: { } current }) return;
+            if (DataContext is not ProjectTreeViewModel { SelectedNode: { } current } || !ReferenceEquals(current, node)) return;
+
+            var container = FindContainer(current);
+            if (container is null || container.IsKeyboardFocusWithin) return;
 
             _suppressNativeSelectionSync = true;
             try
             {
-                FindContainer(current)?.Focus();
+                container.Focus();
             }
             finally
             {
@@ -184,10 +186,20 @@ public partial class ProjectTreeView : UserControl
     /// </summary>
     private void Tree_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // Disarm any drag left armed by a PREVIOUS click, BEFORE the early returns below. A click that
+        // lands on the scrollbar, the expand arrow or a row's padlock button returns early without
+        // ever reaching the re-arm line further down — so without this reset, _dragArmed/_dragCandidate
+        // keep the values from the last real row click, and the next mouse-move-with-button-down fires
+        // a phantom DoDragDrop that reorders that stale candidate (and eats the click that triggered
+        // it, so the scrollbar/button only responds on the second try). Re-armed only if this click
+        // actually lands on a draggable leaf row.
+        _dragArmed = false;
+        _dragCandidate = null;
+
         if (DataContext is not ProjectTreeViewModel vm) return;
         var originalSource = e.OriginalSource as DependencyObject;
         if (FindAncestorDataContext<TreeNodeViewModel>(originalSource) is not { } node) return;
-        if (FindAncestor<ToggleButton>(originalSource) is not null) return; // let the expand arrow toggle itself normally
+        if (FindAncestor<ButtonBase>(originalSource) is not null) return; // let the expand arrow / row padlock button handle their own click
 
         _dragStart = e.GetPosition(null);
         _dragCandidate = node;
@@ -216,6 +228,13 @@ public partial class ProjectTreeView : UserControl
         {
             _suppressNativeSelectionSync = false;
         }
+    }
+
+    /// <summary>Ends any armed-but-not-started drag on button release, so a plain click that didn't turn into a drag never leaves <see cref="_dragArmed"/> set for a later mouse-move to act on.</summary>
+    private void Tree_OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        _dragArmed = false;
+        _dragCandidate = null;
     }
 
     /// <summary>Fires continuously while a mouse button is held over the tree — only actually starts a drag once armed (see <see cref="Tree_OnPreviewMouseLeftButtonDown"/>) and past the OS's drag distance threshold, same pattern as <see cref="SourceImagesPanelView"/>'s drag source.</summary>
@@ -454,11 +473,12 @@ public partial class ProjectTreeView : UserControl
 
     /// <summary>
     /// Shows only the menu items that make sense for the right-clicked node and the current
-    /// multi-selection. Item order: 0 Rename, 1 Re-quantize, 2 Delete, 3 Add sub-folder,
-    /// 4 Re-quantize folder, 5 Delete folder. Rename is hidden for a bulk (>1) selection — renaming
+    /// multi-selection. Item order: 0 Rename, 1 Re-quantize, 2 Delete, 3 Lock/Unlock, 4 Add sub-folder,
+    /// 5 Re-quantize folder, 6 Delete folder, 7 Delete unused. Rename is hidden for a bulk (>1) selection — renaming
     /// several assets at once doesn't make sense. Re-quantize/Delete swap their header text to show
     /// the selection count, and bulk Re-quantize is disabled outright when the selection spans more
     /// than one category (re-quantizing needs one shared FolderPath/Category to replace assets into).
+    /// The Lock item's header flips to "Unlock" when every asset in the target set is already locked.
     /// </summary>
     private void NodeText_OnContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
@@ -498,9 +518,18 @@ public partial class ProjectTreeView : UserControl
             delete.Header = isBulkTarget ? $"Delete {multiSelected.Count} selected..." : "Delete";
         }
 
-        if (menu.Items[3] is MenuItem addSubfolder) addSubfolder.Visibility = node.IsFolder && node.CanHaveSubfolders ? Visibility.Visible : Visibility.Collapsed;
+        if (menu.Items[3] is MenuItem lockItem)
+        {
+            lockItem.Visibility = isLeaf && !node.IsReservedBlank ? Visibility.Visible : Visibility.Collapsed;
+            var targets = isBulkTarget ? multiSelected : new List<TreeNodeViewModel> { node };
+            var allLocked = targets.All(n => n.IsLocked);
+            var verb = allLocked ? "Unlock" : "Lock";
+            lockItem.Header = isBulkTarget ? $"{verb} {multiSelected.Count} selected" : verb;
+        }
 
-        if (menu.Items[4] is MenuItem reQuantizeFolder)
+        if (menu.Items[4] is MenuItem addSubfolder) addSubfolder.Visibility = node.IsFolder && node.CanHaveSubfolders ? Visibility.Visible : Visibility.Collapsed;
+
+        if (menu.Items[5] is MenuItem reQuantizeFolder)
         {
             reQuantizeFolder.Visibility = node.IsFolder ? Visibility.Visible : Visibility.Collapsed;
             if (node.IsFolder)
@@ -513,7 +542,16 @@ public partial class ProjectTreeView : UserControl
             }
         }
 
-        if (menu.Items[5] is MenuItem deleteFolder) deleteFolder.Visibility = node.IsFolder && !node.IsCategoryRoot ? Visibility.Visible : Visibility.Collapsed;
+        if (menu.Items[6] is MenuItem deleteFolder) deleteFolder.Visibility = node.IsFolder && !node.IsCategoryRoot ? Visibility.Visible : Visibility.Collapsed;
+
+        // "Delete unused" applies to a whole category root or one of its sub-folders — but not Layer2
+        // (whole standalone images, no "placed / not placed" concept).
+        if (menu.Items[7] is MenuItem deleteUnused)
+        {
+            deleteUnused.Visibility = node.IsFolder && node.Category is { } cat && !cat.IsLayer2()
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
     }
 
     private void RenameMenuItem_OnClick(object sender, RoutedEventArgs e)
@@ -548,10 +586,35 @@ public partial class ProjectTreeView : UserControl
         DeleteRequested?.Invoke();
     }
 
+    /// <summary>The row's padlock button — toggles the lock on just this one asset (the right-click menu handles bulk).</summary>
+    private void LockButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: TreeNodeViewModel { IsFolder: false, IsReservedBlank: false, AssetId: { } assetId } node }) return;
+        SetAssetLockRequested?.Invoke(assetId, !node.IsLocked);
+    }
+
+    /// <summary>"Lock"/"Unlock" menu item — same target set as Delete (multi-selection or single node); locks unless every target is already locked, in which case it unlocks.</summary>
+    private void LockMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetContextNode(sender, out var node)) return;
+        if (DataContext is not ProjectTreeViewModel vm) return;
+
+        var multiSelected = vm.GetMultiSelectedLeaves();
+        var isBulkTarget = node.IsMultiSelected && multiSelected.Count > 1;
+        var targets = isBulkTarget ? multiSelected : new List<TreeNodeViewModel> { node };
+        SetLockOnSelectionRequested?.Invoke(!targets.All(n => n.IsLocked));
+    }
+
     private void DeleteFolderMenuItem_OnClick(object sender, RoutedEventArgs e)
     {
         if (sender is not MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement { DataContext: TreeNodeViewModel { IsFolder: true, IsCategoryRoot: false } node } } }) return;
         DeleteFolderRequested?.Invoke(node);
+    }
+
+    private void DeleteUnusedMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement { DataContext: TreeNodeViewModel { IsFolder: true } node } } }) return;
+        DeleteUnusedRequested?.Invoke(node);
     }
 
     private void ReQuantizeFolderMenuItem_OnClick(object sender, RoutedEventArgs e)

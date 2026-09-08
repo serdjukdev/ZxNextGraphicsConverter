@@ -61,6 +61,20 @@ public class ReferenceIntegrityServiceTests
     }
 
     [Fact]
+    public void CanDeleteAsset_LockedAsset_Blocked_EvenWhenUnreferenced()
+    {
+        var project = new ProjectState();
+        var tile = FakeAsset("protected_frame", AssetCategory.Sprite4Bpp);
+        tile.IsLocked = true;
+        project.Assets.Add(tile);
+
+        var check = ReferenceIntegrityService.CanDeleteAsset(project, tile);
+
+        Assert.False(check.CanDelete);
+        Assert.Contains("locked", check.BlockingReason);
+    }
+
+    [Fact]
     public void CanDeleteAsset_SpritePlacedOnMap_Blocked()
     {
         var project = new ProjectState();

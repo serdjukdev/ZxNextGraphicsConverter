@@ -402,6 +402,14 @@ public partial class MetatileEditorViewModel : ObservableObject
             var tileAsset = _project.Assets.FirstOrDefault(a => a.Id == metatile.Cells[0].TileAssetId);
             if (tileAsset is not null && !tileAsset.IsReservedBlank)
             {
+                // For 1x1 the metatile and its tile are one unit — a locked tile blocks the whole
+                // delete, including the wrapper (deleting just the wrapper would orphan the tile).
+                if (tileAsset.IsLocked)
+                {
+                    StatusText = $"Cannot delete '{tileAsset.Name}': it is locked. Unlock it in the project tree first.";
+                    IsStatusError = true;
+                    return;
+                }
                 DeleteUnderlyingTile(tileAsset);
                 return;
             }
@@ -487,8 +495,9 @@ public partial class MetatileEditorViewModel : ObservableObject
     /// <summary>
     /// Deletes every metatile of the current <see cref="SelectedKind"/> that no map places — the reserved
     /// blank is never a candidate (it's never "used" by a map cell reference in the first place, but is
-    /// excluded explicitly rather than relying on that). On a GridSize=1 project this deletes the
-    /// underlying tile instead, same as a single "Delete selected" now does (see <see cref="DeleteMetatile"/>) —
+    /// excluded explicitly rather than relying on that), and on GridSize=1 a metatile whose underlying tile
+    /// is <see cref="ZxNext.Core.Model.GraphicsAsset.IsLocked"/> is skipped too. On a GridSize=1 project this
+    /// deletes the underlying tile instead, same as a single "Delete selected" now does (see <see cref="DeleteMetatile"/>) —
     /// but the "unused" check there is stricter than a plain <see cref="ReferenceIntegrityService.FindMapsReferencingMetatile"/>
     /// call: it asks <see cref="CascadeDeletionService.PlanAssetDeletion"/> whether deleting the TILE would
     /// blank any real map cell, which also catches the (obscure, never producible via this app's own UI)
@@ -512,7 +521,7 @@ public partial class MetatileEditorViewModel : ObservableObject
             if (metatile.GridSize == 1)
             {
                 var tileAsset = _project.Assets.FirstOrDefault(a => a.Id == metatile.Cells[0].TileAssetId);
-                if (tileAsset is null || tileAsset.IsReservedBlank) continue;
+                if (tileAsset is null || tileAsset.IsReservedBlank || tileAsset.IsLocked) continue;
                 if (CascadeDeletionService.PlanAssetDeletion(_project, [tileAsset]).AffectedMapCells.Count > 0) continue;
                 toDelete.Add(metatile);
             }
@@ -549,6 +558,7 @@ public partial class MetatileEditorViewModel : ObservableObject
     private void DeleteMetatilesBatch(List<Metatile> metatiles, string headline, string confirmTitle)
     {
         var perMapCells = new Dictionary<MapAsset, int>();
+        var lockedSkipped = 0;
         foreach (var metatile in metatiles)
         {
             if (metatile.IsReservedBlank) continue;
@@ -557,6 +567,7 @@ public partial class MetatileEditorViewModel : ObservableObject
             {
                 var tileAsset = _project.Assets.FirstOrDefault(a => a.Id == metatile.Cells[0].TileAssetId);
                 if (tileAsset is null || tileAsset.IsReservedBlank) continue;
+                if (tileAsset.IsLocked) { lockedSkipped++; continue; }
                 foreach (var (map, count) in CascadeDeletionService.PlanAssetDeletion(_project, [tileAsset]).AffectedMapCells)
                 {
                     perMapCells[map] = perMapCells.GetValueOrDefault(map) + count;
@@ -572,6 +583,10 @@ public partial class MetatileEditorViewModel : ObservableObject
         }
 
         var confirmLines = new List<string> { headline };
+        if (lockedSkipped > 0)
+        {
+            confirmLines.Add($"{lockedSkipped} locked tile(s) will be skipped.");
+        }
         if (perMapCells.Count > 0)
         {
             var detail = string.Join(", ", perMapCells.Select(kv => $"{kv.Key.Name} ({kv.Value} cell(s))"));
@@ -590,7 +605,7 @@ public partial class MetatileEditorViewModel : ObservableObject
             if (metatile.GridSize == 1)
             {
                 var tileAsset = _project.Assets.FirstOrDefault(a => a.Id == metatile.Cells[0].TileAssetId);
-                if (tileAsset is null || tileAsset.IsReservedBlank) continue;
+                if (tileAsset is null || tileAsset.IsReservedBlank || tileAsset.IsLocked) continue;
                 ExecuteTileDeletion(tileAsset, CascadeDeletionService.PlanAssetDeletion(_project, [tileAsset]));
             }
             else

@@ -73,6 +73,9 @@ public class AssetDto
 
     /// <summary>False (the correct default) in project files saved before this field existed — <see cref="ProjectService.Load"/>'s reserved-blank migration sweep backfills a proper one for any already-populated Tile4Bpp/Tile8Bpp category regardless.</summary>
     public bool IsReservedBlank { get; set; }
+
+    /// <summary>User "never delete" flag (see <see cref="Model.GraphicsAsset.IsLocked"/>). False — the correct default — in project files saved before this field existed.</summary>
+    public bool IsLocked { get; set; }
 }
 
 public class MetatileCellDto

@@ -524,6 +524,7 @@ public partial class MainViewModel : ObservableObject
 
         result.Asset!.Name = originalName;
         result.Asset.SortIndex = asset.SortIndex; // re-quantize replaces the asset object; keep its original export/tile-index position
+        result.Asset.IsLocked = asset.IsLocked;   // ...and its lock state — re-quantizing a locked asset must not silently unlock it
         Tree.ReplaceAssetNode(asset.Id, result.Asset, _project); // keeps its position in the list instead of jumping to the bottom
 
         if (asset.Category.UsesPaletteBank())
@@ -972,6 +973,16 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        // A locked asset is an unconditional block — the cascade below deliberately overrides the
+        // "used in a metatile / placed on a map" checks, but not this one (see GraphicsAsset.IsLocked).
+        var locked = targetAssets.Where(a => a.IsLocked).ToList();
+        if (locked.Count > 0)
+        {
+            var reasons = locked.Select(a => $"Cannot delete '{a.Name}': it is locked. Unlock it first.");
+            ScrollableMessageWindow.Show(string.Join("\n", reasons), "Cannot delete", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         // Tiles used in metatiles / sprites placed on maps are no longer a hard block — see
         // CascadeDeletionService's own doc comment. The confirmation dialog spells out everything that
         // would ALSO go: metatiles containing a deleted tile, the map cells that placed them (become
@@ -1004,6 +1015,19 @@ public partial class MainViewModel : ObservableObject
         var confirm = ScrollableMessageWindow.Show(string.Join("\n", confirmLines), "Delete", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes) return;
 
+        ExecuteConfirmedAssetDeletion(targetAssets, impact);
+    }
+
+    /// <summary>
+    /// Shared tail of every already-confirmed bulk tile/sprite delete (multi-select Delete, and the
+    /// tree's "Delete unused" sweep): run the cascade the caller planned, remove the assets and their
+    /// tree nodes, compact any palette left with orphaned colours, and push an undo — but ONLY when
+    /// nothing cascaded and no palette was compacted (a map/metatile change or a palette re-index can't
+    /// be safely snapshotted, same call <see cref="DeleteFolder"/>/<see cref="DeleteSourceImage"/> make).
+    /// The caller owns the confirmation dialog and its own final status text (this sets a generic one).
+    /// </summary>
+    private void ExecuteConfirmedAssetDeletion(IReadOnlyList<GraphicsAsset> targetAssets, CascadeDeletionImpact impact)
+    {
         if (!impact.IsEmpty)
         {
             CascadeDeletionService.ExecuteAssetDeletion(_project, targetAssets, impact);
@@ -1061,6 +1085,105 @@ public partial class MainViewModel : ObservableObject
         }
 
         HasUnsavedChanges = true;
+    }
+
+    /// <summary>
+    /// Right-click "Delete unused..." on a category root or one of its sub-folders — deletes every
+    /// tile/sprite in scope that no map places (directly, or via any metatile) and that isn't locked or
+    /// the reserved blank. Layer2 folders have no "unused" concept and are a no-op. Scope is the whole
+    /// category for a category root, or exactly one sub-folder otherwise.
+    /// </summary>
+    public void DeleteUnusedAssets(TreeNodeViewModel folderNode)
+    {
+        if (!folderNode.IsFolder || folderNode.Category is not { } category) return;
+
+        var scope = category.IsLayer2()
+            ? new List<GraphicsAsset>()
+            : folderNode.IsCategoryRoot
+                ? _project.Assets.Where(a => a.Category == category).ToList()
+                : _project.Assets.Where(a => a.Category == category && a.FolderPath == folderNode.FolderPath).ToList();
+
+        var unused = scope.Where(a => CascadeDeletionService.IsAssetUnused(_project, a)).ToList();
+        var lockedInScope = scope.Count(a => a.IsLocked);
+
+        if (unused.Count == 0)
+        {
+            PixelEditor.StatusText = lockedInScope > 0
+                ? $"No unused tiles/sprites to delete in \"{folderNode.Name}\" ({lockedInScope} locked and left alone)."
+                : $"No unused tiles/sprites to delete in \"{folderNode.Name}\".";
+            return;
+        }
+
+        var noun = category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp ? "sprite" : "tile";
+        var confirmLines = new List<string>
+        {
+            $"Delete {unused.Count} unused {noun}(s) from \"{folderNode.Name}\"?",
+            "",
+            string.Join(", ", unused.Select(a => a.Name)),
+            "",
+            $"These {noun}s are not referenced by any metatile or placed on any map in this project. They may still",
+            $"be used directly by your game code (animation frames, procedurally drawn {noun}s), which this tool",
+            "cannot detect. Lock a tile/sprite to protect it from this.",
+            "",
+            $"Deleting also renumbers the export indices of every remaining {noun} in this category: any index",
+            "hardcoded in your code will need updating.",
+        };
+        if (lockedInScope > 0) confirmLines.Add($"\n{lockedInScope} locked {noun}(s) in this folder are left alone.");
+        confirmLines.Add("\nThis cannot be undone.");
+
+        if (ScrollableMessageWindow.Show(string.Join("\n", confirmLines), "Delete unused", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        var impact = CascadeDeletionService.PlanAssetDeletion(_project, unused);
+        ExecuteConfirmedAssetDeletion(unused, impact);
+        PixelEditor.StatusText = $"Deleted {unused.Count} unused {noun}(s) from \"{folderNode.Name}\".";
+    }
+
+    /// <summary>
+    /// Sets (or clears) the "never delete" lock on one asset — driven by the padlock icon on its tree row.
+    /// The reserved blank has nothing to lock (it's already permanently undeletable) so it's silently ignored.
+    /// </summary>
+    public void SetAssetLock(Guid assetId, bool locked)
+    {
+        var asset = _project.Assets.FirstOrDefault(a => a.Id == assetId);
+        if (asset is null || asset.IsReservedBlank || asset.IsLocked == locked) return;
+
+        asset.IsLocked = locked;
+        if (Tree.FindLeafNode(assetId) is { } node) node.IsLocked = locked;
+        HasUnsavedChanges = true;
+        PixelEditor.StatusText = locked ? $"Locked '{asset.Name}'." : $"Unlocked '{asset.Name}'.";
+    }
+
+    /// <summary>
+    /// Bulk lock/unlock from the tree's right-click menu — whatever's currently multi-selected (Ctrl/Shift-
+    /// click), or else the single last-clicked asset node. Reserved-blank rows in the set are skipped.
+    /// </summary>
+    public void SetLockOnSelectedAssets(bool locked)
+    {
+        var targetIds = Tree.GetMultiSelectedAssetIds();
+        if (targetIds.Count == 0 && Tree.SelectedNode is { IsFolder: false, AssetId: { } singleId })
+        {
+            targetIds = [singleId];
+        }
+        if (targetIds.Count == 0) return;
+
+        var changed = 0;
+        foreach (var id in targetIds)
+        {
+            var asset = _project.Assets.FirstOrDefault(a => a.Id == id);
+            if (asset is null || asset.IsReservedBlank || asset.IsLocked == locked) continue;
+            asset.IsLocked = locked;
+            if (Tree.FindLeafNode(id) is { } node) node.IsLocked = locked;
+            changed++;
+        }
+
+        if (changed == 0) return;
+        HasUnsavedChanges = true;
+        PixelEditor.StatusText = locked
+            ? $"Locked {changed} tile(s)/sprite(s)."
+            : $"Unlocked {changed} tile(s)/sprite(s).";
     }
 
     /// <summary>

@@ -92,7 +92,8 @@ public static class ProjectService
                     SourceOffsetY = asset.SourceOffsetY,
                     SourceCropWidth = asset.SourceCropWidth,
                     SourceCropHeight = asset.SourceCropHeight,
-                    IsReservedBlank = asset.IsReservedBlank
+                    IsReservedBlank = asset.IsReservedBlank,
+                    IsLocked = asset.IsLocked
                 });
             }
 
@@ -251,7 +252,8 @@ public static class ProjectService
                 SourceOffsetY = a.SourceOffsetY,
                 SourceCropWidth = a.SourceCropWidth > 0 ? a.SourceCropWidth : a.Width, // projects saved before this field existed default to "no padding" (crop == full size)
                 SourceCropHeight = a.SourceCropHeight > 0 ? a.SourceCropHeight : a.Height,
-                IsReservedBlank = a.IsReservedBlank
+                IsReservedBlank = a.IsReservedBlank,
+                IsLocked = a.IsLocked
             });
         }
 

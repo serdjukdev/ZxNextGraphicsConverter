@@ -36,6 +36,9 @@ public partial class MainWindow : Window
         ProjectTreeViewControl.DeleteRequested += () => _viewModel.DeleteSelectedCommand.Execute(null);
         ProjectTreeViewControl.DeleteFolderRequested += _viewModel.DeleteFolder;
         ProjectTreeViewControl.ReQuantizeFolderRequested += OnReQuantizeFolderRequested;
+        ProjectTreeViewControl.DeleteUnusedRequested += _viewModel.DeleteUnusedAssets;
+        ProjectTreeViewControl.SetAssetLockRequested += _viewModel.SetAssetLock;
+        ProjectTreeViewControl.SetLockOnSelectionRequested += _viewModel.SetLockOnSelectedAssets;
         PixelEditorViewControl.PaintStrokeStarted += _viewModel.BeginPaintStroke;
         PixelEditorViewControl.PixelPainted += _viewModel.PaintPixel;
         PixelEditorViewControl.PaintStrokeEnded += _viewModel.EndPaintStroke;

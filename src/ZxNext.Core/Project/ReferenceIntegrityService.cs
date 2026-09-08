@@ -51,6 +51,11 @@ public static class ReferenceIntegrityService
             return new DeletionCheck(false, $"Cannot delete '{asset.Name}': it's the reserved blank tile every map's grid layer relies on.");
         }
 
+        if (asset.IsLocked)
+        {
+            return new DeletionCheck(false, $"Cannot delete '{asset.Name}': it is locked. Unlock it in the project tree first.");
+        }
+
         if (asset.Category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp)
         {
             var metatiles = FindMetatilesReferencingTile(project, asset.Id);

@@ -67,7 +67,9 @@ public class MapExporterTests
     /// <summary>Arbitrary placeholder fill for tests (ExportObjects/ValidateSize) that never inspect grid-layer content — every real cell now references a real metatile, but which one is irrelevant to those tests.</summary>
     private static byte[] FullOfZero(int length) => new byte[length];
 
-    /// <summary>Parses every `db a,b,c` line following `{label}:` (skipping `;` comment lines, stopping at the first line that's neither) back into a flat byte list — lets tests assert exact byte values without depending on line-wrap boundaries.</summary>
+    /// <summary>Parses every `db a,b,c` line following `{label}:` (skipping `;` comment lines, tolerating an
+    /// optional per-line `someLabel:` prefix before the `db`, stopping at the first line that's neither) back
+    /// into a flat byte list — lets tests assert exact byte values without depending on line-wrap boundaries.</summary>
     private static List<byte> ExtractDbBytes(string asmText, string label)
     {
         var lines = asmText.Split('\n');
@@ -79,6 +81,8 @@ public class MapExporterTests
         {
             var line = lines[i].Trim();
             if (line.StartsWith(';')) continue;
+            var dbColon = line.IndexOf(": db ", StringComparison.Ordinal);
+            if (dbColon >= 0) line = line[(dbColon + 2)..]; // drop a "someLabel:" prefix, keep "db ..."
             if (!line.StartsWith("db ")) break;
             foreach (var part in line[3..].Split(',')) result.Add(byte.Parse(part.Trim()));
         }
@@ -298,6 +302,49 @@ public class MapExporterTests
         Assert.Equal(1, data[13]);
         Assert.Equal(0xFF, data[14]);
         Assert.Equal(7, data[15]);
+    }
+
+    [Fact]
+    public void ExportObjects_PutsAnAddressLabelOnEachObjectsDbLine_WithCoordinates_DedupedAndSafeAgainstTheCountReservedWord()
+    {
+        var hero = FakeSprite("hero", sortIndex: 0);
+        var count = FakeSprite("count", sortIndex: 1); // sanitises to "count" -> would collide with <rowKey>_count
+        var assets = new List<GraphicsAsset> { hero, count };
+
+        var map = FakeMap("level1", 8, 8, gridSize: 1, sprites:
+        [
+            new SpritePlacement { SpriteAssetId = hero.Id, X = 0, Y = 0 },
+            new SpritePlacement { SpriteAssetId = hero.Id, X = 8, Y = 16 }, // same sprite, different spot -> distinct label via x/y
+            new SpritePlacement { SpriteAssetId = hero.Id, X = 8, Y = 16 }, // exact same sprite AND spot -> needs the _2 suffix
+            new SpritePlacement { SpriteAssetId = count.Id, X = 0, Y = 0 }
+        ]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, assets, []);
+
+        Assert.True(success, error);
+        Assert.Contains("level1_objects_count: equ 4", result!.AsmText);           // the count line is untouched
+        Assert.Contains("level1_objects:\n", result.AsmText);                      // the whole-table label
+        Assert.Contains("level1_objects_hero_0_0: db 0,0,0,0,0,255,255,0", result.AsmText);
+        Assert.Contains("level1_objects_hero_8_16: db ", result.AsmText);
+        Assert.Contains("level1_objects_hero_8_16_2: db ", result.AsmText);        // coordinates matched too -> _2
+        Assert.Contains("level1_objects_count_0_0: db ", result.AsmText);          // the "count" sprite keeps its coords, no clash with <rowKey>_count
+        Assert.DoesNotContain("level1_objects_count: db ", result.AsmText);        // never clobbers <rowKey>_count
+
+        // labels are real addresses -> the byte stream is still exactly 4 * 8 bytes, in placement order
+        Assert.Equal(32, ExtractDbBytes(result.AsmText, "level1_objects").Count);
+    }
+
+    [Fact]
+    public void ExportObjects_NoObjects_EmitsTableLabelAndZeroCount_NoObjectLabels()
+    {
+        var map = FakeMap("empty", 4, 4, gridSize: 1, sprites: []);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, [], []);
+
+        Assert.True(success, error);
+        Assert.Contains("empty_objects_count: equ 0", result!.AsmText);
+        Assert.Contains("empty_objects:\n", result.AsmText);   // the table label itself is still emitted
+        Assert.DoesNotContain(": db ", result.AsmText);        // no object rows at all
     }
 
     [Fact]

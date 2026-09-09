@@ -202,10 +202,18 @@ public static class MapExporter
         var sb = new StringBuilder();
         sb.Append("; ").Append(rowKey).Append(" -- object (sprite) placements on this map\n");
         sb.Append("; One `db` line per object -- 8 bytes: spriteIndex (this sprite's rank within its own Sprite4Bpp/Sprite8Bpp category), X lo, X hi, Y lo, Y hi (X/Y int16 little-endian), type, connect, userByte\n");
-        sb.Append("; type = obj_<name> equ index from object_types.asm (0xFF = no type); connect = index of the linked object below (0xFF = no link); userByte reserved, always 0 for now\n");
+        sb.Append("; type = obj_<name> equ index from object_types.asm (0xFF = no type); connect = index of the linked object below (0xFF = no link); userByte = the per-object User Byte (0-255), set in the Map Editor\n");
+        sb.Append("; every object's db line also carries its own address label: <name>_<x>_<y> (sprite asset name + placement, a `_2`/`_3` suffix only if even the coordinates match)\n");
         sb.Append(rowKey).Append("_count: equ ").Append(records!.Count).Append('\n');
         sb.Append('\n');
         sb.Append(rowKey).Append(":\n");
+
+        // A real address label directly on each object's db line so game code can reference an object by
+        // name with no arithmetic. Label = sprite asset name + X + Y; a `_2`/`_3` suffix is added only when
+        // even the coordinates collide. All names go through the shared AsmLabel sanitizer (same as the
+        // s4_/s8_/t8_ labels). The used-set is seeded with "count" so `<name>_<x>_<y>` can never land on
+        // the `<rowKey>_count` label above.
+        var usedLabels = new HashSet<string>(StringComparer.Ordinal) { "count" };
 
         Span<byte> le = stackalloc byte[2];
         for (var i = 0; i < records.Count; i++)
@@ -222,7 +230,9 @@ public static class MapExporter
             if (r.TypeName is not null) sb.Append(", type ").Append(r.TypeName);
             if (r.LinkTargetIndex is { } targetIndex) sb.Append(", links to [").Append(targetIndex).Append("] ").Append(r.LinkTargetName);
             sb.Append('\n');
-            sb.Append("    db ").Append(r.SpriteIndex).Append(',').Append(xLo).Append(',').Append(xHi).Append(',').Append(yLo).Append(',').Append(yHi)
+            var label = AsmLabel.SanitizeUnique($"{r.SpriteName}_{r.X}_{r.Y}", usedLabels);
+            sb.Append(rowKey).Append('_').Append(label).Append(": db ")
+                .Append(r.SpriteIndex).Append(',').Append(xLo).Append(',').Append(xHi).Append(',').Append(yLo).Append(',').Append(yHi)
                 .Append(',').Append(r.Type).Append(',').Append(r.Connect).Append(',').Append(r.UserByte).Append('\n');
         }
 

@@ -1,8 +1,108 @@
-﻿<Application x:Class="ZxNext.App.App"
+<Application x:Class="ZxNext.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:ZxNext.App">
     <Application.Resources>
+        <!-- Shared button styles so every window (Export dialog, Map Editor, ...) uses one look:
+             rounded, 1px border, subtle hover, a filled "primary" variant for the main action, and a
+             compact icon variant for glyph buttons (layer up/down, reset). Reference by key with
+             Style="{StaticResource FlatButtonStyle}" (or BasedOn it to add per-button triggers). -->
+        <Style x:Key="FlatButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#FFF4F4F4" />
+            <Setter Property="BorderBrush" Value="#FFCBCBCB" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#FF1E1E1E" />
+            <Setter Property="Padding" Value="12,4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FFEAEAEA" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#FFB6B6B6" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FFDEDEDE" />
+                            </Trigger>
+                            <!-- A tinted default/primary button darkens toward blue on hover/press, not grey. -->
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsDefault" Value="True" />
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Bd" Property="Background" Value="#FF6E93C9" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#FF4B72AC" />
+                            </MultiTrigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsDefault" Value="True" />
+                                    <Condition Property="IsPressed" Value="True" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Bd" Property="Background" Value="#FF4B72AC" />
+                            </MultiTrigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource FlatButtonStyle}">
+            <Setter Property="Background" Value="#FF5B84C0" />
+            <Setter Property="BorderBrush" Value="#FF4B72AC" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
+                                CornerRadius="4" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FF6E93C9" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FF4B72AC" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource FlatButtonStyle}">
+            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="MinWidth" Value="26" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+
+        <!-- Every plain Button in the app gets the flat look; the default (Enter) button of a dialog also
+             gets a tinted fill so it reads as the primary action. Buttons that set their own Style (the
+             Export dialog's PrimaryButtonStyle, the Map Editor's icon buttons, ...) are unaffected. -->
+        <Style TargetType="{x:Type Button}" BasedOn="{StaticResource FlatButtonStyle}">
+            <Style.Triggers>
+                <Trigger Property="IsDefault" Value="True">
+                    <Setter Property="Background" Value="#FF5B84C0" />
+                    <Setter Property="BorderBrush" Value="#FF4B72AC" />
+                    <Setter Property="Foreground" Value="White" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Application.Resources>
 </Application>

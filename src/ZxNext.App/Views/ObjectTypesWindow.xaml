@@ -38,7 +38,8 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBox Grid.Column="0" Text="{Binding NewTypeName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,6,0" />
-            <Button Grid.Column="1" Content="Add" Width="70" Command="{Binding AddTypeCommand}" />
+            <Button Grid.Column="1" Content="Add" MinWidth="70" Command="{Binding AddTypeCommand}"
+                    Style="{StaticResource PrimaryButtonStyle}" />
         </Grid>
 
         <Grid Grid.Row="3" Margin="0,6,0,0">

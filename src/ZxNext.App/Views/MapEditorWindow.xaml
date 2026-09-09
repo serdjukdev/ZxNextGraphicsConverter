@@ -68,7 +68,8 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Button Grid.Row="0" Content="New Map..." Click="NewMap_OnClick" HorizontalAlignment="Left" Width="110" Margin="0,0,0,10" />
+            <Button Grid.Row="0" Content="New Map..." Click="NewMap_OnClick" Style="{StaticResource FlatButtonStyle}"
+                    HorizontalAlignment="Left" Margin="0,0,0,10" />
 
             <TextBlock Grid.Row="1" Text="Existing maps" FontSize="11" Margin="0,0,0,2" />
             <Border Grid.Row="2" BorderBrush="#999" BorderThickness="1">
@@ -93,11 +94,16 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
             </Border>
-            <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,6,0,0">
-                <Button Content="Delete selected" Command="{Binding DeleteMapCommand}" Width="100" Margin="0,0,6,0" />
-                <Button Content="Resize..." Click="ResizeMap_OnClick" Width="70" Margin="0,0,6,0" />
-                <Button Content="Trim" Command="{Binding TrimCommand}" Width="60" />
-            </StackPanel>
+            <UniformGrid Grid.Row="3" Columns="3" Margin="0,6,0,0">
+                <UniformGrid.Resources>
+                    <Style TargetType="Button" BasedOn="{StaticResource FlatButtonStyle}">
+                        <Setter Property="Margin" Value="0,0,4,0" />
+                    </Style>
+                </UniformGrid.Resources>
+                <Button Content="Delete" Command="{Binding DeleteMapCommand}" ToolTip="Delete the selected map" />
+                <Button Content="Resize..." Click="ResizeMap_OnClick" />
+                <Button Content="Trim" Command="{Binding TrimCommand}" Margin="0" />
+            </UniformGrid>
             <TextBlock Grid.Row="4" Text="{Binding StatusText}" Style="{StaticResource StatusTextStyle}" TextWrapping="Wrap" MinHeight="16" Margin="0,8,0,0" />
         </Grid>
 
@@ -130,13 +136,15 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="6,0,0,0">
-                    <Button Content="&#9650;" Width="28" Margin="0,0,0,4" Command="{Binding MoveLayerUpCommand}" ToolTip="Move this layer toward the front (drawn later, on top)" />
-                    <Button Content="&#9660;" Width="28" Command="{Binding MoveLayerDownCommand}" ToolTip="Move this layer toward the back (drawn earlier, underneath)" />
+                    <Button Content="&#9650;" Style="{StaticResource IconButtonStyle}" Margin="0,0,0,4"
+                            Command="{Binding MoveLayerUpCommand}" ToolTip="Move this layer toward the front (drawn later, on top)" />
+                    <Button Content="&#9660;" Style="{StaticResource IconButtonStyle}"
+                            Command="{Binding MoveLayerDownCommand}" ToolTip="Move this layer toward the back (drawn earlier, underneath)" />
                 </StackPanel>
             </Grid>
 
             <Grid Grid.Row="2" Margin="0,0,0,6" Visibility="{Binding IsSpritesLayerActive, Converter={StaticResource BoolToVis}}">
-                <Button Content="Manage Types..." Click="ManageTypes_OnClick" HorizontalAlignment="Left" />
+                <Button Content="Manage Types..." Click="ManageTypes_OnClick" Style="{StaticResource FlatButtonStyle}" HorizontalAlignment="Left" />
             </Grid>
 
             <TextBlock Grid.Row="4" Margin="0,0,0,4" TextWrapping="Wrap"
@@ -158,7 +166,8 @@
                             <TextBlock Text="{Binding NativePaletteSlotLabel}" FontSize="9" VerticalAlignment="Center" Margin="0,0,4,0" />
                             <ComboBox ItemsSource="{Binding AvailablePaletteSlots}" SelectedItem="{Binding EffectivePaletteSlot}" Width="46" FontSize="9"
                                       ToolTip="Recolor: read this tile against a DIFFERENT palette slot than its own native one." />
-                            <Button Content="&#8630;" Width="20" Margin="4,0,0,0" Command="{Binding ResetPaletteToNativeCommand}"
+                            <Button Content="&#8630;" Style="{StaticResource IconButtonStyle}" MinWidth="22" Margin="4,0,0,0"
+                                    Command="{Binding ResetPaletteToNativeCommand}"
                                     Visibility="{Binding HasOverride, Converter={StaticResource BoolToVis}}"
                                     ToolTip="Reset to the tile's own native palette slot" />
                         </StackPanel>
@@ -222,51 +231,58 @@
                 </ListBox>
             </Border>
 
-            <StackPanel Grid.Row="6" Margin="0,8,0,0">
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                    <Button Content="Fill Selection" Command="{Binding FillSelectionCommand}" IsEnabled="{Binding CanFillSelection}" Width="100" Margin="0,0,6,0" />
-                    <Button Content="Delete Selection" Command="{Binding DeleteSelectionCommand}" IsEnabled="{Binding HasSelection}" Width="110" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                    <Button Content="{Binding LinkButtonText}" Command="{Binding ToggleLinkToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}" Width="105" Margin="0,0,6,0" ToolTip="Link two objects: click one, then click the other.">
-                        <Button.Style>
-                            <Style TargetType="Button">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsLinkToolActive}" Value="True">
-                                        <Setter Property="Background" Value="Orange" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-                    <Button Content="Set Type" Command="{Binding ToggleSetTypeToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}" Width="105" ToolTip="Click objects one after another to pick a type for each from a popup.">
-                        <Button.Style>
-                            <Style TargetType="Button">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsSetTypeToolActive}" Value="True">
-                                        <Setter Property="Background" Value="Orange" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <Button Content="Set User Byte" Command="{Binding ToggleSetUserByteToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}" Width="105" Margin="0,0,6,0" ToolTip="Click objects one after another to edit each one's raw user byte.">
-                        <Button.Style>
-                            <Style TargetType="Button">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsSetUserByteToolActive}" Value="True">
-                                        <Setter Property="Background" Value="Orange" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-                    <Button Content="Undo (Ctrl+Z)" Command="{Binding UndoCommand}" Width="110" Margin="0,0,6,0" />
-                    <Button Content="Redo (Ctrl+Y)" Command="{Binding RedoCommand}" Width="110" />
-                </StackPanel>
-            </StackPanel>
+            <!-- Two buttons per row, stretched to the pane width so nothing spills under the canvas
+                 splitter (was: three fixed-width buttons on the last row, and Redo fell off the edge).
+                 Left column has a right margin, right column doesn't; every row has a bottom margin. -->
+            <UniformGrid Grid.Row="6" Columns="2" Margin="0,8,0,0">
+                <Button Content="Fill Selection" Command="{Binding FillSelectionCommand}" IsEnabled="{Binding CanFillSelection}"
+                        Style="{StaticResource FlatButtonStyle}" Margin="0,0,6,6" />
+                <Button Content="Delete Selection" Command="{Binding DeleteSelectionCommand}" IsEnabled="{Binding HasSelection}"
+                        Style="{StaticResource FlatButtonStyle}" Margin="0,0,0,6" />
+                <Button Command="{Binding ToggleLinkToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}"
+                        Content="{Binding LinkButtonText}" Margin="0,0,6,6"
+                        ToolTip="Link two objects: click one, then click the other.">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource FlatButtonStyle}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsLinkToolActive}" Value="True">
+                                    <Setter Property="Background" Value="#FFEBB84B" />
+                                    <Setter Property="BorderBrush" Value="#FFC9962F" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="Set Type" Command="{Binding ToggleSetTypeToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}"
+                        Margin="0,0,0,6" ToolTip="Click objects one after another to pick a type for each from a popup.">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource FlatButtonStyle}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSetTypeToolActive}" Value="True">
+                                    <Setter Property="Background" Value="#FFEBB84B" />
+                                    <Setter Property="BorderBrush" Value="#FFC9962F" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="Set User Byte" Command="{Binding ToggleSetUserByteToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}"
+                        Margin="0,0,6,6" ToolTip="Click objects one after another to edit each one's raw user byte.">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource FlatButtonStyle}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSetUserByteToolActive}" Value="True">
+                                    <Setter Property="Background" Value="#FFEBB84B" />
+                                    <Setter Property="BorderBrush" Value="#FFC9962F" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Border />
+                <Button Content="Undo (Ctrl+Z)" Command="{Binding UndoCommand}" Style="{StaticResource FlatButtonStyle}" Margin="0,0,6,0" />
+                <Button Content="Redo (Ctrl+Y)" Command="{Binding RedoCommand}" Style="{StaticResource FlatButtonStyle}" Margin="0" />
+            </UniformGrid>
         </Grid>
 
         <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="#CCC"

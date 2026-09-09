@@ -55,6 +55,36 @@ public static class TileGridBitmapRenderer
     }
 
     /// <summary>
+    /// Like <see cref="RenderMetatile"/> but blits ONLY the cells whose tile asset is
+    /// <see cref="ZxNext.Core.Model.GraphicsAsset.IsPriority"/> — the Map Editor's "priority tiles draw on
+    /// top of every layer" preview overlay (matching the Layer2 priority-colour hardware flag; export is
+    /// unaffected). EightBpp metatiles only, since <c>IsPriority</c> is a Tile8Bpp concept. Returns null
+    /// when nothing in the metatile is priority, so the caller can skip the map cell entirely.
+    /// </summary>
+    public static WriteableBitmap? RenderMetatilePriorityOverlay(Metatile metatile, ProjectState project, MapRenderCache? cache = null)
+    {
+        if (metatile.Kind != MetatileKind.EightBpp) return null;
+
+        var (tileWidth, tileHeight) = AssetCategory.Tile8Bpp.CellSize();
+        WriteableBitmap? composite = null;
+
+        for (var row = 0; row < metatile.GridSize; row++)
+        {
+            for (var col = 0; col < metatile.GridSize; col++)
+            {
+                var cell = metatile.Cells[row * metatile.GridSize + col];
+                if (project.Assets.FirstOrDefault(a => a.Id == cell.TileAssetId) is not { IsPriority: true } tileAsset) continue;
+
+                composite ??= new WriteableBitmap(metatile.GridSize * tileWidth, metatile.GridSize * tileHeight, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null);
+                var transformed = RenderTile(tileAsset, project, cell.MirrorX, cell.MirrorY, cell.Rotate, cell.PaletteSlotOverride, cache);
+                Blit(composite, transformed, col * tileWidth, row * tileHeight);
+            }
+        }
+
+        return composite;
+    }
+
+    /// <summary>
     /// Renders one grid layer (Tilemap or 8bpp Tile) of a map: for every non-empty cell, looks up the
     /// referenced <see cref="Metatile"/> by (Kind, SortIndex) and blits its own <see cref="RenderMetatile"/>
     /// composite into the right grid position — the same "one primitive, nested" recursion the metatile
@@ -190,6 +220,9 @@ public static class TileGridBitmapRenderer
             }
         }
 
+        // This per-layer fallback only runs for a 0-sized map or a null cache (see the fast-path guard
+        // above); every real caller passes a cache and a non-empty map, so the "priority tiles on top"
+        // pass lives only in RenderMapRegionInto. Nothing to render here anyway when we reach this.
         return composite;
     }
 
@@ -235,7 +268,41 @@ public static class TileGridBitmapRenderer
             }
         }
 
+        // Priority pass: a Tile8Bpp tile flagged priority draws ABOVE every layer and every sprite,
+        // matching the Layer2 priority-colour hardware flag (nextreg 0x44 bit 7). Preview-only — the
+        // exported grid/palette are unchanged. Follows the 8bpp layer's own visibility, and costs
+        // nothing on a map with no priority tiles (GetMetatilePriorityOverlayOrNull returns null).
+        if (map.TileLayer8BppVisible)
+        {
+            BlitPriorityOverlayRegion(buffer, rect, stride, map.TileLayer8Bpp, map.Width, map.Height, map.MetatileGridSize, cellPixelWidth, cellPixelHeight, project, cache);
+        }
+
         target.WritePixels(rect, buffer, stride, 0);
+    }
+
+    private static void BlitPriorityOverlayRegion(byte[] destBuffer, Int32Rect destRect, int destStride, MapGridLayer layer,
+        int widthCells, int heightCells, int metatileGridSize, int cellPixelWidth, int cellPixelHeight, ProjectState project, MapRenderCache cache)
+    {
+        var colStart = Math.Max(0, destRect.X / cellPixelWidth);
+        var colEnd = Math.Min(widthCells - 1, (destRect.X + destRect.Width - 1) / cellPixelWidth);
+        var rowStart = Math.Max(0, destRect.Y / cellPixelHeight);
+        var rowEnd = Math.Min(heightCells - 1, (destRect.Y + destRect.Height - 1) / cellPixelHeight);
+        if (colStart > colEnd || rowStart > rowEnd) return;
+
+        var metatilesBySortIndex = cache.GetMetatilesBySortIndex(project, MetatileKind.EightBpp);
+
+        for (var row = rowStart; row <= rowEnd; row++)
+        {
+            for (var col = colStart; col <= colEnd; col++)
+            {
+                var cellIndex = row * widthCells + col;
+                if (!metatilesBySortIndex.TryGetValue(layer.MetatileIndices[cellIndex], out var metatile)) continue;
+                if (cache.GetMetatilePriorityOverlayOrNull(metatile, project) is not { } overlay) continue;
+
+                BlitOverBuffer(destBuffer, destStride, destRect.Width, destRect.Height, overlay,
+                    col * cellPixelWidth - destRect.X, row * cellPixelHeight - destRect.Y);
+            }
+        }
     }
 
     private static void BlitGridLayerRegion(byte[] destBuffer, Int32Rect destRect, int destStride, MapGridLayer layer, MetatileKind kind,

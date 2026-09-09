@@ -25,6 +25,9 @@ public partial class MetatileListItemViewModel(Metatile metatile, ProjectState p
     public string SizeLabel => $"{Metatile.GridSize}x{Metatile.GridSize}";
     public WriteableBitmap Preview { get; } = TileGridBitmapRenderer.RenderMetatile(metatile, project, cache);
 
+    /// <summary>True when any cell references a Tile8Bpp tile flagged <see cref="ZxNext.Core.Model.GraphicsAsset.IsPriority"/> — drives a small green corner marker on the thumbnail, matching the Project Tree's priority arrow and the "draws on top" Map Editor preview.</summary>
+    public bool ContainsPriorityTile { get; } = metatile.Cells.Any(c => project.Assets.FirstOrDefault(a => a.Id == c.TileAssetId) is { IsPriority: true });
+
     /// <summary>Mirrors <see cref="ZxNext.Core.Model.Metatile.IsReservedBlank"/> — drives whether this item can be a drag SOURCE for reordering (never — it must stay first) and, as a drop TARGET, whether "insert before" is refused (would bump it out of the first slot).</summary>
     public bool IsReservedBlank => Metatile.IsReservedBlank;
 

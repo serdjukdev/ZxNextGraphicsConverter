@@ -19,4 +19,7 @@ public class TilePaletteItemViewModel(GraphicsAsset asset, ProjectState project,
     public GraphicsAsset Asset { get; } = asset;
     public string Name => Asset.Name;
     public WriteableBitmap Preview { get; } = cache is not null ? cache.GetTileBitmap(asset, project, null) : NextBitmapRenderer.Render(asset, project);
+
+    /// <summary>Tile8Bpp Layer2 priority tile (see <see cref="GraphicsAsset.IsPriority"/>) — shows a small green corner marker on the thumbnail.</summary>
+    public bool IsPriority => Asset.IsPriority;
 }

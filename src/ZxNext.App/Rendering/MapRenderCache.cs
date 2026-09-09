@@ -11,8 +11,9 @@ namespace ZxNext.App.Rendering;
 /// discarded when its modal window closes) — safe with NO invalidation because <c>MapEditorWindow</c>
 /// is opened via <c>ShowDialog()</c>, which blocks the owning <c>MainWindow</c>, so neither the
 /// Metatile Editor nor the Pixel Editor (both reached only through MainWindow's own buttons) can run
-/// concurrently, and the Map Editor itself never mutates a <see cref="Metatile"/>'s cells or a
-/// <see cref="GraphicsAsset"/>'s pixels — only which existing metatile/sprite a map cell/placement
+/// concurrently, and the Map Editor itself never mutates a <see cref="Metatile"/>'s cells, a
+/// <see cref="GraphicsAsset"/>'s pixels, or its <see cref="GraphicsAsset.IsPriority"/> flag (that
+/// toggle lives in the Project Tree, also blocked) — only which existing metatile/sprite a map cell/placement
 /// references (including a GridSize=1 map's per-cell mirror/rotate/palette attribute, which lives in
 /// <see cref="MapGridLayer.CellAttributes"/>, entirely separate from the metatile library). The set of
 /// possible rendered bitmaps is therefore fixed for the whole session.
@@ -21,6 +22,7 @@ public sealed class MapRenderCache
 {
     private readonly Dictionary<(Guid AssetId, int PaletteSlotOverride), WriteableBitmap> _tileBitmaps = [];
     private readonly Dictionary<Guid, WriteableBitmap> _metatileBitmaps = [];
+    private readonly Dictionary<Guid, WriteableBitmap?> _metatilePriorityOverlays = [];
     private readonly Dictionary<MetatileKind, Dictionary<int, Metatile>> _metatilesBySortIndex = [];
 
     /// <summary>Base (untransformed — no mirror/rotate) render of a tile or sprite asset, cached by (asset, palette-slot-override).</summary>
@@ -41,6 +43,21 @@ public sealed class MapRenderCache
 
         var rendered = TileGridBitmapRenderer.RenderMetatile(metatile, project, this);
         _metatileBitmaps[metatile.Id] = rendered;
+        return rendered;
+    }
+
+    /// <summary>
+    /// A metatile-sized bitmap holding ONLY the cells whose tile asset is
+    /// <see cref="GraphicsAsset.IsPriority"/> (everything else transparent), for the Map Editor's
+    /// "priority tiles draw on top of every layer" preview pass — or null when the metatile has no
+    /// priority tile at all, so the caller skips the cell entirely. Cached by <see cref="Metatile.Id"/>.
+    /// </summary>
+    public WriteableBitmap? GetMetatilePriorityOverlayOrNull(Metatile metatile, ProjectState project)
+    {
+        if (_metatilePriorityOverlays.TryGetValue(metatile.Id, out var cached)) return cached;
+
+        var rendered = TileGridBitmapRenderer.RenderMetatilePriorityOverlay(metatile, project, this);
+        _metatilePriorityOverlays[metatile.Id] = rendered;
         return rendered;
     }
 

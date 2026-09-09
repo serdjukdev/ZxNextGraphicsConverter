@@ -175,7 +175,14 @@
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding Name}">
-                                    <Image Source="{Binding Preview}" Width="48" Height="48" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                    <Grid Width="48" Height="48">
+                                        <Image Source="{Binding Preview}" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                        <Path Data="M0,0 L9,0 L9,9 Z" Fill="#FF2FA02F" Stroke="White" StrokeThickness="0.6"
+                                              Width="9" Height="9" Stretch="Fill" IsHitTestVisible="False"
+                                              HorizontalAlignment="Right" VerticalAlignment="Top"
+                                              ToolTip="Contains a Layer2 priority tile (drawn on top on hardware)"
+                                              Visibility="{Binding ContainsPriorityTile, Converter={StaticResource BoolToVis}}" />
+                                    </Grid>
                                     <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="52" HorizontalAlignment="Center" />
                                 </StackPanel>
                             </DataTemplate>

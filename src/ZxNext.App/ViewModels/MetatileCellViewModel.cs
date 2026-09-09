@@ -24,6 +24,7 @@ public partial class MetatileCellViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(NativePaletteSlotLabel))]
     [NotifyPropertyChangedFor(nameof(EffectivePaletteSlot))]
     [NotifyPropertyChangedFor(nameof(IsEmpty))]
+    [NotifyPropertyChangedFor(nameof(IsPriorityTile))]
     private GraphicsAsset? tileAsset;
 
     [ObservableProperty]
@@ -52,6 +53,9 @@ public partial class MetatileCellViewModel : ObservableObject
 
     public bool HasOverride => PaletteSlotOverride is not null;
     public bool IsEmpty => TileAsset is null;
+
+    /// <summary>This cell's tile is a Layer2 priority tile (Tile8Bpp only) — shows a small green corner marker on the draft cell.</summary>
+    public bool IsPriorityTile => TileAsset is { IsPriority: true };
     public string NativePaletteSlotLabel => $"Native palette: {(TileAsset is null ? "-" : TileAsset.PaletteSlotIndex.ToString())}";
 
     /// <summary>

@@ -55,7 +55,10 @@
             <ComboBox Grid.Row="1" ItemsSource="{Binding AvailableKinds}" DisplayMemberPath="Label"
                       SelectedValuePath="Kind" SelectedValue="{Binding SelectedKind}" Margin="0,0,0,8" />
 
-            <TextBlock Grid.Row="2" Text="Tile palette — click a tile, then click a cell on the right to paint it (or drag a tile straight onto a cell)" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,2" />
+            <TextBlock Grid.Row="2" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,2">
+                Tile palette — click a tile, then click a cell on the right to paint it (or drag a tile straight onto a cell).<LineBreak />
+                <Run Foreground="#1A7A1A" FontWeight="Bold">Green corner</Run><Run> = a Layer2 "priority" tile (set in the Project Tree): it draws on top of every layer on hardware. A metatile is marked if any of its tiles is one.</Run>
+            </TextBlock>
             <Border Grid.Row="3" BorderBrush="#999" BorderThickness="1">
                 <ListBox x:Name="TilePaletteList" ItemsSource="{Binding TilePalette}" SelectedItem="{Binding SelectedPaletteTile}"
                          BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -70,8 +73,14 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding Name}">
-                                <Image Source="{Binding Preview}" Width="48" Height="48" Stretch="Uniform"
-                                       RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                <Grid Width="48" Height="48">
+                                    <Image Source="{Binding Preview}" Stretch="Uniform"
+                                           RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                    <Path Data="M0,0 L9,0 L9,9 Z" Fill="#FF2FA02F" Stroke="White" StrokeThickness="0.6"
+                                          Width="9" Height="9" Stretch="Fill" IsHitTestVisible="False"
+                                          HorizontalAlignment="Right" VerticalAlignment="Top"
+                                          Visibility="{Binding IsPriority, Converter={StaticResource BoolToVis}}" />
+                                </Grid>
                                 <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="52" HorizontalAlignment="Center" />
                             </StackPanel>
                         </DataTemplate>
@@ -99,8 +108,15 @@
                         <DataTemplate>
                             <Grid>
                                 <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding Name}">
-                                    <Image Source="{Binding Preview}" Width="56" Height="56" Stretch="Uniform"
-                                           RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                    <Grid Width="56" Height="56">
+                                        <Image Source="{Binding Preview}" Stretch="Uniform"
+                                               RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                        <Path Data="M0,0 L10,0 L10,10 Z" Fill="#FF2FA02F" Stroke="White" StrokeThickness="0.7"
+                                              Width="10" Height="10" Stretch="Fill" IsHitTestVisible="False"
+                                              HorizontalAlignment="Right" VerticalAlignment="Top"
+                                              ToolTip="Contains a Layer2 priority tile (drawn on top on hardware)"
+                                              Visibility="{Binding ContainsPriorityTile, Converter={StaticResource BoolToVis}}" />
+                                    </Grid>
                                     <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="60" HorizontalAlignment="Center" />
                                     <TextBlock Text="{Binding SizeLabel}" FontSize="8" Foreground="Gray" HorizontalAlignment="Center" />
                                 </StackPanel>
@@ -212,6 +228,10 @@
                                             <TextBlock Text="+" FontSize="32" Foreground="#BBB" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" />
                                             <Image Source="{Binding Preview}" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                            <Path Data="M0,0 L11,0 L11,11 Z" Fill="#FF2FA02F" Stroke="White" StrokeThickness="0.8"
+                                                  Width="11" Height="11" Stretch="Fill" IsHitTestVisible="False"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                  Visibility="{Binding IsPriorityTile, Converter={StaticResource BoolToVis}}" />
                                         </Grid>
                                     </Button>
                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Visibility="{Binding IsFourBpp, Converter={StaticResource BoolToVis}}">

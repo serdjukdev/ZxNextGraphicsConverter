@@ -60,9 +60,10 @@ public class ExportServiceTests : IDisposable
         Assert.Equal(PaletteFileWriter.FileSizeBytes, new FileInfo(palFiles[0]).Length);
 
         var asmText = File.ReadAllText(asmFiles[0]);
-        Assert.Contains("slot_000: equ 0", asmText);
-        Assert.Contains("db slot_000", asmText);
-        Assert.Contains("4bpp palette index", asmText); // end-to-end: Tile4Bpp assets must carry the palette byte
+        Assert.Contains("t4_pal_table:", asmText);
+        Assert.Matches(@"t4_\w+: db \d", asmText);   // name-based label per tile, value is just the 4bpp palette index
+        Assert.DoesNotContain("slot_", asmText);     // no bank/offset record any more
+        Assert.DoesNotContain("equ", asmText);       // no index constant
     }
 
     [Fact]

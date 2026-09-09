@@ -7,35 +7,24 @@ namespace ZxNext.Core.Tests;
 public class AsmMapGeneratorTests
 {
     [Fact]
-    public void Generate_FourBppTiles_IncludeAPaletteByte()
+    public void Generate_Tile4Bpp_EmitsNameIndexAndPaletteByte_NoBankOrOffset()
     {
         var placements = new List<AssetPlacement>
         {
-            new("player_idle", 0, 0, IsFourBpp: true, PaletteSlotIndex: 3),
-            new("player_walk", 0, 128, IsFourBpp: true, PaletteSlotIndex: 3),
+            new("player idle", 0, 0, IsFourBpp: true, PaletteSlotIndex: 3),
+            new("player.idle", 0, 128, IsFourBpp: true, PaletteSlotIndex: 3), // sanitizes to the same -> _2
             new("enemy_a", 1, 0, IsFourBpp: true, PaletteSlotIndex: 7)
         };
 
         var text = AsmMapGenerator.Generate(placements, chunkCount: 2, AssetCategory.Tile4Bpp);
 
-        const string expected =
-            "slot_000: equ 0\n" +
-            "slot_001: equ 1\n" +
-            "\n" +
-            "player_idle:\n" +
-            "    db slot_000 ; 8KB bank\n" +
-            "    db 3 ; 4bpp palette index (0-15)\n" +
-            "    dw 0 ; byte offset within the bank\n" +
-            "player_walk:\n" +
-            "    db slot_000 ; 8KB bank\n" +
-            "    db 3 ; 4bpp palette index (0-15)\n" +
-            "    dw 128 ; byte offset within the bank\n" +
-            "enemy_a:\n" +
-            "    db slot_001 ; 8KB bank\n" +
-            "    db 7 ; 4bpp palette index (0-15)\n" +
-            "    dw 0 ; byte offset within the bank\n";
-
-        Assert.Equal(expected, text);
+        Assert.Contains("t4_pal_table:\nt4_player_idle: db 3\n", text); // table-start label right before the first byte
+        Assert.Contains("t4_player_idle_2: db 3\n", text);              // sanitization collision -> suffix
+        Assert.Contains("t4_enemy_a: db 7\n", text);
+        Assert.DoesNotContain("equ", text);                             // no index constant, just the palette byte
+        Assert.DoesNotContain("slot_", text);                           // no bank record
+        Assert.DoesNotContain(" dw ", text);                            // no byte offset
+        Assert.DoesNotContain("8KB bank", text);
     }
 
     [Fact]

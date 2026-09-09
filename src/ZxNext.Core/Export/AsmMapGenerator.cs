@@ -4,10 +4,10 @@ using ZxNext.Core.Model;
 namespace ZxNext.Core.Export;
 
 /// <summary>
-/// Emits the Z80 ASM address map for one exported asset folder. Sprite4Bpp gets its own compact
-/// name-to-pattern-number + palette-offset form (see <see cref="GenerateSprite4Bpp"/>); Sprite8Bpp and
-/// Tile8Bpp share the same bare name-to-index form (see <see cref="GenerateBareIndex"/>); every other
-/// category still gets the generic per-asset slot/offset record.
+/// Emits the Z80 ASM address map for one exported asset folder. Sprite4Bpp and Tile4Bpp each get a
+/// compact name-to-index + palette form (see <see cref="GenerateSprite4Bpp"/> / <see cref="GenerateTile4Bpp"/>);
+/// Sprite8Bpp and Tile8Bpp share the same bare name-to-index form (see <see cref="GenerateBareIndex"/>);
+/// anything else falls back to the generic per-asset slot/offset record.
 /// </summary>
 public static class AsmMapGenerator
 {
@@ -23,6 +23,7 @@ public static class AsmMapGenerator
         {
             AssetCategory.Sprite4Bpp => GenerateSprite4Bpp(placements),
             AssetCategory.Sprite8Bpp => GenerateBareIndex(placements, "s8", "Sprite8Bpp", subfolderName),
+            AssetCategory.Tile4Bpp => GenerateTile4Bpp(placements),
             AssetCategory.Tile8Bpp => GenerateBareIndex(placements, "t8", "Tile8Bpp", subfolderName),
             _ => GenerateGeneric(placements, chunkCount)
         };
@@ -88,6 +89,32 @@ public static class AsmMapGenerator
         {
             var label = prefix + "_" + AsmLabel.SanitizeUnique(folderPrefix + placements[i].Name, used);
             sb.Append(label).Append(": equ ").Append(i).Append('\n');
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Tile4Bpp: one byte per tile, that tile's 4bpp palette index (0-15), in tile order, each with its
+    /// own <c>t4_&lt;name&gt;:</c> label. A <c>t4_pal_table:</c> label marks the start of the run, so
+    /// <c>t4_pal_table + &lt;tile number&gt;</c> reaches the same byte. No index constant (the tile number
+    /// is just its position here), no bank/byte-offset record: 4bpp tiles upload as one contiguous blob
+    /// (chunk 0, then 1, ...), like <see cref="GenerateSprite4Bpp"/>.
+    /// </summary>
+    private static string GenerateTile4Bpp(IReadOnlyList<AssetPlacement> placements)
+    {
+        var sb = new StringBuilder();
+        sb.Append("; Tile4Bpp graphics map.\n");
+        sb.Append("; t4_<name>: db <n>   -- this tile's 4bpp palette index (0-15). One byte per tile, in tile order.\n");
+        sb.Append("; t4_pal_table:       -- start of that run; t4_pal_table + <tile number> is the same byte.\n");
+        sb.Append("; Tiles upload as one contiguous blob, so there is no per-tile bank or byte offset.\n");
+        sb.Append('\n');
+        sb.Append("t4_pal_table:\n");
+
+        var used = new HashSet<string>();
+        foreach (var p in placements)
+        {
+            sb.Append("t4_").Append(AsmLabel.SanitizeUnique(p.Name, used)).Append(": db ").Append(p.PaletteSlotIndex).Append('\n');
         }
 
         return sb.ToString();

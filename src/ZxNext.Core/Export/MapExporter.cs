@@ -346,10 +346,18 @@ public static class MapExporter
             .Append(kind == MetatileKind.FourBpp ? "tile index, then attribute byte: bits7:4 palette, bit3 MirrorX, bit2 MirrorY, bit1 Rotate" : "tile index only, no attribute")
             .Append(")\n");
         sb.Append("; the grid file's index byte is LOCAL to this table (0..N-1 here), not this metatile's project-wide order\n");
+        sb.Append("; each metatile's record also carries its own address label: <name> (a `_2`/`_3` suffix only if two metatiles sanitize to the same name)\n");
         sb.Append(rowKey).Append("_count: equ ").Append(orderedMetatiles.Count).Append('\n');
         sb.Append(rowKey).Append("_size: equ ").Append(recordSize).Append(" ; bytes per metatile record\n");
         sb.Append('\n');
         sb.Append(rowKey).Append(":\n");
+
+        // A real address label on each metatile's record so game code can reference a metatile by name.
+        // Same rules as the object labels: the metatile's Name through the shared AsmLabel sanitizer,
+        // de-collided per file. The used-set is seeded with "count" and "size" so a metatile name can't
+        // land on the `<rowKey>_count` / `<rowKey>_size` constants above. The label is additive: the grid
+        // file still references metatiles by their LOCAL dense index, and the `db` order is unchanged.
+        var usedLabels = new HashSet<string>(StringComparer.Ordinal) { "count", "size" };
 
         for (var i = 0; i < orderedMetatiles.Count; i++)
         {
@@ -360,6 +368,7 @@ public static class MapExporter
                 throw new InvalidOperationException(serialized.Error);
             }
             sb.Append("; [").Append(i).Append("] ").Append(metatile.Name).Append('\n');
+            sb.Append(rowKey).Append('_').Append(AsmLabel.SanitizeUnique(metatile.Name, usedLabels)).Append(":\n");
             AsmByteDataWriter.AppendDataBytes(sb, serialized.Data!);
         }
 

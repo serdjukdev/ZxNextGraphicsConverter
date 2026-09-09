@@ -81,6 +81,7 @@ public class MapExporterTests
         {
             var line = lines[i].Trim();
             if (line.StartsWith(';')) continue;
+            if (line.Length > 0 && line.EndsWith(":")) continue; // a bare per-record label line
             var dbColon = line.IndexOf(": db ", StringComparison.Ordinal);
             if (dbColon >= 0) line = line[(dbColon + 2)..]; // drop a "someLabel:" prefix, keep "db ..."
             if (!line.StartsWith("db ")) break;
@@ -124,9 +125,38 @@ public class MapExporterTests
         Assert.False(result.Metatiles.IsChunked);
         Assert.Contains("level1_tilemap_metatiles_count: equ 2", result.Metatiles.AsmText);
         Assert.Contains("level1_tilemap_metatiles_size: equ 8", result.Metatiles.AsmText); // 2x2 tiles * 2 bytes/tile
+        // Each metatile record carries its own name label, in local-index order
+        Assert.Contains("level1_tilemap_metatiles_low:\n", result.Metatiles.AsmText);
+        Assert.Contains("level1_tilemap_metatiles_high:\n", result.Metatiles.AsmText);
         // Local index 0 = "low" (tileB, global SortIndex 1), local index 1 = "high" (tileA, global SortIndex 0)
         var metatileBytes = ExtractDbBytes(result.Metatiles.AsmText, "level1_tilemap_metatiles");
         Assert.Equal([1, 0, 1, 0, 1, 0, 1, 0, /**/ 0, 0, 0, 0, 0, 0, 0, 0], metatileBytes);
+    }
+
+    [Fact]
+    public void ExportMetatiles_LabelsEachRecordByName_DedupedAndSafeAgainstCountAndSizeConstants()
+    {
+        var tile = FakeTile("t", 0, AssetCategory.Tile8Bpp);
+        var project = new ProjectState();
+        project.Assets.Add(tile);
+        // Two metatiles that sanitise to the same label -> the second must get a _2 suffix; one named
+        // "size", which would collide with the <rowKey>_size constant.
+        project.Metatiles.Add(FakeMetatile("wall a", MetatileKind.EightBpp, 2, sortIndex: 0, tile.Id, tile.Id, tile.Id, tile.Id));
+        project.Metatiles.Add(FakeMetatile("wall.a", MetatileKind.EightBpp, 2, sortIndex: 1, tile.Id, tile.Id, tile.Id, tile.Id));
+        project.Metatiles.Add(FakeMetatile("size", MetatileKind.EightBpp, 2, sortIndex: 2, tile.Id, tile.Id, tile.Id, tile.Id));
+
+        var map = FakeMap("level1", 3, 1, gridSize: 2, tile8Bpp: [0, 1, 2]);
+        project.Maps.Add(map);
+
+        var result = MapExporter.ExportTileLayer8Bpp(map, project);
+
+        Assert.NotNull(result.Metatiles);
+        var asm = result.Metatiles!.AsmText;
+        Assert.Contains("level1_8bpp_metatiles_size: equ 4", asm);       // the constant is untouched
+        Assert.Contains("level1_8bpp_metatiles_wall_a:\n", asm);
+        Assert.Contains("level1_8bpp_metatiles_wall_a_2:\n", asm);       // "wall.a" sanitises to the same -> _2
+        Assert.Contains("level1_8bpp_metatiles_size_2:\n", asm);         // the "size" metatile is pushed off the reserved word
+        Assert.DoesNotContain("level1_8bpp_metatiles_size:\n", asm);     // never clobbers <rowKey>_size
     }
 
     [Fact]

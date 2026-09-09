@@ -39,6 +39,8 @@ public partial class MainWindow : Window
         ProjectTreeViewControl.DeleteUnusedRequested += _viewModel.DeleteUnusedAssets;
         ProjectTreeViewControl.SetAssetLockRequested += _viewModel.SetAssetLock;
         ProjectTreeViewControl.SetLockOnSelectionRequested += _viewModel.SetLockOnSelectedAssets;
+        ProjectTreeViewControl.SetAssetPriorityRequested += _viewModel.SetAssetPriority;
+        ProjectTreeViewControl.SetPriorityOnSelectionRequested += _viewModel.SetPriorityOnSelectedAssets;
         PixelEditorViewControl.PaintStrokeStarted += _viewModel.BeginPaintStroke;
         PixelEditorViewControl.PixelPainted += _viewModel.PaintPixel;
         PixelEditorViewControl.PaintStrokeEnded += _viewModel.EndPaintStroke;

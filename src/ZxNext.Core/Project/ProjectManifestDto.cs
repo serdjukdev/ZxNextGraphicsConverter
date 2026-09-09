@@ -33,10 +33,10 @@ public class SourceImageDto
     public int Height { get; set; }
 }
 
-public record NextColorDto(byte R3, byte G3, byte B3)
+public record NextColorDto(byte R3, byte G3, byte B3, bool Priority = false)
 {
-    public NextColor ToModel() => new(R3, G3, B3);
-    public static NextColorDto FromModel(NextColor c) => new(c.R3, c.G3, c.B3);
+    public NextColor ToModel() => new(R3, G3, B3) { Priority = Priority };
+    public static NextColorDto FromModel(NextColor c) => new(c.R3, c.G3, c.B3, c.Priority);
 }
 
 public class PaletteBankDto
@@ -76,6 +76,9 @@ public class AssetDto
 
     /// <summary>User "never delete" flag (see <see cref="Model.GraphicsAsset.IsLocked"/>). False — the correct default — in project files saved before this field existed.</summary>
     public bool IsLocked { get; set; }
+
+    /// <summary>Layer2 priority flag for a Tile8Bpp asset (see <see cref="Model.GraphicsAsset.IsPriority"/>). False — the correct default — in older project files. The asset's actual pixel indices (pointing at the palette's priority colour twins) are the source of truth; this just records the intent so re-quantize can rebuild it.</summary>
+    public bool IsPriority { get; set; }
 }
 
 public class MetatileCellDto

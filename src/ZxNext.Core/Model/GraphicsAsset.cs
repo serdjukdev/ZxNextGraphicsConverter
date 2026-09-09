@@ -63,4 +63,14 @@ public class GraphicsAsset
     /// straight from game code by export index, which this app cannot see. Does NOT affect reorder or export.
     /// </summary>
     public bool IsLocked { get; set; }
+
+    /// <summary>
+    /// Tile8Bpp only: this whole tile is a Layer2 "priority" tile — every non-transparent pixel indexes a
+    /// palette entry whose <see cref="NextColor.Priority"/> bit is set, so on real hardware it draws above
+    /// every other layer (see that flag's own doc). Toggled from the Project Tree;
+    /// <see cref="Conversion.PriorityColorService"/> does the palette twin allocation and pixel remap.
+    /// Transparent pixels stay on the shared non-priority transparent index. The pixel indices are the
+    /// real source of truth; this flag just records intent so re-quantize can rebuild it.
+    /// </summary>
+    public bool IsPriority { get; set; }
 }

@@ -515,7 +515,7 @@ public partial class MainViewModel : ObservableObject
 
         var result = _project.ReplaceFlatPaletteAsset(asset, () =>
             AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, maxFourBppColors, asset.SourceOffsetX, asset.SourceOffsetY, excludeAssetIdFromNameCheck: asset.Id,
-                sourceCropWidth: asset.SourceCropWidth, sourceCropHeight: asset.SourceCropHeight));
+                sourceCropWidth: asset.SourceCropWidth, sourceCropHeight: asset.SourceCropHeight, priority: asset.IsPriority));
         if (!result.Success)
         {
             PixelEditor.StatusText = $"Re-quantize failed: {result.Error}";
@@ -525,6 +525,7 @@ public partial class MainViewModel : ObservableObject
         result.Asset!.Name = originalName;
         result.Asset.SortIndex = asset.SortIndex; // re-quantize replaces the asset object; keep its original export/tile-index position
         result.Asset.IsLocked = asset.IsLocked;   // ...and its lock state — re-quantizing a locked asset must not silently unlock it
+        // IsPriority is already set by the import above (priority: asset.IsPriority), which also allocated the priority colour twins.
         Tree.ReplaceAssetNode(asset.Id, result.Asset, _project); // keeps its position in the list instead of jumping to the bottom
 
         if (asset.Category.UsesPaletteBank())
@@ -809,11 +810,12 @@ public partial class MainViewModel : ObservableObject
                     // THIS asset (and any sibling the compaction touched) exactly as it was.
                     var result = _project.ReplaceFlatPaletteAsset(asset, () =>
                         AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, null, asset.SourceOffsetX, asset.SourceOffsetY, excludeAssetIdFromNameCheck: asset.Id,
-                            sourceCropWidth: asset.SourceCropWidth, sourceCropHeight: asset.SourceCropHeight));
+                            sourceCropWidth: asset.SourceCropWidth, sourceCropHeight: asset.SourceCropHeight, priority: asset.IsPriority));
                     if (result.Success)
                     {
                         result.Asset!.Name = asset.Name;
                         result.Asset.SortIndex = asset.SortIndex; // re-quantize replaces the asset object; keep its original export/tile-index position
+                        result.Asset.IsLocked = asset.IsLocked;   // ...and lock state (IsPriority already carried by the import's `priority:` arg above)
                         replaced.Add((asset.Id, result.Asset));
                         succeeded++;
                     }
@@ -1186,6 +1188,83 @@ public partial class MainViewModel : ObservableObject
             : $"Unlocked {changed} tile(s)/sprite(s).";
     }
 
+    /// <summary>Toggles the Layer2 priority flag on one Tile8Bpp tile — driven by the green up-arrow on its tree row.</summary>
+    public void SetAssetPriority(Guid assetId, bool priority)
+    {
+        var asset = _project.Assets.FirstOrDefault(a => a.Id == assetId);
+        if (asset is not { Category: AssetCategory.Tile8Bpp, IsReservedBlank: false }) return;
+        ApplyPriority([asset], priority);
+    }
+
+    /// <summary>Bulk priority toggle from the tree's right-click menu — the current multi-selection, or the single clicked node. Non-Tile8Bpp and reserved-blank rows in the set are skipped.</summary>
+    public void SetPriorityOnSelectedAssets(bool priority)
+    {
+        var targetIds = Tree.GetMultiSelectedAssetIds();
+        if (targetIds.Count == 0 && Tree.SelectedNode is { IsFolder: false, AssetId: { } singleId })
+        {
+            targetIds = [singleId];
+        }
+
+        var assets = targetIds
+            .Select(id => _project.Assets.FirstOrDefault(a => a.Id == id))
+            .Where(a => a is { Category: AssetCategory.Tile8Bpp, IsReservedBlank: false })
+            .Select(a => a!)
+            .ToList();
+        if (assets.Count == 0) return;
+        ApplyPriority(assets, priority);
+    }
+
+    /// <summary>
+    /// Shared core for <see cref="SetAssetPriority"/> / <see cref="SetPriorityOnSelectedAssets"/>. Tries the
+    /// palette twin allocation + pixel remap (<see cref="PriorityColorService.TrySetPriority"/>); on a
+    /// folder-palette overflow, offers to compact the affected folder palette(s) and retry once, then
+    /// gives up with a clear message. A palette rebuild always happens on success, so the undo stack is
+    /// cleared (same rule as every other shared-palette mutation).
+    /// </summary>
+    private void ApplyPriority(IReadOnlyList<GraphicsAsset> assets, bool priority)
+    {
+        var pending = assets.Where(a => a.IsPriority != priority).ToList();
+        if (pending.Count == 0) return;
+
+        if (!PriorityColorService.TrySetPriority(_project, pending, priority))
+        {
+            var shortfall = PriorityColorService.ShortfallFor(_project, pending, priority);
+            var retry = MessageBox.Show(
+                $"Setting {pending.Count} tile(s) to priority needs {shortfall} more palette colour(s) than the folder has free.\n\n" +
+                "Optimize the folder palette(s) now (drop colours nothing uses any more) and try again?",
+                "Palette full", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (retry != MessageBoxResult.Yes) return;
+
+            foreach (var folderPath in pending.Select(a => a.FolderPath).Distinct())
+            {
+                _project.CompactFlatPalette(AssetCategory.Tile8Bpp, folderPath);
+            }
+            _undoStack.Clear();
+
+            if (!PriorityColorService.TrySetPriority(_project, pending, priority))
+            {
+                OnSelectionChanged();
+                ScrollableMessageWindow.Show(
+                    $"Still {PriorityColorService.ShortfallFor(_project, pending, priority)} colour(s) short after optimizing. " +
+                    "Re-quantize this folder with fewer colours first, then try again.",
+                    "Palette full", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+        }
+
+        foreach (var a in pending)
+        {
+            if (Tree.FindLeafNode(a.Id) is { } node) node.IsPriority = a.IsPriority;
+        }
+
+        _undoStack.Clear();
+        OnSelectionChanged(); // the folder palette object was replaced by compaction — re-fetch the palette strip and re-render
+        HasUnsavedChanges = true;
+        PixelEditor.StatusText = priority
+            ? $"{pending.Count} tile(s) set to priority (drawn on top of every layer on Layer2)."
+            : $"{pending.Count} tile(s) back to normal (no priority).";
+    }
+
     /// <summary>
     /// Permanently deletes a user-created 8bpp sub-folder: every tile/sprite in it plus its own
     /// flat palette. Not undoable — unlike single-asset delete, a folder can hold many assets
@@ -1297,7 +1376,9 @@ public partial class MainViewModel : ObservableObject
         if (PaletteStrip.CurrentPalette is not { } palette) return;
 
         var previous = palette.Slots[index];
-        palette.SetAt(index, newColor);
+        // The picker only ever yields a plain RGB colour; keep whatever priority flag this slot already
+        // carries (a priority Tile8Bpp twin) so editing its colour doesn't silently demote it.
+        palette.SetAt(index, newColor with { Priority = previous?.Priority ?? false });
 
         _undoStack.Push(() =>
         {

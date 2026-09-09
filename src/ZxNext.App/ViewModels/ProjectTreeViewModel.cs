@@ -113,7 +113,8 @@ public partial class ProjectTreeViewModel : ObservableObject
             Category = asset.Category,
             Thumbnail = NextBitmapRenderer.Render(asset, project),
             IsReservedBlank = asset.IsReservedBlank,
-            IsLocked = asset.IsLocked
+            IsLocked = asset.IsLocked,
+            IsPriority = asset.IsPriority
         };
         if (insertAtFront) folder.Children.Insert(0, node);
         else folder.Children.Add(node);
@@ -236,7 +237,8 @@ public partial class ProjectTreeViewModel : ObservableObject
                 IsMultiSelected = wasMultiSelected,
                 Thumbnail = NextBitmapRenderer.Render(newAsset, project),
                 IsReservedBlank = newAsset.IsReservedBlank,
-                IsLocked = newAsset.IsLocked
+                IsLocked = newAsset.IsLocked,
+                IsPriority = newAsset.IsPriority
             };
             folder.Children.Insert(index, node);
             if (wasSelected)

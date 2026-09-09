@@ -93,7 +93,8 @@ public static class ProjectService
                     SourceCropWidth = asset.SourceCropWidth,
                     SourceCropHeight = asset.SourceCropHeight,
                     IsReservedBlank = asset.IsReservedBlank,
-                    IsLocked = asset.IsLocked
+                    IsLocked = asset.IsLocked,
+                    IsPriority = asset.IsPriority
                 });
             }
 
@@ -253,7 +254,8 @@ public static class ProjectService
                 SourceCropWidth = a.SourceCropWidth > 0 ? a.SourceCropWidth : a.Width, // projects saved before this field existed default to "no padding" (crop == full size)
                 SourceCropHeight = a.SourceCropHeight > 0 ? a.SourceCropHeight : a.Height,
                 IsReservedBlank = a.IsReservedBlank,
-                IsLocked = a.IsLocked
+                IsLocked = a.IsLocked,
+                IsPriority = a.IsPriority
             });
         }
 

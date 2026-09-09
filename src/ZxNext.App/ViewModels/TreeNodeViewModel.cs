@@ -39,6 +39,13 @@ public partial class TreeNodeViewModel : ObservableObject
     [ObservableProperty]
     private bool isLocked;
 
+    /// <summary>Mirrors <see cref="ZxNext.Core.Model.GraphicsAsset.IsPriority"/> — only ever true for a Tile8Bpp asset. Drives the row's green priority arrow and the "Priority"/"No priority" context-menu label.</summary>
+    [ObservableProperty]
+    private bool isPriority;
+
+    /// <summary>Leaf Tile8Bpp asset node — the only kind that shows the Layer2 priority arrow / "Priority" menu item.</summary>
+    public bool IsTile8Bpp => !IsFolder && Category == AssetCategory.Tile8Bpp;
+
     /// <summary>Drag-and-drop reorder feedback (ProjectTreeView's code-behind) — a thin line above/below this row showing exactly where the dragged item will land. At most one node in the whole tree has either set true at any time; cleared on drag-leave/drop.</summary>
     [ObservableProperty]
     private bool showDropIndicatorAbove;

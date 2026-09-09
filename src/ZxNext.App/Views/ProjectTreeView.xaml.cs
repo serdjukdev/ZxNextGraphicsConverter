@@ -49,6 +49,12 @@ public partial class ProjectTreeView : UserControl
     /// <summary>Raised from the right-click "Lock"/"Unlock" menu item — applies to the current multi-selection, or else the single clicked asset (bool = lock vs unlock). Target resolution mirrors <see cref="DeleteRequested"/>.</summary>
     public event Action<bool>? SetLockOnSelectionRequested;
 
+    /// <summary>Raised from the row's green priority arrow — toggles the Layer2 priority flag on that one Tile8Bpp asset (bool = the new state).</summary>
+    public event Action<Guid, bool>? SetAssetPriorityRequested;
+
+    /// <summary>Raised from the right-click "Priority"/"No priority" menu item — the current multi-selection, or the single clicked asset (bool = priority vs normal). Same target resolution as Lock.</summary>
+    public event Action<bool>? SetPriorityOnSelectionRequested;
+
     /// <summary>
     /// The last plain- or Ctrl-clicked leaf — the anchor a following Shift-click ranges from.
     /// Cleared whenever selection collapses to a single node (plain click, or a folder click).
@@ -552,6 +558,19 @@ public partial class ProjectTreeView : UserControl
                 ? Visibility.Visible
                 : Visibility.Collapsed;
         }
+
+        // "Priority" (Layer2 draw-on-top) is Tile8Bpp-leaf only. Header flips to "No priority" when
+        // every asset in the target set is already priority.
+        if (menu.Items[8] is MenuItem priorityItem)
+        {
+            priorityItem.Visibility = node.IsTile8Bpp && !node.IsReservedBlank ? Visibility.Visible : Visibility.Collapsed;
+            if (priorityItem.Visibility == Visibility.Visible)
+            {
+                var priorityTargets = isBulkTarget ? multiSelected.Where(n => n.IsTile8Bpp).ToList() : new List<TreeNodeViewModel> { node };
+                var verb = priorityTargets.Count > 0 && priorityTargets.All(n => n.IsPriority) ? "No priority" : "Priority";
+                priorityItem.Header = isBulkTarget ? $"{verb} ({priorityTargets.Count})" : verb;
+            }
+        }
     }
 
     private void RenameMenuItem_OnClick(object sender, RoutedEventArgs e)
@@ -603,6 +622,26 @@ public partial class ProjectTreeView : UserControl
         var isBulkTarget = node.IsMultiSelected && multiSelected.Count > 1;
         var targets = isBulkTarget ? multiSelected : new List<TreeNodeViewModel> { node };
         SetLockOnSelectionRequested?.Invoke(!targets.All(n => n.IsLocked));
+    }
+
+    /// <summary>The row's green priority arrow — toggles Layer2 priority on just this one Tile8Bpp asset.</summary>
+    private void PriorityButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: TreeNodeViewModel { IsTile8Bpp: true, IsReservedBlank: false, AssetId: { } assetId } node }) return;
+        SetAssetPriorityRequested?.Invoke(assetId, !node.IsPriority);
+    }
+
+    /// <summary>"Priority"/"No priority" menu item — the Tile8Bpp assets in the multi-selection, or the single clicked one; sets priority unless every one is already priority.</summary>
+    private void PriorityMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetContextNode(sender, out var node)) return;
+        if (DataContext is not ProjectTreeViewModel vm) return;
+
+        var multiSelected = vm.GetMultiSelectedLeaves();
+        var isBulkTarget = node.IsMultiSelected && multiSelected.Count > 1;
+        var targets = (isBulkTarget ? multiSelected : new List<TreeNodeViewModel> { node }).Where(n => n.IsTile8Bpp).ToList();
+        if (targets.Count == 0) return;
+        SetPriorityOnSelectionRequested?.Invoke(!targets.All(n => n.IsPriority));
     }
 
     private void DeleteFolderMenuItem_OnClick(object sender, RoutedEventArgs e)

@@ -56,6 +56,6 @@ public static class PaletteFileWriter
     {
         if (color is not { } c) return;
         bytes[index] = c.ToRegByteRrrgggbb();
-        bytes[EntryCount + index] = c.ToBlueLsbBit() ? (byte)1 : (byte)0;
+        bytes[EntryCount + index] = c.ToSecondRegByte(); // bit 0 = blue LSB, bit 7 = Layer2 priority (only ever set for a priority Tile8Bpp colour)
     }
 }

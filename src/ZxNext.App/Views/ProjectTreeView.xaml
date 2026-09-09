@@ -64,6 +64,22 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!-- Layer2 "priority" (draw-on-top) toggle for Tile8Bpp rows: an up-arrow, grey when off,
+             green with a white outline when on, mirroring TreeNodeViewModel.IsPriority. -->
+        <Geometry x:Key="PriorityArrowGeometry">M8,3 L14.5,13 L1.5,13 Z</Geometry>
+        <Style x:Key="PriorityArrowStyle" TargetType="Path">
+            <Setter Property="Data" Value="{StaticResource PriorityArrowGeometry}" />
+            <Setter Property="Fill" Value="#C0999999" />
+            <Setter Property="StrokeLineJoin" Value="Round" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsPriority}" Value="True">
+                    <Setter Property="Fill" Value="#FF2FA02F" />
+                    <Setter Property="Stroke" Value="White" />
+                    <Setter Property="StrokeThickness" Value="1.4" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
     <DockPanel LastChildFill="True">
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,4,4,2">
@@ -176,7 +192,7 @@
                              NodeText_OnContextMenuOpening toggles Items[i].Visibility/Header by index
                              depending on the node and the current multi-selection. Item order:
                              0 Rename, 1 Re-quantize, 2 Delete, 3 Lock/Unlock, 4 Add sub-folder,
-                             5 Re-quantize folder, 6 Delete folder, 7 Delete unused. -->
+                             5 Re-quantize folder, 6 Delete folder, 7 Delete unused, 8 Priority (Tile8Bpp only). -->
                         <StackPanel.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Rename..." Click="RenameMenuItem_OnClick" />
@@ -191,6 +207,8 @@
                                 <MenuItem Header="Delete folder..." Click="DeleteFolderMenuItem_OnClick" />
                                 <MenuItem Header="Delete unused..." Click="DeleteUnusedMenuItem_OnClick"
                                           ToolTip="Delete every tile/sprite here that no map places and that isn't locked" />
+                                <MenuItem Header="Priority" Click="PriorityMenuItem_OnClick"
+                                          ToolTip="Layer2 priority: a priority tile draws on top of every layer on real hardware" />
                             </ContextMenu>
                         </StackPanel.ContextMenu>
                         <Image Source="{Binding Thumbnail}" Width="18" Height="18" Margin="0,0,4,0" VerticalAlignment="Center"
@@ -218,6 +236,29 @@
                                 <Canvas Width="16" Height="16">
                                     <Path Style="{StaticResource LockBodyStyle}" />
                                     <Path Style="{StaticResource LockShackleStyle}" />
+                                </Canvas>
+                            </Viewbox>
+                        </Button>
+                        <!-- Layer2 priority (draw-on-top) toggle — Tile8Bpp rows only. Grey arrow = normal,
+                             green arrow = this whole tile renders above every layer on hardware. -->
+                        <Button Click="PriorityButton_OnClick" Margin="2,0,0,0"
+                                ToolTip="Toggle Layer2 priority: a priority tile is drawn on top of every layer on real hardware">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource LockButtonStyle}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsTile8Bpp}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsReservedBlank}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <Viewbox Width="16" Height="16">
+                                <Canvas Width="16" Height="16">
+                                    <Path Style="{StaticResource PriorityArrowStyle}" />
                                 </Canvas>
                             </Viewbox>
                         </Button>

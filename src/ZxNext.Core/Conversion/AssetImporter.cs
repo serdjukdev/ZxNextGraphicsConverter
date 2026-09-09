@@ -40,7 +40,8 @@ public static class AssetImporter
         int sourceOffsetY = 0,
         Guid? excludeAssetIdFromNameCheck = null,
         int? sourceCropWidth = null,
-        int? sourceCropHeight = null)
+        int? sourceCropHeight = null,
+        bool priority = false)
     {
         var (cellWidth, cellHeight) = category.CellSize();
 
@@ -95,7 +96,7 @@ public static class AssetImporter
 
         var result = category.UsesPaletteBank()
             ? ImportFourBpp(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, excludeAssetIdFromNameCheck)
-            : ImportFlatPalette(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, excludeAssetIdFromNameCheck, sourceCropWidth ?? width, sourceCropHeight ?? height);
+            : ImportFlatPalette(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, excludeAssetIdFromNameCheck, sourceCropWidth ?? width, sourceCropHeight ?? height, priority && category == AssetCategory.Tile8Bpp);
 
         // In a GridSize=1 ("no metatile") project, every real Tile4Bpp/Tile8Bpp tile needs its own 1x1
         // metatile to be paintable on a map at all — see ProjectState.MetatileGridSize's own doc comment.
@@ -191,11 +192,23 @@ public static class AssetImporter
     private static ImportResult ImportFlatPalette(
         ProjectState project, SourceImage source, AssetCategory category, string folderPath, DitherMode ditherMode,
         NextColor[] matched, bool[] isTransparent, int width, int height, int? maxColors, int sourceOffsetX, int sourceOffsetY, Guid? excludeAssetIdFromNameCheck,
-        int sourceCropWidth, int sourceCropHeight)
+        int sourceCropWidth, int sourceCropHeight, bool priority)
     {
         if (maxColors is { } cap)
         {
             matched = ColorReducer.Reduce(matched, cap);
+        }
+
+        // A priority Tile8Bpp asset (see NextColor.Priority) indexes the priority TWIN of each colour.
+        // Done AFTER colour reduction (ColorReducer works on RGB channels and strips the flag) and only
+        // for opaque pixels — transparent pixels are placed via palette.TransparentIndex below, never
+        // from `matched`, and a priority transparent slot is exactly the hardware bug to avoid.
+        if (priority)
+        {
+            for (var i = 0; i < matched.Length; i++)
+            {
+                if (!isTransparent[i]) matched[i] = matched[i] with { Priority = true };
+            }
         }
 
         var palette = project.GetOrCreateFolderPalette(category, folderPath);
@@ -247,7 +260,8 @@ public static class AssetImporter
             SourceOffsetX = sourceOffsetX,
             SourceOffsetY = sourceOffsetY,
             SourceCropWidth = sourceCropWidth,
-            SourceCropHeight = sourceCropHeight
+            SourceCropHeight = sourceCropHeight,
+            IsPriority = priority
         };
         project.Assets.Add(asset);
         return new ImportResult(true, asset, null);

@@ -6,8 +6,23 @@ namespace ZxNext.Core.Model;
 /// </summary>
 public readonly record struct NextColor(byte R3, byte G3, byte B3)
 {
+    /// <summary>
+    /// The Layer2 "priority colour" flag — bit 7 of nextreg 0x44's SECOND write, meaningful ONLY when
+    /// that write targets a Layer2 palette (nextreg 0x43): a set bit means this palette entry renders
+    /// above every other layer regardless of the normal S/L/U priority order. Deliberately part of the
+    /// colour's own identity (record equality includes it), so a folder palette can hold "red" and
+    /// "priority red" as two distinct entries and <see cref="NextPalette"/>'s value-equality lookups
+    /// keep them apart with zero special-casing. Only ever set for Tile8Bpp assets marked priority
+    /// (see <c>GraphicsAsset.IsPriority</c> / <c>PriorityColorService</c>); every colour the quantizer,
+    /// dither, colour reducer and picker produce is a plain RGB colour with this false.
+    /// </summary>
+    public bool Priority { get; init; }
+
     /// <summary>The first of the two bytes nextreg 0x44 is written with: RRRGGGBB.</summary>
     public byte ToRegByteRrrgggbb() => (byte)((R3 << 5) | (G3 << 2) | (B3 >> 1));
+
+    /// <summary>The second nextreg 0x44 write: bit 0 = LSB of blue, bit 7 = the Layer2 <see cref="Priority"/> flag (0 for every non-Layer2-destined palette).</summary>
+    public byte ToSecondRegByte() => (byte)((Priority ? 0x80 : 0) | (ToBlueLsbBit() ? 1 : 0));
 
     /// <summary>The second nextreg 0x44 write: bit 0 = LSB of blue.</summary>
     public bool ToBlueLsbBit() => (B3 & 1) != 0;

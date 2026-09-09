@@ -27,6 +27,20 @@ public class PaletteFileWriterTests
     }
 
     [Fact]
+    public void Write_PriorityColour_SetsBit7OfTheSecondByte()
+    {
+        var palette = new NextPalette(256, transparentIndex: -1);
+        palette.SetAt(0, new NextColor(5, 3, 6));                          // blue LSB = 0
+        palette.SetAt(1, new NextColor(5, 3, 7) { Priority = true });      // blue LSB = 1 + priority
+
+        var bytes = PaletteFileWriter.Write(palette);
+
+        Assert.Equal(0x00, bytes[256]);   // normal, blue LSB 0
+        Assert.Equal(0x81, bytes[257]);   // priority (bit 7) + blue LSB
+        Assert.Equal(new NextColor(5, 3, 7).ToRegByteRrrgggbb(), bytes[1]); // first byte unaffected by priority
+    }
+
+    [Fact]
     public void Write_UnusedOrMissingEntries_StayZero()
     {
         var palette = new NextPalette(256, transparentIndex: -1);

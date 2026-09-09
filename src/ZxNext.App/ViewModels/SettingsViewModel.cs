@@ -18,6 +18,7 @@ public partial class SettingsViewModel : ObservableObject
 {
     public static IReadOnlyList<DitherMode> AvailableDitherModes { get; } = Enum.GetValues<DitherMode>();
     public static IReadOnlyList<ChunkSizeOption> AvailableChunkSizes => ExportViewModel.AvailableChunkSizes;
+    public static IReadOnlyList<PixelOrderOption> AvailablePixelOrders => ExportViewModel.AvailablePixelOrders;
 
     public IReadOnlyList<ShortcutAreaGroup> ShortcutGroups { get; } =
         ShortcutReference.All.GroupBy(e => e.Area).Select(g => new ShortcutAreaGroup(g.Key, g.ToList())).ToList();
@@ -31,6 +32,7 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private DitherMode defaultDitherMode;
     [ObservableProperty] private ExportChunkSize defaultExportChunkSize;
+    [ObservableProperty] private PixelExportOrder defaultPixelExportOrder;
     [ObservableProperty] private int defaultMapWidth;
     [ObservableProperty] private int defaultMapHeight;
     [ObservableProperty] private int defaultMetatileGridSize;
@@ -53,6 +55,7 @@ public partial class SettingsViewModel : ObservableObject
 
         defaultDitherMode = s.DefaultDitherMode ?? DitherMode.None;
         defaultExportChunkSize = s.DefaultExportChunkSize ?? ExportChunkSize.EightKb;
+        defaultPixelExportOrder = s.DefaultPixelExportOrder ?? PixelExportOrder.RowMajor;
         defaultMapWidth = s.DefaultMapWidth ?? 32;
         defaultMapHeight = s.DefaultMapHeight ?? 24;
         defaultMetatileGridSize = s.DefaultMetatileGridSize ?? 2;
@@ -86,6 +89,7 @@ public partial class SettingsViewModel : ObservableObject
 
         s.DefaultDitherMode = DefaultDitherMode;
         s.DefaultExportChunkSize = DefaultExportChunkSize;
+        s.DefaultPixelExportOrder = DefaultPixelExportOrder;
         s.DefaultMapWidth = DefaultMapWidth;
         s.DefaultMapHeight = DefaultMapHeight;
         s.DefaultMetatileGridSize = DefaultMetatileGridSize;

@@ -34,6 +34,10 @@ public class AppSettings
     // ----- Settings screen: other app-wide defaults -----
     public DitherMode? DefaultDitherMode { get; set; }
     public ExportChunkSize? DefaultExportChunkSize { get; set; }
+
+    /// <summary>Pixel scan order a fresh Tile8Bpp export row starts on (the only category where this is configurable — see <see cref="PixelExportOrder"/>); still changeable per row in the Export dialog. Null = today's default (row-major).</summary>
+    public PixelExportOrder? DefaultPixelExportOrder { get; set; }
+
     public int? DefaultMapWidth { get; set; }
     public int? DefaultMapHeight { get; set; }
     public int? DefaultMetatileGridSize { get; set; }

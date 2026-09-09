@@ -68,8 +68,13 @@ public partial class ExportFolderRowViewModel : ObservableObject
         this.dataBytes = dataBytes;
         IsChunkConfigurable = isChunkConfigurable;
         IsPixelOrderConfigurable = isPixelOrderConfigurable;
-        selectedChunkSize = AppSettingsStore.Load().DefaultExportChunkSize ?? ExportChunkSize.EightKb;
-        selectedPixelOrder = PixelExportOrder.RowMajor;
+        var settings = AppSettingsStore.Load();
+        selectedChunkSize = settings.DefaultExportChunkSize ?? ExportChunkSize.EightKb;
+        // Only Tile8Bpp rows expose the choice; leaving a fixed-row-major row's field at the settings
+        // default would be invisible but confusing if this VM is ever read for a non-configurable row.
+        selectedPixelOrder = isPixelOrderConfigurable
+            ? settings.DefaultPixelExportOrder ?? PixelExportOrder.RowMajor
+            : PixelExportOrder.RowMajor;
         _recompute = recompute;
     }
 

@@ -41,6 +41,15 @@ public partial class MetatileEditorWindow : Window
         InitializeComponent();
     }
 
+    /// <summary>Ends any armed-but-not-started drag (either list) on button release, so a plain click that didn't turn into a drag never leaves an arm flag set for a later mouse-move to act on.</summary>
+    private void Window_OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        _dragArmed = false;
+        _dragCandidate = null;
+        _tileDragArmed = false;
+        _tileDragCandidate = null;
+    }
+
     /// <summary>
     /// GridSplitter's own built-in resize doesn't reliably re-check the star-width RightPaneColumn's
     /// MinWidth against the Grid's CURRENT ActualWidth on every drag tick — neither column has a
@@ -68,6 +77,13 @@ public partial class MetatileEditorWindow : Window
     /// </summary>
     private void MetatileList_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // Disarm any drag left armed by a PREVIOUS click before the early returns below — a click on the
+        // list's scrollbar, on empty space, or a Ctrl/Shift-click otherwise leaves _dragArmed set from the
+        // last real item click, and the next mouse-move-with-button-down then fires a phantom reorder of
+        // that stale candidate (eating the click that triggered it). Re-armed only if this lands on an item.
+        _dragArmed = false;
+        _dragCandidate = null;
+
         var originalSource = e.OriginalSource as DependencyObject;
         if (FindAncestorDataContext<MetatileListItemViewModel>(originalSource) is not { } item) return;
         if (Keyboard.Modifiers != ModifierKeys.None) return; // Ctrl/Shift-click: let native multi-select handle it, never a drag source
@@ -211,6 +227,9 @@ public partial class MetatileEditorWindow : Window
     /// <summary>Drag source: dragging a tile out of the palette — same arm-on-down/start-past-threshold pattern as <see cref="MetatileList_OnPreviewMouseLeftButtonDown"/>/<see cref="MetatileList_OnPreviewMouseMove"/> above, just without any reorder/indicator/auto-scroll machinery (nothing here reorders the palette itself). Doesn't suppress the ListBox's own click-to-select — a drag naturally starts from an item MouseDown already selected on its way through, exactly like the existing reorder drag coexists with MetatileList's own selection.</summary>
     private void TilePaletteList_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        _tileDragArmed = false; // see MetatileList_OnPreviewMouseLeftButtonDown — disarm a stale candidate before the early return
+        _tileDragCandidate = null;
+
         var originalSource = e.OriginalSource as DependencyObject;
         if (FindAncestorDataContext<TilePaletteItemViewModel>(originalSource) is not { } item) return;
 

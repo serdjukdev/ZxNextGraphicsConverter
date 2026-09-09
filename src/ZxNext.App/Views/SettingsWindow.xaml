@@ -59,6 +59,11 @@
                         <ComboBox ItemsSource="{Binding AvailableChunkSizes}" DisplayMemberPath="Label" SelectedValuePath="Value"
                                   SelectedValue="{Binding DefaultExportChunkSize}" Width="160" HorizontalAlignment="Left" Margin="0,6,0,0" />
 
+                        <TextBlock Text="Default pixel order for a new export row" FontWeight="Bold" FontSize="12" Margin="0,16,0,0" />
+                        <TextBlock Text="Only the software 8bpp Tile rows offer this choice; every other row is always row-major. Still changeable per row in the Export dialog." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,2,0,0" />
+                        <ComboBox ItemsSource="{Binding AvailablePixelOrders}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                  SelectedValue="{Binding DefaultPixelExportOrder}" Width="160" HorizontalAlignment="Left" Margin="0,6,0,0" />
+
                         <TextBlock Text="Default New Map size" FontWeight="Bold" FontSize="12" Margin="0,16,0,0" />
                         <Grid Margin="0,6,0,0">
                             <Grid.ColumnDefinitions>

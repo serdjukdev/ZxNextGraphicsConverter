@@ -6,7 +6,8 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008/design"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Metatile Editor" Height="700" Width="1000" MinWidth="750" MinHeight="500" WindowStartupLocation="CenterOwner">
+        Title="Metatile Editor" Height="700" Width="1000" MinWidth="750" MinHeight="500" WindowStartupLocation="CenterOwner"
+        PreviewMouseLeftButtonUp="Window_OnPreviewMouseLeftButtonUp">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <Style x:Key="ThumbnailListBoxItemStyle" TargetType="ListBoxItem">
@@ -162,7 +163,13 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="Name:" VerticalAlignment="Center" Margin="0,0,6,0" />
-                <TextBox Grid.Column="1" Text="{Binding DraftName, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBox Grid.Column="1" Text="{Binding DraftName, UpdateSourceTrigger=PropertyChanged}">
+                    <!-- Enter in the name field commits the metatile (same as clicking Create / Save Changes) —
+                         so a rename doesn't need a trip to the button. Only fires when every cell is filled. -->
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Enter" Command="{Binding CreateMetatileCommand}" />
+                    </TextBox.InputBindings>
+                </TextBox>
             </Grid>
 
             <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}" Style="{StaticResource StatusTextStyle}" TextWrapping="Wrap" MinHeight="16" Margin="0,8,0,0" />

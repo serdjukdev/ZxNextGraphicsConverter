@@ -137,7 +137,7 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="In the editable pixel editor (bottom), Ctrl is required since a plain click there paints. In the read-only preview (top), nothing else happens on click, so no modifier is needed: click or drag across it to sweep the eyedropper. Either way it picks the colour under the cursor and selects/highlights that palette swatch." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Palette strip: click a swatch" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Selects it as the current paint colour." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Selects it as the current paint colour. A small green corner on a swatch marks a Layer2 priority colour (Tile8Bpp folders only: see the Priority arrow in the Project Tree section); its colour can still be edited like any other." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Palette strip: double-click a swatch" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Opens the colour picker (the real, complete 512-colour Next palette: 8 blocks of 8x8 swatches: so you can never pick an invalid colour). Changes that slot's colour everywhere it's used, live, and pushes one undo step. Blocked on the transparent-index slot (nothing to recolour there)." />

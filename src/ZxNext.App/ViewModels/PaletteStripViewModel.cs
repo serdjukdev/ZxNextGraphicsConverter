@@ -160,7 +160,8 @@ public partial class PaletteStripViewModel : ObservableObject
 
         var c = color.Value;
         var (r, g, b) = c.ToDisplayRgb24();
-        SelectedColorInfo = $"{location}   RGB #{r:X2}{g:X2}{b:X2}   9-bit: {c.ToNineBitValue()} ({c.ToNineBitBinaryString()})";
+        var priority = c.Priority ? "   priority (Layer2 draw-on-top)" : "";
+        SelectedColorInfo = $"{location}   RGB #{r:X2}{g:X2}{b:X2}   9-bit: {c.ToNineBitValue()} ({c.ToNineBitBinaryString()}){priority}";
     }
 
     private static ObservableCollection<PaletteSwatchViewModel> BuildSwatches(NextPalette palette, bool isInteractive)
@@ -182,7 +183,7 @@ public partial class PaletteStripViewModel : ObservableObject
             }
 
             var (r, g, b) = color.Value.ToDisplayRgb24();
-            result.Add(new PaletteSwatchViewModel(i, new SolidColorBrush(Color.FromRgb(r, g, b)), isTransparent: false, isEmpty: false, isInteractive));
+            result.Add(new PaletteSwatchViewModel(i, new SolidColorBrush(Color.FromRgb(r, g, b)), isTransparent: false, isEmpty: false, isInteractive, isPriority: color.Value.Priority));
         }
         return result;
     }

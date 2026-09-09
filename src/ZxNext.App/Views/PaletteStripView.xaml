@@ -8,6 +8,7 @@
              mc:Ignorable="d">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <!-- Compact swatch — used for the 4bpp bank's 16 read-only overview rows. -->
         <DataTemplate x:Key="SwatchTemplate" DataType="{x:Type vm:PaletteSwatchViewModel}">
             <Border Width="16" Height="16" Margin="1" Background="{Binding Brush}"
                     MouseLeftButtonDown="Swatch_OnMouseLeftButtonDown">
@@ -23,6 +24,31 @@
                         </Style.Triggers>
                     </Style>
                 </Border.Style>
+            </Border>
+        </DataTemplate>
+
+        <!-- The interactive strip (an asset's own 8bpp folder palette, or a 4bpp slot): 1.5x the compact
+             size so a colour is easy to aim at, and a small green top-right corner marks a Layer2
+             priority colour (see the Priority arrow in the Project Tree). -->
+        <DataTemplate x:Key="StripSwatchTemplate" DataType="{x:Type vm:PaletteSwatchViewModel}">
+            <Border Width="24" Height="24" Margin="1.5" Background="{Binding Brush}"
+                    ToolTip="{Binding Tooltip}" MouseLeftButtonDown="Swatch_OnMouseLeftButtonDown">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="BorderThickness" Value="0.5" />
+                        <Setter Property="BorderBrush" Value="#666" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter Property="BorderThickness" Value="3" />
+                                <Setter Property="BorderBrush" Value="#2AA1FF" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Path Data="M0,0 L9,0 L9,9 Z" Fill="#FF2FA02F" Stroke="White" StrokeThickness="0.6"
+                      Width="9" Height="9" Stretch="Fill" IsHitTestVisible="False"
+                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                      Visibility="{Binding IsPriority, Converter={StaticResource BoolToVis}}" />
             </Border>
         </DataTemplate>
     </UserControl.Resources>
@@ -75,7 +101,7 @@
             </ItemsControl>
 
             <!-- 8bpp (or nothing 4bpp-specific to show): the one relevant palette, wrapped -->
-            <ItemsControl ItemsSource="{Binding Swatches}" ItemTemplate="{StaticResource SwatchTemplate}"
+            <ItemsControl ItemsSource="{Binding Swatches}" ItemTemplate="{StaticResource StripSwatchTemplate}"
                           Visibility="{Binding ShowSingleStrip, Converter={StaticResource BoolToVis}}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>

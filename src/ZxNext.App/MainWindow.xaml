@@ -49,7 +49,10 @@
 
         <Grid x:Name="RootSplitGrid">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="LeftPaneColumn" Width="260" MinWidth="150" />
+                <!-- MinWidth is the widest the tree's content can be (deepest leaf: 3px bar + 16 expander
+                     + 22 thumb + ~26 index + 120 name + 54 lock/priority cluster + paddings + v-scrollbar),
+                     so an open sub-folder's rows never clip or need the pane dragged wider by hand. -->
+                <ColumnDefinition x:Name="LeftPaneColumn" Width="300" MinWidth="300" />
                 <ColumnDefinition Width="5" />
                 <ColumnDefinition x:Name="RightPaneColumn" Width="*" MinWidth="300" />
             </Grid.ColumnDefinitions>

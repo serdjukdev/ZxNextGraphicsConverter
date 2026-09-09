@@ -44,11 +44,27 @@ public partial class ProjectTreeViewModel : ObservableObject
                 IsCategoryRoot = true
             };
             _categoryFolders[category] = folder;
+            WireFolder(folder);
             Roots.Add(folder);
         }
     }
 
     public TreeNodeViewModel GetCategoryFolder(AssetCategory category) => _categoryFolders[category];
+
+    /// <summary>Keeps a folder's leaf-row zebra striping correct through every add / remove / reorder / replace,
+    /// from one subscription rather than a call at each mutation site.</summary>
+    private static void WireFolder(TreeNodeViewModel folder) =>
+        folder.Children.CollectionChanged += (_, _) => RestripeFolder(folder);
+
+    private static void RestripeFolder(TreeNodeViewModel folder)
+    {
+        var leafIndex = 0;
+        foreach (var child in folder.Children)
+        {
+            if (child.IsFolder) continue;
+            child.IsOddRow = (leafIndex++ & 1) == 1;
+        }
+    }
 
     [RelayCommand]
     private void ExpandAll() => SetAllExpanded(true);
@@ -84,6 +100,7 @@ public partial class ProjectTreeViewModel : ObservableObject
         if (parentFolder.Children.Any(c => c.IsFolder && c.FolderPath == path)) return null;
 
         var node = new TreeNodeViewModel(name, isFolder: true) { Category = category, FolderPath = path };
+        WireFolder(node);
         parentFolder.Children.Add(node);
         return node;
     }
@@ -99,7 +116,9 @@ public partial class ProjectTreeViewModel : ObservableObject
         if (owner.Children.Any(c => c.IsFolder && c.FolderPath == path)) return;
 
         var name = path[(owner.FolderPath!.Length + 1)..];
-        owner.Children.Add(new TreeNodeViewModel(name, isFolder: true) { Category = owner.Category, FolderPath = path });
+        var node = new TreeNodeViewModel(name, isFolder: true) { Category = owner.Category, FolderPath = path };
+        WireFolder(node);
+        owner.Children.Add(node);
     }
 
     /// <summary>Tree display order is plain insertion order, NOT SortIndex — a caller that just gave this asset a lower SortIndex than its siblings (e.g. moving a transparent tile to export index 0) needs <paramref name="insertAtFront"/> to actually show that, otherwise it silently lands at the end like any other new node.</summary>

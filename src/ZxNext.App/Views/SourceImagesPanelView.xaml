@@ -8,12 +8,40 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              AllowDrop="True" Drop="Panel_OnDrop">
+    <UserControl.Resources>
+        <!-- Borderless "x" that only shows chrome on hover, matching the project tree's icon buttons. -->
+        <Style x:Key="SourceDeleteButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="#FF888888" />
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#22CC3333" />
+                                <Setter Property="Foreground" Value="#FFCC3333" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
     <DockPanel LastChildFill="True">
         <TextBlock DockPanel.Dock="Top" Text="Source Images" FontWeight="Bold" Margin="4,4,4,0" />
         <TextBlock DockPanel.Dock="Top" Text="File → Import Images..., or drop files here" FontSize="10" Foreground="Gray" Margin="4,0,4,4" />
         <ListBox ItemsSource="{Binding Images}" SelectedItem="{Binding SelectedImage}"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                 BorderThickness="0"
+                 BorderThickness="0" Padding="2" AlternationCount="2"
                  PreviewMouseLeftButtonDown="Item_OnPreviewMouseLeftButtonDown"
                  PreviewMouseMove="Item_OnPreviewMouseMove">
             <ListBox.InputBindings>
@@ -23,32 +51,55 @@
                 <Style TargetType="ListBoxItem">
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                     <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0,1" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem">
+                                <Border x:Name="Card" CornerRadius="4" BorderThickness="1"
+                                        BorderBrush="#FFE6E6E6" Background="Transparent"
+                                        Padding="6,4" SnapsToDevicePixels="True">
+                                    <ContentPresenter />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                                        <Setter TargetName="Card" Property="Background" Value="#0A000000" />
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Card" Property="Background" Value="#14000000" />
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Card" Property="Background" Value="#FFD6E4F5" />
+                                        <Setter TargetName="Card" Property="BorderBrush" Value="#FFA9C6E8" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
                 </Style>
             </ListBox.ItemContainerStyle>
             <ListBox.ItemTemplate>
                 <DataTemplate DataType="{x:Type vm:SourceImageViewModel}">
-                    <Border BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="4" Background="Transparent">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                <Image Source="{Binding Thumbnail}" Width="32" Height="32"
-                                       Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                                <StackPanel Margin="6,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding FileName}" FontSize="12" />
-                                    <TextBlock FontSize="10" Foreground="Gray">
-                                        <Run Text="{Binding Width, Mode=OneWay}" /><Run Text="x" /><Run Text="{Binding Height, Mode=OneWay}" />
-                                    </TextBlock>
-                                </StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <Image Source="{Binding Thumbnail}" Width="32" Height="32"
+                                   Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                            <StackPanel Margin="6,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding FileName}" FontSize="12" MaxWidth="150"
+                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding FileName}" />
+                                <TextBlock FontSize="10" Foreground="Gray">
+                                    <Run Text="{Binding Width, Mode=OneWay}" /><Run Text="x" /><Run Text="{Binding Height, Mode=OneWay}" />
+                                </TextBlock>
                             </StackPanel>
-                            <Button Grid.Column="1" Content="✕" Width="20" Height="20" Padding="0"
-                                    VerticalAlignment="Top" Margin="4,0,0,0"
-                                    ToolTip="Delete this source image"
-                                    Click="DeleteSourceImage_OnClick" />
-                        </Grid>
-                    </Border>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="✕" Style="{StaticResource SourceDeleteButtonStyle}"
+                                VerticalAlignment="Center" Margin="4,0,0,0"
+                                ToolTip="Delete this source image"
+                                Click="DeleteSourceImage_OnClick" />
+                    </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ZxNext.Core.Model;
@@ -13,7 +14,26 @@ public partial class TreeNodeViewModel : ObservableObject
 {
     /// <summary>Settable (not just constructor-init) so renaming an asset can update the tree display live.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayName))]
     private string name;
+
+    /// <summary>What the tree row shows. Same as <see cref="Name"/> for sub-folders and assets; a fixed-set
+    /// category root instead shows a short friendly label ("Sprite 4bpp", "Layer2 320x256") rather than its
+    /// raw folder path. <see cref="Name"/> / <see cref="FolderPath"/> are unchanged (rename, palette status,
+    /// re-quantize dialogs still use the real values).</summary>
+    public string DisplayName => IsCategoryRoot
+        ? Category switch
+        {
+            AssetCategory.Sprite4Bpp => "Sprite 4bpp",
+            AssetCategory.Sprite8Bpp => "Sprite 8bpp",
+            AssetCategory.Tile4Bpp => "Tile 4bpp",
+            AssetCategory.Tile8Bpp => "Tile 8bpp",
+            AssetCategory.Layer2_256x192 => "Layer2 256x192",
+            AssetCategory.Layer2_320x256 => "Layer2 320x256",
+            AssetCategory.Layer2_640x256x4 => "Layer2 640x256x4",
+            _ => Name
+        }
+        : Name;
 
     public bool IsFolder { get; }
     public ObservableCollection<TreeNodeViewModel> Children { get; } = [];
@@ -74,6 +94,62 @@ public partial class TreeNodeViewModel : ObservableObject
     /// <summary>Bound two-way to the TreeViewItem's own IsExpanded, so "Expand all"/"Collapse all" can drive it programmatically instead of only reacting to the user's own clicks.</summary>
     [ObservableProperty]
     private bool isExpanded = true;
+
+    /// <summary>Zebra striping for leaf rows: set by <see cref="ProjectTreeViewModel.RestripeFolder"/> to this leaf's parity within its parent folder's children. Ignored for folder rows (they get the chip chrome instead).</summary>
+    [ObservableProperty]
+    private bool isOddRow;
+
+    // ---- Visual styling (project tree) --------------------------------------------------------
+    // A folder row is drawn as a rounded "chip": a tinted fill plus a left accent bar. The tint is
+    // by category TYPE, not by individual category: 4bpp (green), 8bpp (blue), Layer2 (violet);
+    // a user sub-folder gets a lighter shade of its parent's tint. Leaf rows are flat (zebra only).
+
+    private static SolidColorBrush Frozen(string hex)
+    {
+        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+        brush.Freeze();
+        return brush;
+    }
+
+    private enum TintKind { FourBpp, EightBpp, Layer2 }
+
+    private TintKind? CategoryTint => Category switch
+    {
+        { } c when c.IsLayer2() => TintKind.Layer2,
+        AssetCategory.Sprite8Bpp or AssetCategory.Tile8Bpp => TintKind.EightBpp,
+        AssetCategory.Sprite4Bpp or AssetCategory.Tile4Bpp => TintKind.FourBpp,
+        _ => null
+    };
+
+    /// <summary>True for a folder row that should be drawn as a chip (every category root and sub-folder).</summary>
+    public bool IsChipRow => IsFolder && CategoryTint is not null;
+
+    /// <summary>Chip fill for a folder row; transparent (but still hit-testable, so the whole row stays
+    /// clickable) for a leaf, which instead gets its zebra / selection background from template triggers.</summary>
+    public Brush RowFill => !IsFolder ? Brushes.Transparent : CategoryTint switch
+    {
+        TintKind.Layer2 => IsCategoryRoot ? Frozen("#ECE5F1") : Frozen("#F5F1F8"),
+        TintKind.EightBpp => IsCategoryRoot ? Frozen("#E3EAF4") : Frozen("#F1F5FB"),
+        TintKind.FourBpp => Frozen("#E7F0E3"), // 4bpp categories never have sub-folders
+        _ => Brushes.Transparent
+    };
+
+    /// <summary>Left accent-bar / border colour for a folder row; transparent for a leaf.</summary>
+    public Brush RowAccent => !IsFolder ? Brushes.Transparent : CategoryTint switch
+    {
+        TintKind.Layer2 => IsCategoryRoot ? Frozen("#8E6DB4") : Frozen("#B79ED2"),
+        TintKind.EightBpp => IsCategoryRoot ? Frozen("#5B84C0") : Frozen("#8FB0DC"),
+        TintKind.FourBpp => Frozen("#77B15E"),
+        _ => Brushes.Transparent
+    };
+
+    /// <summary>Soft fill for a selected / multi-selected leaf row, tinted to its own category.</summary>
+    public Brush SelectionFill => CategoryTint switch
+    {
+        TintKind.Layer2 => Frozen("#E0D4EC"),
+        TintKind.EightBpp => Frozen("#D3E0F2"),
+        _ => Frozen("#D9EAD0")
+    };
 
     public TreeNodeViewModel(string name, bool isFolder)
     {

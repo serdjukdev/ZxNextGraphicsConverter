@@ -95,6 +95,7 @@
               PreviewMouseMove="Tree_OnPreviewMouseMove"
               PreviewMouseRightButtonDown="Tree_OnPreviewMouseRightButtonDown"
               AllowDrop="True" DragOver="Tree_OnDragOver" Drop="Tree_OnDrop" DragLeave="Tree_OnDragLeave"
+              ScrollViewer.HorizontalScrollBarVisibility="Auto"
               BorderThickness="0">
         <TreeView.InputBindings>
             <KeyBinding Key="{x:Static local:Shortcuts.DeleteKey}" Command="{Binding DataContext.DeleteSelectedCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
@@ -105,22 +106,31 @@
                  Auto-sized (fits the content, not the row), so clicks past the name/icons fell
                  through to nothing. Here the header Border sits in an explicit "*" column, so it
                  always spans the row's full available width and is clickable/double-clickable
-                 everywhere, not just on the text itself. -->
+                 everywhere, not just on the text itself.
+
+                 Folder rows (category roots + user sub-folders) are drawn as a rounded "chip": a
+                 tinted fill (RowFill) plus a 3px left accent bar (RowAccent), tint by category type
+                 (4bpp green / 8bpp blue / Layer2 violet; a sub-folder is a lighter shade of its
+                 parent). Leaf rows are flat with a faint zebra stripe (IsOddRow). -->
             <Style TargetType="TreeViewItem">
                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                <Setter Property="Padding" Value="2,3" />
+                <Setter Property="Padding" Value="3,3" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="TreeViewItem">
                             <StackPanel>
-                                <Border x:Name="RowBorder" Background="{TemplateBinding Background}"
-                                        Padding="{TemplateBinding Padding}">
+                                <Border x:Name="RowBorder" Background="{Binding RowFill}"
+                                        BorderBrush="{Binding RowAccent}" BorderThickness="0"
+                                        SnapsToDevicePixels="True">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="3" />
                                             <ColumnDefinition Width="16" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
-                                        <ToggleButton x:Name="Expander" Grid.Column="0"
+                                        <Rectangle x:Name="AccentBar" Grid.Column="0"
+                                                   Fill="{Binding RowAccent}" Visibility="Collapsed" />
+                                        <ToggleButton x:Name="Expander" Grid.Column="1"
                                                       Focusable="False" ClickMode="Press"
                                                       VerticalAlignment="Center"
                                                       IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
@@ -147,11 +157,13 @@
                                                 </ControlTemplate>
                                             </ToggleButton.Template>
                                         </ToggleButton>
-                                        <ContentPresenter x:Name="PART_Header" Grid.Column="1"
-                                                          ContentSource="Header" HorizontalAlignment="Stretch" />
+                                        <Border Grid.Column="2" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter x:Name="PART_Header"
+                                                              ContentSource="Header" HorizontalAlignment="Stretch" />
+                                        </Border>
                                     </Grid>
                                 </Border>
-                                <ItemsPresenter x:Name="ItemsHost" Margin="16,0,0,0" Visibility="Collapsed" />
+                                <ItemsPresenter x:Name="ItemsHost" Margin="14,0,0,0" Visibility="Collapsed" />
                             </StackPanel>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsExpanded" Value="True">
@@ -160,22 +172,26 @@
                                 <Trigger Property="HasItems" Value="False">
                                     <Setter TargetName="Expander" Property="Visibility" Value="Hidden" />
                                 </Trigger>
+                                <!-- Folder chip chrome. -->
+                                <DataTrigger Binding="{Binding IsChipRow}" Value="True">
+                                    <Setter TargetName="RowBorder" Property="CornerRadius" Value="4" />
+                                    <Setter TargetName="RowBorder" Property="BorderThickness" Value="1" />
+                                    <Setter TargetName="RowBorder" Property="Margin" Value="2,1" />
+                                    <Setter TargetName="AccentBar" Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <!-- Leaf zebra (set before selection so a selected odd row still highlights). -->
+                                <DataTrigger Binding="{Binding IsOddRow}" Value="True">
+                                    <Setter TargetName="RowBorder" Property="Background" Value="#0A000000" />
+                                </DataTrigger>
                                 <DataTrigger Binding="{Binding IsMultiSelected}" Value="True">
-                                    <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
-                                    <Setter TargetName="PART_Header" Property="TextElement.Foreground" Value="White" />
+                                    <Setter TargetName="RowBorder" Property="Background" Value="{Binding SelectionFill}" />
+                                    <Setter TargetName="RowBorder" Property="CornerRadius" Value="3" />
+                                    <Setter TargetName="RowBorder" Property="Margin" Value="2,1" />
                                 </DataTrigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
-                <Style.Triggers>
-                    <DataTrigger Binding="{Binding IsFolder}" Value="True">
-                        <Setter Property="Background" Value="#FFE7EEF9" />
-                    </DataTrigger>
-                    <DataTrigger Binding="{Binding IsFolder}" Value="False">
-                        <Setter Property="Background" Value="#FFF6F6F6" />
-                    </DataTrigger>
-                </Style.Triggers>
             </Style>
         </TreeView.ItemContainerStyle>
         <TreeView.ItemTemplate>
@@ -185,15 +201,24 @@
                      assigned to (or one of ITS descendants), so attaching it to the text alone meant
                      right-clicking anywhere else in the row (the same full-width area the left-click
                      fix already made clickable) silently did nothing. -->
-                <Grid>
-                    <StackPanel Orientation="Horizontal" Background="Transparent"
-                                ContextMenuOpening="NodeText_OnContextMenuOpening">
+                <Grid Background="Transparent">
+                    <!-- ContextMenu (and its Opening handler) sits on a full-row-width element, not just the
+                         text — a ContextMenu only opens when you right-click the exact element it's assigned
+                         to (or one of ITS descendants), so attaching it to the text alone meant right-clicking
+                         anywhere else in the row silently did nothing. -->
+                    <Grid Background="Transparent" ContextMenuOpening="NodeText_OnContextMenuOpening">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <!-- Fixed right cluster so the lock (and, on Tile8Bpp, the priority arrow) sit at
+                                 the same X on every row and line up vertically down the list. -->
+                            <ColumnDefinition Width="54" />
+                        </Grid.ColumnDefinitions>
                         <!-- One shared, always-present ContextMenu for every node type (leaf or folder) —
                              NodeText_OnContextMenuOpening toggles Items[i].Visibility/Header by index
                              depending on the node and the current multi-selection. Item order:
                              0 Rename, 1 Re-quantize, 2 Delete, 3 Lock/Unlock, 4 Add sub-folder,
                              5 Re-quantize folder, 6 Delete folder, 7 Delete unused, 8 Priority (Tile8Bpp only). -->
-                        <StackPanel.ContextMenu>
+                        <Grid.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Rename..." Click="RenameMenuItem_OnClick" />
                                 <MenuItem Header="Re-quantize... (Ctrl+R)" Click="ReQuantizeMenuItem_OnClick" />
@@ -210,59 +235,80 @@
                                 <MenuItem Header="Priority" Click="PriorityMenuItem_OnClick"
                                           ToolTip="Layer2 priority: a priority tile draws on top of every layer on real hardware" />
                             </ContextMenu>
-                        </StackPanel.ContextMenu>
-                        <Image Source="{Binding Thumbnail}" Width="18" Height="18" Margin="0,0,4,0" VerticalAlignment="Center"
-                               Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" SnapsToDevicePixels="True" />
-                        <TextBlock Text="{Binding IndexLabel}" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="#FF808080" />
-                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                        <!-- Always-visible padlock on every asset row (open = deletable, closed amber = locked);
-                             click toggles just this asset, the right-click menu also does bulk. Hidden on folder
-                             rows and the reserved blank (which is permanently undeletable anyway). -->
-                        <Button Click="LockButton_OnClick" Margin="4,0,0,0"
-                                ToolTip="Lock / unlock this tile/sprite (a locked one can never be deleted)">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource LockButtonStyle}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsFolder}" Value="True">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsReservedBlank}" Value="True">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <Viewbox Width="16" Height="16">
-                                <Canvas Width="16" Height="16">
-                                    <Path Style="{StaticResource LockBodyStyle}" />
-                                    <Path Style="{StaticResource LockShackleStyle}" />
-                                </Canvas>
-                            </Viewbox>
-                        </Button>
-                        <!-- Layer2 priority (draw-on-top) toggle — Tile8Bpp rows only. Grey arrow = normal,
-                             green arrow = this whole tile renders above every layer on hardware. -->
-                        <Button Click="PriorityButton_OnClick" Margin="2,0,0,0"
-                                ToolTip="Toggle Layer2 priority: a priority tile is drawn on top of every layer on real hardware">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource LockButtonStyle}">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsTile8Bpp}" Value="True">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsReservedBlank}" Value="True">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <Viewbox Width="16" Height="16">
-                                <Canvas Width="16" Height="16">
-                                    <Path Style="{StaticResource PriorityArrowStyle}" />
-                                </Canvas>
-                            </Viewbox>
-                        </Button>
-                    </StackPanel>
+                        </Grid.ContextMenu>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <Image Source="{Binding Thumbnail}" Width="18" Height="18" Margin="0,0,4,0" VerticalAlignment="Center"
+                                   Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" SnapsToDevicePixels="True" />
+                            <TextBlock Text="{Binding IndexLabel}" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="#FF808080" />
+                            <!-- Sub-folder / asset names are truncated with an ellipsis (full name on hover);
+                                 the fixed-set category roots show their friendly label in full. -->
+                            <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="MaxWidth" Value="120" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCategoryRoot}" Value="True">
+                                                <Setter Property="MaxWidth" Value="1000" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <!-- Layer2 priority (draw-on-top) toggle — shown only on Tile8Bpp rows, but the slot
+                                 is kept (Hidden, not Collapsed) elsewhere so the lock never shifts. -->
+                            <Button Click="PriorityButton_OnClick" Margin="0,0,2,0"
+                                    ToolTip="Toggle Layer2 priority: a priority tile is drawn on top of every layer on real hardware">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource LockButtonStyle}">
+                                        <Setter Property="Visibility" Value="Hidden" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsTile8Bpp}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsReservedBlank}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <Viewbox Width="16" Height="16">
+                                    <Canvas Width="16" Height="16">
+                                        <Path Style="{StaticResource PriorityArrowStyle}" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Button>
+                            <!-- Padlock on every asset row (open = deletable, closed amber = locked); click
+                                 toggles just this asset, the right-click menu also does bulk. Hidden on folder
+                                 rows and the reserved blank (permanently undeletable anyway). -->
+                            <Button Click="LockButton_OnClick"
+                                    ToolTip="Lock / unlock this tile/sprite (a locked one can never be deleted)">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource LockButtonStyle}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsReservedBlank}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <Viewbox Width="16" Height="16">
+                                    <Canvas Width="16" Height="16">
+                                        <Path Style="{StaticResource LockBodyStyle}" />
+                                        <Path Style="{StaticResource LockShackleStyle}" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
                     <!-- Drag-and-drop reorder feedback (ProjectTreeView.xaml.cs) — a thin line showing exactly where a dragged tile/sprite row will land. -->
                     <Border Height="2" VerticalAlignment="Top" Background="#FF3388FF" IsHitTestVisible="False"
                             Visibility="{Binding ShowDropIndicatorAbove, Converter={StaticResource BoolToVis}}" />

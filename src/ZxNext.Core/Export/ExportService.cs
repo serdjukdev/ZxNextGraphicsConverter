@@ -42,12 +42,40 @@ public static class ExportService
     {
         pixelOrderForRow ??= _ => PixelExportOrder.RowMajor;
 
-        var results = project.Assets
+        // Grouped by folder first (stable order, same as before this ever considered sub-folders) then
+        // re-grouped by category — a category's root and every one of its own sub-folders always sort
+        // ordinally adjacent (a sub-folder's path is always "<root>/<name>", so it always sorts right
+        // after its own root), so this never reorders anything relative to the old flat grouping.
+        var folderGroups = project.Assets
             .Where(a => !a.Category.IsLayer2())
             .GroupBy(a => a.FolderPath)
             .OrderBy(g => g.Key, StringComparer.Ordinal)
-            .Select(g => ExportFolder(project, g.Key, g.OrderBy(a => a.SortIndex).ToList(), chunkSizeForRow(g.Key).ToByteBoundary(), pixelOrderForRow(g.Key)))
             .ToList();
+
+        var results = new List<FolderExportResult>();
+        foreach (var categoryBatch in folderGroups.GroupBy(g => g.First().Category))
+        {
+            var category = categoryBatch.Key;
+
+            // Sprite8Bpp/Tile8Bpp sub-folders are "banks" of the same logical content (see
+            // AssetCategoryExtensions.SharesPaletteAcrossFolders) — the whole category is ONE row (sized
+            // by the category root's key, not each sub-folder's own path) even though every sub-folder
+            // still gets its own separate binary. Every other category keeps one row per folder.
+            var sizeLookupKey = category.SharesPaletteAcrossFolders() ? category.ToFolderPath() : null;
+            var perFolder = categoryBatch
+                .Select(g => ExportFolder(project, g.Key, g.OrderBy(a => a.SortIndex).ToList(),
+                    chunkSizeForRow(sizeLookupKey ?? g.Key).ToByteBoundary(), pixelOrderForRow(sizeLookupKey ?? g.Key)))
+                .ToList();
+
+            if (sizeLookupKey is not null)
+            {
+                results.Add(perFolder.Count > 1 ? UnifyAcrossSubfolders(category, perFolder) : perFolder[0]);
+            }
+            else
+            {
+                results.AddRange(perFolder);
+            }
+        }
 
         // Layer2 images are exported one-at-a-time, not grouped by folder — see Layer2Exporter's
         // remarks for why they can't share BinaryChunker's per-folder packing model.
@@ -98,7 +126,8 @@ public static class ExportService
                 a.Category.UsesPaletteBank(), a.PaletteSlotIndex))
             .ToList();
         var (chunks, placements) = BinaryChunker.Pack(exportables, baseFileName, category.BinaryFileExtension(), chunkSizeBytes);
-        var asmText = AsmMapGenerator.Generate(placements, chunks.Count);
+        var subfolderName = folderPath == category.ToFolderPath() ? null : folderPath[(category.ToFolderPath().Length + 1)..];
+        var asmText = AsmMapGenerator.Generate(placements, chunks.Count, category, subfolderName);
 
         var paletteBytes = category.UsesPaletteBank()
             ? PaletteFileWriter.WriteBank(project.BankFor(category))
@@ -106,6 +135,37 @@ public static class ExportService
         var paletteFile = new ChunkFile($"{baseFileName}.pal", paletteBytes);
 
         return new FolderExportResult(folderPath, folderPath, chunks, placements, asmText, $"{baseFileName}.asm", paletteFile, IsPixelOrderConfigurable: isPixelOrderConfigurable);
+    }
+
+    /// <summary>
+    /// Collapses a category's separately-generated per-folder results (root + every sub-folder) into ONE
+    /// row — the Export dialog shows only category roots, never individual sub-folders (per-folder detail
+    /// would just be internal plumbing the user never asked to see). <see
+    /// cref="FolderExportResult.Chunks"/> and <see cref="FolderExportResult.Placements"/> are the
+    /// concatenation of every folder's own (each chunk file keeps its own distinct, folder-specific name,
+    /// so every sub-folder still gets its own separate binary on disk) — only the address-map text and the
+    /// palette file physically collapse into one shared file, since every folder's palette is already the
+    /// SAME <see cref="Model.NextPalette"/> object (see <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/>).
+    /// </summary>
+    private static FolderExportResult UnifyAcrossSubfolders(AssetCategory category, List<FolderExportResult> perFolder)
+    {
+        var rootBaseFileName = ExportFileNaming.GraphicsDataBaseFileName(SanitizeFileName(category.ToFolderPath()));
+        var rootPath = category.ToFolderPath();
+        var combinedAsmText = string.Concat(perFolder.Select(r => r.AsmText));
+        var combinedChunks = perFolder.SelectMany(r => r.Chunks).ToList();
+        var combinedPlacements = perFolder.SelectMany(r => r.Placements).ToList();
+        var sharedPaletteFile = perFolder[0].PaletteFile is { } pf ? pf with { FileName = $"{rootBaseFileName}.pal" } : null;
+
+        return perFolder[0] with
+        {
+            RowKey = rootPath,
+            FolderPath = rootPath,
+            Chunks = combinedChunks,
+            Placements = combinedPlacements,
+            AsmText = combinedAsmText,
+            AsmFileName = $"{rootBaseFileName}.asm",
+            PaletteFile = sharedPaletteFile
+        };
     }
 
     public static void WriteToDisk(IEnumerable<FolderExportResult> results, string outputDirectory)
@@ -125,13 +185,13 @@ public static class ExportService
         }
     }
 
-    /// <summary>Every filename this export would write, for an overwrite check before actually writing anything.</summary>
+    /// <summary>Every filename this export would write, for an overwrite check before actually writing anything. Deduplicated — a category unified across sub-folders (see <see cref="UnifyAcrossSubfolders"/>) repeats the same asm/palette filename on every one of its rows.</summary>
     public static List<string> ListOutputFileNames(IEnumerable<FolderExportResult> results) =>
         results.SelectMany(r =>
         {
             var names = r.Chunks.Select(c => c.FileName).Append(r.AsmFileName);
             return r.PaletteFile is { } paletteFile ? names.Append(paletteFile.FileName) : names;
-        }).ToList();
+        }).Distinct().ToList();
 
     private static string SanitizeFileName(string folderPath) =>
         folderPath.Replace('/', '_').Replace('\\', '_').Replace(':', '_');

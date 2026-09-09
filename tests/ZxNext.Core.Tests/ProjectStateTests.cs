@@ -254,4 +254,77 @@ public class ProjectStateTests
         Assert.Equal(15 - 10, project.Tile4BppBank.Slots[newAsset.PaletteSlotIndex].FreeSlotCount);
         Assert.Equal(sibling.PaletteSlotIndex, newAsset.PaletteSlotIndex); // stayed in the shared slot, didn't need to move
     }
+
+    /// <summary>
+    /// Sprite8Bpp/Tile8Bpp sub-folders are "banks" of one logical category (animation frames sharing one
+    /// palette so a bank swap only re-DMAs pixel data, never the palette too) — see
+    /// AssetCategoryExtensions.SharesPaletteAcrossFolders. Every other flat-palette category (Layer2)
+    /// keeps its original one-independent-palette-per-folder behavior.
+    /// </summary>
+    [Fact]
+    public void GetOrCreateFolderPalette_Sprite8Bpp_RootAndSubfolder_ShareTheSameInstance()
+    {
+        var project = new ProjectState();
+
+        var root = project.GetOrCreateFolderPalette(AssetCategory.Sprite8Bpp, "sprite/8bpp/images");
+        var sub = project.GetOrCreateFolderPalette(AssetCategory.Sprite8Bpp, "sprite/8bpp/images/anim1");
+
+        Assert.Same(root, sub);
+    }
+
+    [Fact]
+    public void ClearFlatPalette_Sprite8Bpp_ResetsTheOneSharedInstance_RootAndSubfolderBothSeeItEmpty()
+    {
+        var project = new ProjectState();
+        var palette = project.GetOrCreateFolderPalette(AssetCategory.Sprite8Bpp, "sprite/8bpp/images");
+        palette.TryAdd(new NextColor(1, 2, 3));
+        Assert.Equal(1, palette.Slots.Count(c => c is not null));
+
+        project.ClearFlatPalette(AssetCategory.Sprite8Bpp);
+
+        var root = project.GetOrCreateFolderPalette(AssetCategory.Sprite8Bpp, "sprite/8bpp/images");
+        var sub = project.GetOrCreateFolderPalette(AssetCategory.Sprite8Bpp, "sprite/8bpp/images/anim1");
+        Assert.Same(root, sub);
+        Assert.Equal(0, root.Slots.Count(c => c is not null));
+    }
+
+    [Fact]
+    public void GetOrCreateFolderPalette_Layer2_DifferentFolders_GetIndependentInstances()
+    {
+        var project = new ProjectState();
+
+        var a = project.GetOrCreateFolderPalette(AssetCategory.Layer2_256x192, "layer2/256x192/images/sceneA");
+        var b = project.GetOrCreateFolderPalette(AssetCategory.Layer2_256x192, "layer2/256x192/images/sceneB");
+
+        Assert.NotSame(a, b);
+    }
+
+    [Fact]
+    public void CompactFlatPalette_Sprite8Bpp_SubfolderAssetDeleted_RemapsRootAssetsToo()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "hero", FilePath = "C:\\fake\\hero.png", Width = 16, Height = 16 };
+        project.SourceImages.Add(source);
+
+        var rootRgba = DistinctColorsImage(16, 16, 3, blueOffset: 0);
+        var subRgba = DistinctColorsImage(16, 16, 3, blueOffset: 3);
+        var rootAsset = AssetImporter.Import(project, source, rootRgba, AssetCategory.Sprite8Bpp, "sprite/8bpp/images", DitherMode.None).Asset!;
+        var subSource = new SourceImage { FileName = "walk_0", FilePath = "C:\\fake\\hero.png", Width = 16, Height = 16 };
+        var subAsset = AssetImporter.Import(project, subSource, subRgba, AssetCategory.Sprite8Bpp, "sprite/8bpp/images/anim1", DitherMode.None).Asset!;
+
+        project.RemoveAsset(subAsset.Id);
+        project.CompactFlatPalette(AssetCategory.Sprite8Bpp, "sprite/8bpp/images/anim1"); // called with the SUBFOLDER path...
+
+        // ...but since the palette is shared, compaction must still be driven off the ROOT asset's real
+        // pixel data (not skip it as "a different folder") — the root asset must still render correctly.
+        var palette = project.GetOrCreateFolderPalette(AssetCategory.Sprite8Bpp, "sprite/8bpp/images");
+        for (var y = 0; y < 16; y++)
+        {
+            for (var x = 0; x < 16; x++)
+            {
+                var index = ZxNext.Core.Editing.AssetPixelEditor.GetPixelIndex(rootAsset, x, y);
+                Assert.NotNull(palette.Slots[index]);
+            }
+        }
+    }
 }

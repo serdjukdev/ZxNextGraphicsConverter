@@ -35,11 +35,14 @@ public static class TransparentTileDetector
     }
 
     /// <summary>
-    /// True if some existing asset in this category (scanned project-wide, not just one folder — a
-    /// 4bpp category's palette bank is shared across folders, and per the user's own call this check
-    /// is scoped the same way for 8bpp/flat-palette categories too, even though their palette itself is
-    /// per-folder) already consists entirely of its palette's transparent index. Skips any asset whose
-    /// palette/slot hasn't actually reserved a transparent index at all (nothing to compare against).
+    /// True if some existing asset in this category (scanned project-wide, not just one folder) already
+    /// consists entirely of its palette's transparent index. For Sprite4Bpp/Tile4Bpp the bank is shared
+    /// project-wide anyway; for Sprite8Bpp/Tile8Bpp the flat palette is ALSO shared across every
+    /// sub-folder now (see <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/>) so scanning
+    /// project-wide here is simply correct, not a widened check; Layer2's per-folder palettes are the one
+    /// remaining case where this genuinely looks across otherwise-independent palettes, per the user's own
+    /// call. Skips any asset whose palette/slot hasn't actually reserved a transparent index at all
+    /// (nothing to compare against).
     /// </summary>
     public static bool CategoryAlreadyHasTransparentTile(ProjectState project, AssetCategory category) =>
         project.Assets.Any(a => a.Category == category && IsAssetFullyTransparent(project, a));
@@ -49,7 +52,7 @@ public static class TransparentTileDetector
     {
         var transparentIndex = asset.Category.UsesPaletteBank()
             ? project.BankFor(asset.Category).Slots[asset.PaletteSlotIndex].TransparentIndex
-            : project.FolderPalettesFor(asset.Category).TryGetValue(asset.FolderPath, out var palette) ? palette.TransparentIndex : -1;
+            : project.GetOrCreateFolderPalette(asset.Category, asset.FolderPath).TransparentIndex;
 
         if (transparentIndex < 0) return false;
 

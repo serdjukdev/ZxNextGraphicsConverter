@@ -138,6 +138,103 @@ public class ExportServiceTests : IDisposable
         Assert.Empty(results);
     }
 
+    [Fact]
+    public void ExportAll_Sprite8BppRootAndSubfolder_OnlyOneRowInResult_NoSeparateSubfolderRow()
+    {
+        var project = new ProjectState();
+        var source = new SourceImage { FileName = "hero", FilePath = _tempSourceFile, Width = 16, Height = 16 };
+        project.SourceImages.Add(source);
+        var rgba = new byte[16 * 16 * 4];
+
+        var rootResult = AssetImporter.Import(project, source, rgba, AssetCategory.Sprite8Bpp, "sprite/8bpp/images", DitherMode.None);
+        var subResult = AssetImporter.Import(project, source, rgba, AssetCategory.Sprite8Bpp, "sprite/8bpp/images/anim1", DitherMode.None);
+        Assert.True(rootResult.Success, rootResult.Error);
+        Assert.True(subResult.Success, subResult.Error);
+
+        var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
+        var rowKeys = results.Select(r => r.RowKey).ToList();
+
+        Assert.Contains("sprite/8bpp/images", rowKeys);
+        Assert.DoesNotContain("sprite/8bpp/images/anim1", rowKeys); // sub-folder never gets its own row in the dialog
+    }
+
+    /// <summary>
+    /// Sprite8Bpp/Tile8Bpp sub-folders are "banks" of one logical category (see
+    /// AssetCategoryExtensions.SharesPaletteAcrossFolders): the whole category is ONE row in the Export
+    /// dialog (no separate sub-folder rows), one shared address map, one shared palette file — but each
+    /// sub-folder still gets its own separate binary chunk file(s).
+    /// </summary>
+    [Fact]
+    public void ExportAll_Sprite8BppRootAndSubfolder_CollapseToOneRow_ButKeepSeparateBinaries()
+    {
+        var project = new ProjectState();
+        var rootSource = new SourceImage { FileName = "hero", FilePath = _tempSourceFile, Width = 16, Height = 16 };
+        var subSource = new SourceImage { FileName = "walk_0", FilePath = _tempSourceFile, Width = 16, Height = 16 };
+        project.SourceImages.Add(rootSource);
+        project.SourceImages.Add(subSource);
+        var rgba = new byte[16 * 16 * 4];
+
+        var rootResult = AssetImporter.Import(project, rootSource, rgba, AssetCategory.Sprite8Bpp, "sprite/8bpp/images", DitherMode.None);
+        var subResult = AssetImporter.Import(project, subSource, rgba, AssetCategory.Sprite8Bpp, "sprite/8bpp/images/anim1", DitherMode.None);
+        Assert.True(rootResult.Success, rootResult.Error);
+        Assert.True(subResult.Success, subResult.Error);
+
+        var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
+        var row = results.Single(r => r.RowKey == "sprite/8bpp/images"); // no separate "sprite/8bpp/images/anim1" row at all
+
+        Assert.Equal("sprite_8bpp_images_gfx.asm", row.AsmFileName);
+        Assert.Contains("s8_hero: equ 0\n", row.AsmText);
+        Assert.Contains("s8_anim1_walk_0: equ 0\n", row.AsmText);
+        Assert.Equal(2, row.Placements.Count); // both folders' assets counted on the one row
+
+        Assert.NotNull(row.PaletteFile);
+
+        Assert.Equal(2, row.Chunks.Count);
+        Assert.NotEqual(row.Chunks[0].FileName, row.Chunks[1].FileName); // still separate binaries
+
+        ExportService.WriteToDisk(results, _outputDir);
+        Assert.Single(Directory.GetFiles(_outputDir, "*.asm"));
+        Assert.Single(Directory.GetFiles(_outputDir, "*.pal"));
+        Assert.Equal(2, Directory.GetFiles(_outputDir, "*.spr").Length);
+    }
+
+    /// <summary>Same collapse (and same LOCAL-index label format) as Sprite8Bpp — Tile8Bpp mirrors it exactly
+    /// (no slot/offset, per-file-local equ index), by explicit user decision even though this means the
+    /// label will NOT match a metatile cell's tileIndex byte once sub-folders are involved.</summary>
+    [Fact]
+    public void ExportAll_Tile8BppRootAndSubfolder_CollapseToOneRow_EquValuesArePerFileLocal()
+    {
+        var project = new ProjectState();
+        var rootSource = new SourceImage { FileName = "grass", FilePath = _tempSourceFile, Width = 8, Height = 8 };
+        var subSource = new SourceImage { FileName = "wall", FilePath = _tempSourceFile, Width = 8, Height = 8 };
+        project.SourceImages.Add(rootSource);
+        project.SourceImages.Add(subSource);
+        var rgba = new byte[8 * 8 * 4];
+        for (var i = 0; i < 8 * 8; i++)
+        {
+            var o = i * 4;
+            rgba[o] = 10; rgba[o + 1] = 20; rgba[o + 2] = 30; rgba[o + 3] = 255;
+        }
+
+        var rootResult = AssetImporter.Import(project, rootSource, rgba, AssetCategory.Tile8Bpp, "tile/8bpp/images", DitherMode.None);
+        var subResult = AssetImporter.Import(project, subSource, rgba, AssetCategory.Tile8Bpp, "tile/8bpp/images/set1", DitherMode.None);
+        Assert.True(rootResult.Success, rootResult.Error);
+        Assert.True(subResult.Success, subResult.Error);
+
+        var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
+        var row = results.Single(r => r.RowKey == "tile/8bpp/images"); // no separate "tile/8bpp/images/set1" row at all
+
+        // "grass" is rank 1 in the ROOT file's own export (the reserved blank tile is rank 0 there);
+        // "wall" is rank 0 in the SUB-FOLDER's own export (its own file, no blank of its own) — both
+        // per-file-local, deliberately not AssetExportIndexer's project-wide rank.
+        Assert.Contains("t8_grass: equ 1\n", row.AsmText);
+        Assert.Contains("t8_set1_wall: equ 0\n", row.AsmText);
+
+        Assert.NotNull(row.PaletteFile);
+        Assert.Equal(2, row.Chunks.Count);
+        Assert.NotEqual(row.Chunks[0].FileName, row.Chunks[1].FileName);
+    }
+
     /// <summary>
     /// Regression for a reported "size looks wrong" report: a Layer2_256x192 image's pixel data
     /// (256*192 = 49152 bytes, exactly 6 whole 8KB chunks) was seen as 49664 bytes (49152 + 512) —

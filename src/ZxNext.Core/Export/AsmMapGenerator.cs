@@ -1,16 +1,99 @@
 using System.Text;
+using ZxNext.Core.Model;
 
 namespace ZxNext.Core.Export;
 
 /// <summary>
-/// Emits the Z80 ASM address map for one exported folder: a block of slot_nnn bank constants,
-/// then one label per asset (named after its source image) giving its slot, byte offset, and
-/// (for 4bpp assets only) which of the 16 4bpp palettes it needs — so the programmer knows which
-/// palette to load before drawing this specific tile/sprite.
+/// Emits the Z80 ASM address map for one exported asset folder. Sprite4Bpp gets its own compact
+/// name-to-pattern-number + palette-offset form (see <see cref="GenerateSprite4Bpp"/>); Sprite8Bpp and
+/// Tile8Bpp share the same bare name-to-index form (see <see cref="GenerateBareIndex"/>); every other
+/// category still gets the generic per-asset slot/offset record.
 /// </summary>
 public static class AsmMapGenerator
 {
-    public static string Generate(IReadOnlyList<AssetPlacement> placements, int chunkCount)
+    /// <param name="subfolderName">
+    /// Null for a category's root folder; the sub-folder's own name (no slashes — only Sprite8Bpp/Tile8Bpp
+    /// and the Layer2 categories support one level of user-created sub-folders, see
+    /// <c>AssetCategoryExtensions.UsesPaletteBank</c>) otherwise. Folded into Sprite8Bpp/Tile8Bpp's
+    /// per-item labels since two different sub-folders can otherwise legally reuse the same asset name;
+    /// ignored by every other category for now.
+    /// </param>
+    public static string Generate(IReadOnlyList<AssetPlacement> placements, int chunkCount, AssetCategory category, string? subfolderName = null) =>
+        category switch
+        {
+            AssetCategory.Sprite4Bpp => GenerateSprite4Bpp(placements),
+            AssetCategory.Sprite8Bpp => GenerateBareIndex(placements, "s8", "Sprite8Bpp", subfolderName),
+            AssetCategory.Tile8Bpp => GenerateBareIndex(placements, "t8", "Tile8Bpp", subfolderName),
+            _ => GenerateGeneric(placements, chunkCount)
+        };
+
+    /// <summary>
+    /// Sprite4Bpp: <c>s4_&lt;name&gt;: equ &lt;pattern number&gt;</c> (the 0-based sprite pattern index, i.e.
+    /// the spriteIndex byte a map's <c>_objects.asm</c> writes) plus <c>s4_&lt;name&gt;_pal: db &lt;n&gt;</c>
+    /// (that sprite's 4bpp palette offset 0-15, for bits 7:4 of its attribute byte). A <c>s4_pal_table:</c>
+    /// label marks the start of that same run of palette-offset bytes, so code can also index into it by
+    /// pattern number instead of by name. No bank/byte-offset record: 4bpp sprite patterns upload as one
+    /// contiguous blob (chunk 0, then 1, ...).
+    /// </summary>
+    private static string GenerateSprite4Bpp(IReadOnlyList<AssetPlacement> placements)
+    {
+        var sb = new StringBuilder();
+        sb.Append("; Sprite4Bpp graphics map.\n");
+        sb.Append("; s4_<name>: equ <n>      -- 0-based sprite pattern number (the spriteIndex byte in a map's _objects.asm).\n");
+        sb.Append("; s4_<name>_pal: db <n>   -- this sprite's 4bpp palette offset (0-15): bits 7:4 of its attribute byte.\n");
+        sb.Append("; s4_pal_table:           -- the same palette-offset bytes back to back, indexable by pattern number.\n");
+        sb.Append("; Patterns upload as one contiguous blob, so there is no per-sprite bank or byte offset.\n");
+        sb.Append('\n');
+        sb.Append("s4_pal_table:\n");
+
+        var used = new HashSet<string>();
+        for (var i = 0; i < placements.Count; i++)
+        {
+            var label = "s4_" + AsmLabel.SanitizeUnique(placements[i].Name, used);
+            sb.Append(label).Append(": equ ").Append(i).Append('\n');
+            sb.Append(label).Append("_pal:\n");
+            sb.Append("    db ").Append(placements[i].PaletteSlotIndex).Append('\n');
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Sprite8Bpp/Tile8Bpp: <c>&lt;prefix&gt;_&lt;name&gt;: equ &lt;n&gt;</c> (0-based index within THIS
+    /// file's own export only), e.g. for animation-frame refs like <c>s8_explosion_0</c> + a runtime
+    /// counter. If this file is a user-created sub-folder, the label becomes
+    /// <c>&lt;prefix&gt;_&lt;subfolder&gt;_&lt;name&gt;</c> instead (two sub-folders may otherwise legally
+    /// share an asset name); a root-folder asset's label carries no sub-folder segment. No data byte array
+    /// at all, so unlike <see cref="GenerateSprite4Bpp"/> there is nothing to give a table-start label to.
+    /// Deliberately per-file/per-sub-folder LOCAL, NOT the project-wide category rank
+    /// <see cref="AssetExportIndexer"/> computes for a map's <c>_objects.asm</c> spriteIndex byte or a
+    /// metatile cell's tileIndex byte -- both categories' sub-folders are meant for a "one bank per file,
+    /// re-loaded at a fixed local index, swap banks to change content" technique (Sprite8Bpp: animation
+    /// frames; Tile8Bpp: whichever Layer2 tile set is currently active), addressed by the game directly
+    /// rather than through the Map/Metatile placement system. A Tile8Bpp tile that WOULD be placed via a
+    /// metatile cell in a project that also uses Tile8Bpp sub-folders needs its own separate care -- the
+    /// metatile system's tileIndex byte still uses the project-wide rank regardless, so it will NOT match
+    /// this label's value whenever more than one folder is involved.
+    /// </summary>
+    private static string GenerateBareIndex(IReadOnlyList<AssetPlacement> placements, string prefix, string categoryLabel, string? subfolderName)
+    {
+        var sb = new StringBuilder();
+        sb.Append("; ").Append(categoryLabel).Append(" graphics map.\n");
+        sb.Append("; ").Append(prefix).Append("_<name>: equ <n>   -- 0-based index within this file's own export.\n");
+        sb.Append('\n');
+
+        var folderPrefix = subfolderName is null ? "" : subfolderName + "_";
+        var used = new HashSet<string>();
+        for (var i = 0; i < placements.Count; i++)
+        {
+            var label = prefix + "_" + AsmLabel.SanitizeUnique(folderPrefix + placements[i].Name, used);
+            sb.Append(label).Append(": equ ").Append(i).Append('\n');
+        }
+
+        return sb.ToString();
+    }
+
+    private static string GenerateGeneric(IReadOnlyList<AssetPlacement> placements, int chunkCount)
     {
         var sb = new StringBuilder();
 

@@ -550,42 +550,76 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Rebuilds an entire 4bpp category's palette bank from scratch, re-quantizing every asset in
-    /// it down to at most <paramref name="maxColorsPerTile"/> colours each. Not undoable (the undo
-    /// stack is cleared) — a bulk structural change like this can't be safely snapshotted with the
-    /// current single-level undo model. Any tile that still doesn't fit even after reduction, or
-    /// that lost its source image, is removed from the project rather than left with a now-invalid
-    /// palette slot reference; the user is told which ones need to be re-imported by hand. Every
-    /// removed/replaced tile's <see cref="MetatileCell.TileAssetId"/> references are kept valid
-    /// (remapped to the replacement, or to the category's reserved blank if there's no
-    /// replacement) — see <see cref="ProjectState.RemapMetatileTileReferences"/> for why this
-    /// matters. The category's own reserved blank tile is never fed through re-quantization itself
-    /// (it has no source image, so it would always hit the "no source" removal branch) — instead
-    /// it's explicitly recreated fresh in the rebuilt bank up front, and every metatile cell that
-    /// referenced the old one is remapped to the new one.
+    /// Rebuilds an entire category's palette from scratch — the palette BANK for a 4bpp category
+    /// (<see cref="AssetCategoryExtensions.UsesPaletteBank"/>), or the ONE shared flat palette for a
+    /// <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/> category (Sprite8Bpp/Tile8Bpp,
+    /// across every sub-folder at once — a per-folder re-quantize can't free space a DIFFERENT folder is
+    /// using up in the shared palette) — re-quantizing every asset in it down to at most
+    /// <paramref name="maxColorsPerTile"/> colours each, keeping each asset's own existing dither mode.
+    /// See <see cref="RebuildCategoryFromScratchAsync"/> for the shared engine and everything it guarantees
+    /// (undo-stack clearing, reserved-blank handling, dangling-metatile-reference remapping, etc).
     /// </summary>
     public async Task ReQuantizeCategoryAsync(AssetCategory category, int maxColorsPerTile)
     {
-        if (!category.UsesPaletteBank()) return;
+        if (!category.UsesPaletteBank() && !category.SharesPaletteAcrossFolders()) return;
 
-        await RunBusyAsync($"Re-quantizing {category}...", async progress =>
+        var (succeeded, failed) = await RebuildCategoryFromScratchAsync(category, a => a.DitherMode, maxColorsPerTile, $"Re-quantizing {category}...");
+
+        PixelEditor.StatusText = failed.Count == 0
+            ? $"Re-quantized {succeeded} tile(s) in {category} to ≤{maxColorsPerTile} colours each."
+            : $"Re-quantized {succeeded} tile(s); {failed.Count} still didn't fit and were REMOVED — re-import from Source Images: {string.Join(", ", failed)}.";
+    }
+
+    /// <summary>
+    /// Shared engine for a full CATEGORY rebuild from scratch: clears the palette bank (4bpp categories)
+    /// or the one shared flat palette (<see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/>),
+    /// then re-imports every asset in the category from its original source region, letting
+    /// <paramref name="ditherModeFor"/> choose each asset's dither mode (so a caller can change dithering
+    /// for just some assets while everyone else keeps their own) with an optional
+    /// <paramref name="maxColorsPerTile"/> cap. Used by <see cref="ReQuantizeCategoryAsync"/> (every
+    /// asset keeps its own dither, new colour cap) and, for <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/>
+    /// categories only, by <see cref="ReQuantizeFolderAsync"/> (new dither for just the target folder, no
+    /// colour cap) — both need this SAME "clear once, rebuild everything in one pass" approach rather than
+    /// the older per-asset <see cref="ProjectState.ReplaceFlatPaletteAsset"/> incremental-compaction path
+    /// (still used by <see cref="ReQuantizeAssetsAsync"/> for independent-per-folder-palette categories,
+    /// i.e. Layer2), which the user found adds a stray extra colour when repeated against a palette now
+    /// shared across several folders. Not undoable (the undo stack is cleared) — a bulk structural change
+    /// like this can't be safely snapshotted with the current single-level undo model. Any tile that still
+    /// doesn't fit, or that lost its source image, is removed from the project rather than left with a
+    /// now-invalid palette reference — the caller is told which ones via the returned failed-name list.
+    /// Every removed/replaced tile's <see cref="MetatileCell.TileAssetId"/> references are kept valid
+    /// (remapped to the replacement, or to the category's reserved blank if there's no replacement) — see
+    /// <see cref="ProjectState.RemapMetatileTileReferences"/>. The category's own reserved blank tile is
+    /// never fed through re-quantization itself (no source image, would always hit the "no source"
+    /// removal branch) — instead it's explicitly recreated fresh up front, and every metatile cell that
+    /// referenced the old one is remapped to the new one. Each asset keeps its own original
+    /// <see cref="GraphicsAsset.FolderPath"/>/<see cref="GraphicsAsset.IsLocked"/>/<see cref="GraphicsAsset.IsPriority"/>
+    /// when re-imported, so a shared-palette category's sub-folder structure and per-tile flags survive
+    /// the rebuild untouched.
+    /// </summary>
+    private async Task<(int Succeeded, List<string> Failed)> RebuildCategoryFromScratchAsync(
+        AssetCategory category, Func<GraphicsAsset, DitherMode> ditherModeFor, int? maxColorsPerTile, string busyMessage)
+    {
+        var succeeded = 0;
+        var failed = new List<string>();
+
+        await RunBusyAsync(busyMessage, async progress =>
         {
             _undoStack.Clear();
 
             var hasReservedBlank = category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp;
             var assetsInCategory = _project.Assets.Where(a => a.Category == category && !a.IsReservedBlank).OrderBy(a => a.SortIndex).ToList();
             var oldBlank = hasReservedBlank ? _project.Assets.FirstOrDefault(a => a.Category == category && a.IsReservedBlank) : null;
-            _project.BankFor(category).Clear();
+            if (category.UsesPaletteBank()) _project.BankFor(category).Clear();
+            else _project.ClearFlatPalette(category);
             if (oldBlank is not null) _project.Assets.Remove(oldBlank);
 
-            // Recreate the reserved blank first, in the now-empty bank, so every tile that can't be
+            // Recreate the reserved blank first, in the now-empty palette, so every tile that can't be
             // carried forward (overflow or missing source) has somewhere safe to redirect its
-            // metatile cells to instead of going dangling. Sprite4Bpp (the only other bank category)
-            // has no reserved-blank concept at all, so this is skipped entirely for it.
+            // metatile cells to instead of going dangling. Sprite4Bpp/Sprite8Bpp have no reserved-blank
+            // concept at all, so this is skipped entirely for them.
             var newBlank = hasReservedBlank ? ReservedBlankAssetService.EnsureBlankTile(_project, category) : null;
 
-            var succeeded = 0;
-            var failed = new List<string>();
             var replaced = new List<(Guid OldId, GraphicsAsset New)>();
             var removedIds = new List<Guid>();
 
@@ -617,13 +651,15 @@ public partial class MainViewModel : ObservableObject
                     var cellRgba = PixelRectExtractor.Extract(decoded.Rgba32, decoded.Width, rect);
                     var cellSource = new SourceImage { Id = source.Id, FileName = asset.Name, FilePath = source.FilePath, Width = asset.Width, Height = asset.Height };
 
-                    var result = AssetImporter.Import(_project, cellSource, cellRgba, category, asset.FolderPath, asset.DitherMode, maxColorsPerTile, asset.SourceOffsetX, asset.SourceOffsetY, excludeAssetIdFromNameCheck: asset.Id);
+                    var result = AssetImporter.Import(_project, cellSource, cellRgba, category, asset.FolderPath, ditherModeFor(asset), maxColorsPerTile, asset.SourceOffsetX, asset.SourceOffsetY,
+                        excludeAssetIdFromNameCheck: asset.Id, priority: asset.IsPriority);
                     _project.Assets.Remove(asset);
 
                     if (result.Success)
                     {
                         result.Asset!.Name = asset.Name;
                         result.Asset.SortIndex = asset.SortIndex; // full category rebuild replaces every asset; keep original relative order
+                        result.Asset.IsLocked = asset.IsLocked;
                         _project.RemapMetatileTileReferences(asset.Id, result.Asset.Id);
                         replaced.Add((asset.Id, result.Asset));
                         succeeded++;
@@ -641,10 +677,9 @@ public partial class MainViewModel : ObservableObject
             foreach (var id in removedIds) Tree.RemoveAssetNode(id, _project);
 
             HasUnsavedChanges = true;
-            PixelEditor.StatusText = failed.Count == 0
-                ? $"Re-quantized {succeeded} tile(s) in {category} to ≤{maxColorsPerTile} colours each."
-                : $"Re-quantized {succeeded} tile(s); {failed.Count} still didn't fit and were REMOVED — re-import from Source Images: {string.Join(", ", failed)}.";
         });
+
+        return (succeeded, failed);
     }
 
     /// <summary>
@@ -740,6 +775,14 @@ public partial class MainViewModel : ObservableObject
     /// would be a dialog per tile) — use the per-tile Ctrl+R / Re-quantize... flow (which does
     /// prompt) for any that fail here. Can touch many assets at once, so it runs off the UI thread
     /// behind a busy indicator.
+    ///
+    /// For a <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/> category (Sprite8Bpp/Tile8Bpp)
+    /// this goes through <see cref="RebuildCategoryFromScratchAsync"/> instead of the older per-asset
+    /// <see cref="ReQuantizeAssetsAsync"/> path — the whole category gets rebuilt in one clean pass (every
+    /// OTHER folder's assets keep their own existing dither mode, only this folder's get
+    /// <paramref name="newDitherMode"/>), because the incremental remove/compact/re-import
+    /// <see cref="ProjectState.ReplaceFlatPaletteAsset"/> does per asset showed a stray extra colour
+    /// appearing when run repeatedly against a palette now shared across several folders.
     /// </summary>
     public async Task ReQuantizeFolderAsync(AssetCategory category, string folderPath, DitherMode newDitherMode)
     {
@@ -747,6 +790,17 @@ public partial class MainViewModel : ObservableObject
         if (affected.Count == 0)
         {
             PixelEditor.StatusText = "This folder has no tiles/sprites to re-quantize yet.";
+            return;
+        }
+
+        if (category.SharesPaletteAcrossFolders())
+        {
+            var (succeeded, failed) = await RebuildCategoryFromScratchAsync(
+                category, a => a.FolderPath == folderPath ? newDitherMode : a.DitherMode, maxColorsPerTile: null, "Re-quantizing folder...");
+
+            PixelEditor.StatusText = failed.Count == 0
+                ? $"Re-quantized {succeeded} tile(s)/sprite(s) in this folder (dither: {newDitherMode})."
+                : $"Re-quantized {succeeded}; {failed.Count} lost their source image and were REMOVED: {string.Join(", ", failed)}.";
             return;
         }
 
@@ -1266,11 +1320,12 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Permanently deletes a user-created 8bpp sub-folder: every tile/sprite in it plus its own
-    /// flat palette. Not undoable — unlike single-asset delete, a folder can hold many assets
-    /// and its own standing palette object, and safely snapshotting all of that just for undo
-    /// isn't worth the complexity for a rare, deliberate, explicitly-confirmed action (same call
-    /// already made for bulk category re-quantize).
+    /// Permanently deletes a user-created 8bpp sub-folder and every tile/sprite in it. The category's
+    /// palette (shared across every sub-folder — see <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/>)
+    /// is compacted afterward, NOT removed — the root and any other sub-folder may still be using it. Not
+    /// undoable — unlike single-asset delete, a folder can hold many assets, and safely snapshotting all
+    /// of that just for undo isn't worth the complexity for a rare, deliberate, explicitly-confirmed
+    /// action (same call already made for bulk category re-quantize).
     /// </summary>
     public void DeleteFolder(TreeNodeViewModel folderNode)
     {
@@ -1296,7 +1351,7 @@ public partial class MainViewModel : ObservableObject
         if (ScrollableMessageWindow.Show(message, "Delete folder", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
 
         foreach (var asset in affected) _project.RemoveAsset(asset.Id);
-        _project.FolderPalettesFor(category).Remove(folderPath);
+        _project.CompactFlatPalette(category, folderPath);
         Tree.RemoveFolderNode(folderNode);
         _undoStack.Clear();
 
@@ -1622,7 +1677,10 @@ public partial class MainViewModel : ObservableObject
     /// re-pack every OTHER row too just to read one back out) — for a project with many folders or
     /// a large Layer2 image, that would mean redoing real work (byte packing, or Layer2's
     /// per-pixel hardware reordering) on every single ComboBox change instead of only for the row
-    /// that actually changed.
+    /// that actually changed. A shared-palette category's row (see
+    /// <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/>) covers the whole category —
+    /// its <paramref name="rowKey"/> is the category's own root path — so this sums the re-chunked size
+    /// across every one of its folders (root + every sub-folder), each still packed independently.
     /// </summary>
     public (int ChunkCount, int DataBytes) RecomputeExportRow(string rowKey, ExportChunkSize size)
     {
@@ -1633,6 +1691,19 @@ public partial class MainViewModel : ObservableObject
         {
             var result = Layer2Exporter.Export(layer2Asset, _project.GetOrCreateFolderPalette(layer2Asset.Category, layer2Asset.FolderPath), chunkSizeBytes);
             return (result.Chunks.Count, result.Chunks.Sum(c => c.Data.Length));
+        }
+
+        var sharedCategory = Enum.GetValues<AssetCategory>()
+            .Cast<AssetCategory?>()
+            .FirstOrDefault(c => c!.Value.SharesPaletteAcrossFolders() && c.Value.ToFolderPath() == rowKey);
+
+        if (sharedCategory is { } category)
+        {
+            var perFolderResults = _project.Assets
+                .Where(a => a.Category == category)
+                .GroupBy(a => a.FolderPath)
+                .Select(g => ExportService.ExportFolder(_project, g.Key, g.OrderBy(a => a.SortIndex).ToList(), chunkSizeBytes));
+            return (perFolderResults.Sum(r => r.Chunks.Count), perFolderResults.Sum(r => r.Chunks.Sum(c => c.Data.Length)));
         }
 
         var assets = _project.Assets
@@ -1820,17 +1891,25 @@ public partial class MainViewModel : ObservableObject
                 PaletteStrip.ShowBank(bank, $"{category} — palette bank overview");
                 PixelEditor.StatusText = $"{category}: {usedPalettes}/{PaletteBank.MaxSlots} palette(s) used, {totalColors} colour(s) total.";
             }
-            else if (node.FolderPath is { } folderPath && _project.FolderPalettesFor(category).TryGetValue(folderPath, out var palette))
+            else if (node.FolderPath is { } folderPath)
             {
-                var capacity = category.FlatPaletteCapacity();
+                // GetOrCreateFolderPalette (not a raw dictionary lookup) so a Sprite8Bpp/Tile8Bpp
+                // sub-folder correctly shows the CATEGORY's shared palette (see
+                // AssetCategoryExtensions.SharesPaletteAcrossFolders) — including one already populated
+                // by sibling folders, even if this particular sub-folder has no assets of its own yet.
+                var palette = _project.GetOrCreateFolderPalette(category, folderPath);
                 var usedColors = palette.Slots.Count(c => c is not null);
-                PaletteStrip.ShowPalette(palette, $"{node.Name} ({category}) — folder palette, {usedColors}/{capacity} colour(s) used", isFourBpp: false, paletteSlotIndex: 0);
-                PixelEditor.StatusText = $"{node.Name}: {usedColors}/{capacity} colour(s) used in this folder's palette.";
-            }
-            else
-            {
-                PaletteStrip.Clear();
-                PixelEditor.StatusText = $"{node.Name}: no images placed yet — palette is empty.";
+                if (usedColors == 0)
+                {
+                    PaletteStrip.Clear();
+                    PixelEditor.StatusText = $"{node.Name}: no images placed yet — palette is empty.";
+                }
+                else
+                {
+                    var capacity = category.FlatPaletteCapacity();
+                    PaletteStrip.ShowPalette(palette, $"{node.Name} ({category}) — folder palette, {usedColors}/{capacity} colour(s) used", isFourBpp: false, paletteSlotIndex: 0);
+                    PixelEditor.StatusText = $"{node.Name}: {usedColors}/{capacity} colour(s) used in this folder's palette.";
+                }
             }
         }
         else

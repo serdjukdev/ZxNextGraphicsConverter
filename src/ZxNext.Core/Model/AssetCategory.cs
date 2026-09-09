@@ -43,6 +43,17 @@ public static class AssetCategoryExtensions
     public static bool UsesPaletteBank(this AssetCategory category) =>
         category is AssetCategory.Sprite4Bpp or AssetCategory.Tile4Bpp;
 
+    /// <summary>
+    /// True for the two flat-palette categories whose user-created sub-folders are meant as "banks" of
+    /// the SAME logical content (Sprite8Bpp's animation-frame-bank technique; Tile8Bpp's 8x8 tiles all
+    /// destined for one Layer2 target) rather than independent, unrelated images — so unlike Layer2 (each
+    /// image genuinely independent), the whole category (root + every sub-folder) shares ONE
+    /// <see cref="ZxNext.Core.Model.NextPalette"/> instead of each folder getting its own. See
+    /// <see cref="ZxNext.Core.Project.ProjectState.GetOrCreateFolderPalette"/>.
+    /// </summary>
+    public static bool SharesPaletteAcrossFolders(this AssetCategory category) =>
+        category is AssetCategory.Sprite8Bpp or AssetCategory.Tile8Bpp;
+
     public static bool IsLayer2(this AssetCategory category) =>
         category is AssetCategory.Layer2_256x192 or AssetCategory.Layer2_320x256 or AssetCategory.Layer2_640x256x4;
 

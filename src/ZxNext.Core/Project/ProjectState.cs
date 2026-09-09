@@ -93,15 +93,50 @@ public class ProjectState
     /// </summary>
     public NextPalette GetOrCreateFolderPalette(AssetCategory category, string folderPath)
     {
+        var key = PaletteKey(category, folderPath);
         var palettes = FolderPalettesFor(category);
-        if (!palettes.TryGetValue(folderPath, out var palette))
+        if (!palettes.TryGetValue(key, out var palette))
         {
             var transparentIndex = category.HardwareTransparentIndex() ?? -1;
             palette = new NextPalette(category.FlatPaletteCapacity(), transparentIndex);
-            palettes[folderPath] = palette;
+            palettes[key] = palette;
         }
         return palette;
     }
+
+    /// <summary>
+    /// Resets a category's flat palette to a fresh, empty instance — used by a full-category re-quantize
+    /// (<see cref="AssetCategoryExtensions.UsesPaletteBank"/>'s <c>PaletteBank.Clear()</c> equivalent for
+    /// flat categories), which is about to re-import every asset from scratch and let each one re-allocate
+    /// its own colours. For a <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/> category
+    /// this clears the ONE palette shared by every sub-folder (there is no per-sub-folder palette to reset
+    /// individually any more).
+    /// </summary>
+    public void ClearFlatPalette(AssetCategory category)
+    {
+        var key = PaletteKey(category, category.ToFolderPath());
+        FolderPalettesFor(category)[key] = new NextPalette(category.FlatPaletteCapacity(), category.HardwareTransparentIndex() ?? -1);
+    }
+
+    /// <summary>
+    /// The folder-palette dictionary key for <paramref name="folderPath"/> — normally itself, but for a
+    /// <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/> category always the category's
+    /// OWN root path, so every sub-folder resolves to (and shares) the exact same dictionary entry as the
+    /// root instead of getting an independent palette.
+    /// </summary>
+    private static string PaletteKey(AssetCategory category, string folderPath) =>
+        category.SharesPaletteAcrossFolders() ? category.ToFolderPath() : folderPath;
+
+    /// <summary>
+    /// Every asset whose pixel indices are governed by the SAME flat palette as <paramref name="folderPath"/> —
+    /// just that one folder's own assets normally, but every asset in the whole category (regardless of
+    /// which sub-folder it's in) for a <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/>
+    /// category, since those all share one <see cref="NextPalette"/> instance.
+    /// </summary>
+    private IEnumerable<GraphicsAsset> AssetsSharingPalette(AssetCategory category, string folderPath) =>
+        category.SharesPaletteAcrossFolders()
+            ? Assets.Where(a => a.Category == category)
+            : Assets.Where(a => a.Category == category && a.FolderPath == folderPath);
 
     /// <summary>
     /// Removes an asset by id. Safe unconditionally: palettes (bank slots and 8bpp folder
@@ -164,13 +199,14 @@ public class ProjectState
     /// </summary>
     public void CompactFlatPalette(AssetCategory category, string folderPath)
     {
+        var key = PaletteKey(category, folderPath);
         var palettes = FolderPalettesFor(category);
-        if (!palettes.TryGetValue(folderPath, out var oldPalette)) return;
+        if (!palettes.TryGetValue(key, out var oldPalette)) return;
 
-        var assetsInFolder = Assets.Where(a => a.Category == category && a.FolderPath == folderPath).ToList();
+        var assetsInFolder = AssetsSharingPalette(category, folderPath).ToList();
         if (assetsInFolder.Count == 0)
         {
-            palettes[folderPath] = new NextPalette(category.FlatPaletteCapacity(), category.HardwareTransparentIndex() ?? -1);
+            palettes[key] = new NextPalette(category.FlatPaletteCapacity(), category.HardwareTransparentIndex() ?? -1);
             return;
         }
 
@@ -219,7 +255,7 @@ public class ProjectState
             }
         }
 
-        palettes[folderPath] = newPalette;
+        palettes[key] = newPalette;
     }
 
     /// <summary>
@@ -329,11 +365,12 @@ public class ProjectState
         }
 
         var folderPath = oldAsset.FolderPath;
+        var key = PaletteKey(category, folderPath);
         var palettes = FolderPalettesFor(category);
-        palettes.TryGetValue(folderPath, out var originalPalette);
+        palettes.TryGetValue(key, out var originalPalette);
 
-        var siblingSnapshots = Assets
-            .Where(a => a.Category == category && a.FolderPath == folderPath && a.Id != oldAsset.Id)
+        var siblingSnapshots = AssetsSharingPalette(category, folderPath)
+            .Where(a => a.Id != oldAsset.Id)
             .Select(a => (Asset: a, OriginalPixelData: (byte[])a.PackedPixelData.Clone()))
             .ToList();
 
@@ -348,8 +385,8 @@ public class ProjectState
         }
 
         // Roll back: restore the palette, every sibling's remapped pixel data, and the old asset.
-        if (originalPalette is not null) palettes[folderPath] = originalPalette;
-        else palettes.Remove(folderPath);
+        if (originalPalette is not null) palettes[key] = originalPalette;
+        else palettes.Remove(key);
         foreach (var (asset, originalPixelData) in siblingSnapshots) asset.PackedPixelData = originalPixelData;
         Assets.Add(oldAsset);
 

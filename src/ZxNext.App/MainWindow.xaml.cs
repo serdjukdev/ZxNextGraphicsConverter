@@ -256,7 +256,7 @@ public partial class MainWindow : Window
 
         var preview = RawBitmapRenderer.FromRgba32(decoded.Width, decoded.Height, decoded.Rgba32);
         var slicerVm = new AtlasSlicerViewModel(preview, decoded.Width, decoded.Height, cellWidth, cellHeight,
-            _viewModel.Project, category, decoded.Rgba32);
+            _viewModel.Project, category, decoded.Rgba32, folderPath);
         var dialog = new AtlasSlicerWindow { DataContext = slicerVm, Owner = this };
 
         if (dialog.ShowDialog() == true)
@@ -336,11 +336,11 @@ public partial class MainWindow : Window
     private static bool IsPaletteFullReason(ImportFailureReason reason) =>
         reason is ImportFailureReason.PaletteOverflow or ImportFailureReason.FlatPaletteFull;
 
-    /// <summary>Shown whenever an import/re-quantize can't fit into its palette — lets the user reduce just this tile's colours, or (4bpp bank categories only) rebuild the whole category's palette bank from scratch at a lower colour cap.</summary>
+    /// <summary>Shown whenever an import/re-quantize can't fit into its palette — lets the user reduce just this tile's colours, or (4bpp bank categories, and shared-palette Sprite8Bpp/Tile8Bpp) rebuild the whole category's palette from scratch at a lower colour cap.</summary>
     private async Task HandlePaletteOverflowAsync(string message, AssetCategory category, Func<int, ImportOutcome> retryWithMaxColors)
     {
         var maxUsableColors = category.UsesPaletteBank() ? PaletteBank.SlotUsableColors : category.FlatPaletteCapacity() - 1;
-        var vm = new PaletteOverflowViewModel(message, maxUsableColors, showReQuantizeCategoryOption: category.UsesPaletteBank());
+        var vm = new PaletteOverflowViewModel(message, maxUsableColors, showReQuantizeCategoryOption: category.UsesPaletteBank() || category.SharesPaletteAcrossFolders());
         var dialog = new PaletteOverflowWindow { DataContext = vm, Owner = this };
         if (dialog.ShowDialog() != true) return;
 

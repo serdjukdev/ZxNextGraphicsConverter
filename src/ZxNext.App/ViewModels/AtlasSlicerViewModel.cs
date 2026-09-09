@@ -118,7 +118,7 @@ public partial class AtlasSlicerViewModel : ObservableObject
     public bool CanPadIncompleteEdgeCells => !SliceIntoMetatileBlocks;
 
     public AtlasSlicerViewModel(WriteableBitmap preview, int sourceWidth, int sourceHeight, int cellWidth, int cellHeight,
-        ProjectState project, AssetCategory category, byte[] sourceRgba32)
+        ProjectState project, AssetCategory category, byte[] sourceRgba32, string folderPath)
     {
         SourcePreview = preview;
         SourceWidth = sourceWidth;
@@ -134,8 +134,14 @@ public partial class AtlasSlicerViewModel : ObservableObject
         _categoryHasReservedBlankConcept = category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp;
         // Not offered for GridSize=1: a 1x1 "block" is identical to a plain tile slice, and
         // AssetImporter.Import already auto-creates the matching 1x1 metatile for every plain-sliced tile
-        // in that mode — block-mode would just create a second, duplicate metatile per tile.
-        SupportsMetatileBlockSlicing = category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp && project.MetatileGridSize != 1;
+        // in that mode — block-mode would just create a second, duplicate metatile per tile. Also never
+        // offered when slicing into a Tile8Bpp sub-folder: those tiles are excluded from the Metatile
+        // Editor's tile palette entirely (see MetatileEditorViewModel.RefreshTilePalette's remarks — a
+        // sub-folder tile's exported label is a per-file LOCAL index, which would never match the
+        // project-wide tileIndex byte a metatile cell actually needs), so auto-building a metatile from
+        // them here would create exactly the same trap through a different door.
+        var isSubfolder = category.SharesPaletteAcrossFolders() && folderPath != category.ToFolderPath();
+        SupportsMetatileBlockSlicing = category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp && project.MetatileGridSize != 1 && !isSubfolder;
         ResolvedGridSize = project.MetatileGridSize;
 
         _remainingTileCapacity = category == AssetCategory.Tile4Bpp

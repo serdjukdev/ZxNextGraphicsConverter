@@ -104,12 +104,8 @@ public partial class TreeNodeViewModel : ObservableObject
     // by category TYPE, not by individual category: 4bpp (green), 8bpp (blue), Layer2 (violet);
     // a user sub-folder gets a lighter shade of its parent's tint. Leaf rows are flat (zebra only).
 
-    private static SolidColorBrush Frozen(string hex)
-    {
-        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
-        brush.Freeze();
-        return brush;
-    }
+    private static readonly SolidColorBrush SubfolderAccent8Bpp = UiPalette.Freeze("#8FB0DC");
+    private static readonly SolidColorBrush SubfolderAccentLayer2 = UiPalette.Freeze("#B79ED2");
 
     private enum TintKind { FourBpp, EightBpp, Layer2 }
 
@@ -128,27 +124,27 @@ public partial class TreeNodeViewModel : ObservableObject
     /// clickable) for a leaf, which instead gets its zebra / selection background from template triggers.</summary>
     public Brush RowFill => !IsFolder ? Brushes.Transparent : CategoryTint switch
     {
-        TintKind.Layer2 => IsCategoryRoot ? Frozen("#ECE5F1") : Frozen("#F5F1F8"),
-        TintKind.EightBpp => IsCategoryRoot ? Frozen("#E3EAF4") : Frozen("#F1F5FB"),
-        TintKind.FourBpp => Frozen("#E7F0E3"), // 4bpp categories never have sub-folders
+        TintKind.Layer2 => IsCategoryRoot ? UiPalette.Layer2Fill : UiPalette.Layer2FillLight,
+        TintKind.EightBpp => IsCategoryRoot ? UiPalette.EightBppFill : UiPalette.EightBppFillLight,
+        TintKind.FourBpp => UiPalette.FourBppFill, // 4bpp categories never have sub-folders
         _ => Brushes.Transparent
     };
 
     /// <summary>Left accent-bar / border colour for a folder row; transparent for a leaf.</summary>
     public Brush RowAccent => !IsFolder ? Brushes.Transparent : CategoryTint switch
     {
-        TintKind.Layer2 => IsCategoryRoot ? Frozen("#8E6DB4") : Frozen("#B79ED2"),
-        TintKind.EightBpp => IsCategoryRoot ? Frozen("#5B84C0") : Frozen("#8FB0DC"),
-        TintKind.FourBpp => Frozen("#77B15E"),
+        TintKind.Layer2 => IsCategoryRoot ? UiPalette.Layer2Accent : SubfolderAccentLayer2,
+        TintKind.EightBpp => IsCategoryRoot ? UiPalette.EightBppAccent : SubfolderAccent8Bpp,
+        TintKind.FourBpp => UiPalette.FourBppAccent,
         _ => Brushes.Transparent
     };
 
     /// <summary>Soft fill for a selected / multi-selected leaf row, tinted to its own category.</summary>
     public Brush SelectionFill => CategoryTint switch
     {
-        TintKind.Layer2 => Frozen("#E0D4EC"),
-        TintKind.EightBpp => Frozen("#D3E0F2"),
-        _ => Frozen("#D9EAD0")
+        TintKind.Layer2 => UiPalette.Layer2Selection,
+        TintKind.EightBpp => UiPalette.EightBppSelection,
+        _ => UiPalette.FourBppSelection
     };
 
     public TreeNodeViewModel(string name, bool isFolder)

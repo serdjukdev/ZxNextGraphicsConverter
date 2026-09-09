@@ -7,76 +7,211 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Export for Next" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize">
-    <StackPanel Margin="14" Width="620">
-        <StackPanel.Resources>
-            <BooleanToVisibilityConverter x:Key="BoolToVis" />
-        </StackPanel.Resources>
+        ResizeMode="NoResize" Background="#FFFAFAFA">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <!-- Flat button, matching the tree/source-images restyle: rounded, 1px border, subtle hover. -->
+        <Style x:Key="FlatButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#FFF4F4F4" />
+            <Setter Property="BorderBrush" Value="#FFCBCBCB" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#FF1E1E1E" />
+            <Setter Property="Padding" Value="12,4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FFEAEAEA" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#FFB6B6B6" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Primary (accented) button for the main action. -->
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource FlatButtonStyle}">
+            <Setter Property="Background" Value="#FF5B84C0" />
+            <Setter Property="BorderBrush" Value="#FF4B72AC" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
+                                CornerRadius="4" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FF6E93C9" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ExportGridHeaderStyle" TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#FFEFEFEF" />
+            <Setter Property="Foreground" Value="#FF404040" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="BorderBrush" Value="#FFD8D8D8" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+
+        <Style x:Key="ExportGridCellStyle" TargetType="DataGridCell">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#FF1E1E1E" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridCell">
+                        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <!-- Keep row text dark on the tinted selection fill (the theme default would switch it to
+                     the light HighlightText colour, which washes out against our pale selection tint). -->
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Foreground" Value="#FF1E1E1E" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- All row backgrounds come from these triggers (not RowBackground/AlternatingRowBackground,
+             which would out-rank the selection setter): last matching trigger wins, so
+             selected > hover > zebra. -->
+        <Style x:Key="ExportGridRowStyle" TargetType="DataGridRow">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="Foreground" Value="#FF1E1E1E" />
+            <Style.Triggers>
+                <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                    <Setter Property="Background" Value="#FFF7F8FA" />
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FFEDEFF3" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{Binding RowSelectionFill}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <StackPanel Margin="16" Width="620">
         <TextBlock Text="Each row below is packed into its own 8KB-chunked .bin file(s) plus a matching .asm address map. Rows for a real tile/sprite/Layer2 folder also get their own .pal palette file (always 512 bytes). Map/metatile/object rows instead embed their data directly as `db` bytes in one plain .asm file — no chunk size to pick, no palette file (they carry no colour data of their own)."
-                   TextWrapping="Wrap" Margin="0,0,0,10" />
+                   TextWrapping="Wrap" Foreground="#FF555555" Margin="0,0,0,12" />
 
         <!-- Clicking anywhere in a row (except the Chunk size dropdown, which needs its own clicks
              for opening/picking) toggles that row's Export? checkbox in one click — see
-             Grid_OnPreviewMouseLeftButtonDown. Without this, DataGrid's normal behavior needs a
-             precise hit on the small checkbox glyph, AND a first click just to select the cell
-             before a second click can actually toggle it. -->
-        <DataGrid x:Name="Grid" ItemsSource="{Binding Folders}" AutoGenerateColumns="False"
-                  PreviewMouseLeftButtonDown="Grid_OnPreviewMouseLeftButtonDown"
-                  HeadersVisibility="Column" MaxHeight="220" CanUserAddRows="False" GridLinesVisibility="Horizontal">
-            <DataGrid.Columns>
-                <DataGridCheckBoxColumn Header="Export?" Binding="{Binding IsIncluded, Mode=TwoWay}" Width="Auto" />
-                <DataGridTextColumn Header="What's this row?" Binding="{Binding RowKey}" IsReadOnly="True" Width="2*" />
-                <DataGridTextColumn Header="Assets" Binding="{Binding AssetCountDisplay}" IsReadOnly="True" Width="*" />
-                <DataGridTextColumn Header="Chunks" Binding="{Binding ChunkCountDisplay}" IsReadOnly="True" Width="*" />
-                <DataGridTextColumn Header="Data bytes" Binding="{Binding DataBytesDisplay}" IsReadOnly="True" Width="*" />
-                <!-- Per-row choice of how this folder's/image's data is split into files at write time —
-                     goes in the same "one number per row" slot the redundant constant palette-size
-                     column used to occupy. A plain ComboBox in a CellTemplate (not a
-                     DataGridComboBoxColumn's cell-editing template) stays interactive regardless of
-                     the grid's other columns being read-only. -->
-                <DataGridTemplateColumn Header="Chunk size" Width="1.2*">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <ComboBox ItemsSource="{x:Static vm:ExportViewModel.AvailableChunkSizes}"
-                                      DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      SelectedValue="{Binding SelectedChunkSize, UpdateSourceTrigger=PropertyChanged}"
-                                      Visibility="{Binding IsChunkConfigurable, Converter={StaticResource BoolToVis}}"
-                                      Margin="2" VerticalAlignment="Center" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                <!-- Tile8Bpp only — see PixelExportOrder's remarks on why this is a real performance
-                     choice (matching the target Layer2 resolution's row/column-major SRAM addressing
-                     for a fast sequential blit), not a style preference. -->
-                <DataGridTemplateColumn Header="Pixel order" Width="1.2*">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <ComboBox ItemsSource="{x:Static vm:ExportViewModel.AvailablePixelOrders}"
-                                      DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      SelectedValue="{Binding SelectedPixelOrder, UpdateSourceTrigger=PropertyChanged}"
-                                      Visibility="{Binding IsPixelOrderConfigurable, Converter={StaticResource BoolToVis}}"
-                                      Margin="2" VerticalAlignment="Center" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-            </DataGrid.Columns>
-        </DataGrid>
+             Grid_OnPreviewMouseLeftButtonDown. The 4px first column is a colour bar keyed to the
+             row's asset-category type, matching the project tree. -->
+        <Border BorderBrush="#FFDDDDDD" BorderThickness="1" CornerRadius="6" SnapsToDevicePixels="True"
+                ClipToBounds="True">
+            <DataGrid x:Name="Grid" ItemsSource="{Binding Folders}" AutoGenerateColumns="False"
+                      PreviewMouseLeftButtonDown="Grid_OnPreviewMouseLeftButtonDown"
+                      HeadersVisibility="Column" MaxHeight="240" CanUserAddRows="False"
+                      GridLinesVisibility="None" BorderThickness="0" Background="White"
+                      AlternationCount="2" RowHeight="30"
+                      ColumnHeaderStyle="{StaticResource ExportGridHeaderStyle}"
+                      CellStyle="{StaticResource ExportGridCellStyle}"
+                      RowStyle="{StaticResource ExportGridRowStyle}">
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Width="4" CanUserResize="False" CanUserSort="False" CanUserReorder="False">
+                        <DataGridTemplateColumn.CellStyle>
+                            <Style TargetType="DataGridCell" BasedOn="{StaticResource ExportGridCellStyle}">
+                                <Setter Property="Padding" Value="0" />
+                            </Style>
+                        </DataGridTemplateColumn.CellStyle>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Rectangle Fill="{Binding RowAccent}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridCheckBoxColumn Header="Export?" Binding="{Binding IsIncluded, Mode=TwoWay}" Width="Auto" />
+                    <DataGridTextColumn Header="What's this row?" Binding="{Binding RowKey}" IsReadOnly="True" Width="2*" />
+                    <DataGridTextColumn Header="Assets" Binding="{Binding AssetCountDisplay}" IsReadOnly="True" Width="*" />
+                    <DataGridTextColumn Header="Chunks" Binding="{Binding ChunkCountDisplay}" IsReadOnly="True" Width="*" />
+                    <DataGridTextColumn Header="Data bytes" Binding="{Binding DataBytesDisplay}" IsReadOnly="True" Width="*" />
+                    <!-- Per-row choice of how this folder's/image's data is split into files at write time.
+                         A plain ComboBox in a CellTemplate (not a DataGridComboBoxColumn's cell-editing
+                         template) stays interactive regardless of the grid's other columns being read-only. -->
+                    <DataGridTemplateColumn Header="Chunk size" Width="1.2*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox ItemsSource="{x:Static vm:ExportViewModel.AvailableChunkSizes}"
+                                          DisplayMemberPath="Label" SelectedValuePath="Value"
+                                          SelectedValue="{Binding SelectedChunkSize, UpdateSourceTrigger=PropertyChanged}"
+                                          Visibility="{Binding IsChunkConfigurable, Converter={StaticResource BoolToVis}}"
+                                          VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <!-- Tile8Bpp only — see PixelExportOrder's remarks on why this is a real performance
+                         choice (matching the target Layer2 resolution's row/column-major SRAM addressing
+                         for a fast sequential blit), not a style preference. -->
+                    <DataGridTemplateColumn Header="Pixel order" Width="1.2*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox ItemsSource="{x:Static vm:ExportViewModel.AvailablePixelOrders}"
+                                          DisplayMemberPath="Label" SelectedValuePath="Value"
+                                          SelectedValue="{Binding SelectedPixelOrder, UpdateSourceTrigger=PropertyChanged}"
+                                          Visibility="{Binding IsPixelOrderConfigurable, Converter={StaticResource BoolToVis}}"
+                                          VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
         <TextBlock Text="Pixel order (Tile8Bpp only): Row-major matches Layer2_256x192's SRAM addressing; Column-major matches Layer2_320x256/640x256x4's — pick whichever your game's Layer2 mode uses, so the blit can copy sequentially instead of doing per-pixel address math."
-                   FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,4,0,0" />
+                   FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="2,6,0,0" />
 
-        <TextBlock Text="Output folder" FontSize="11" Margin="0,10,0,2" />
+        <TextBlock Text="Output folder" FontSize="11" FontWeight="SemiBold" Foreground="#FF404040" Margin="2,14,0,3" />
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBox Grid.Column="0" Text="{Binding OutputDirectory, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="True" />
-            <Button Grid.Column="1" Content="Browse..." Click="Browse_OnClick" Margin="6,0,0,0" Padding="8,2" />
+            <Border Grid.Column="0" BorderBrush="#FFDDDDDD" BorderThickness="1" CornerRadius="4" Background="White">
+                <TextBox Text="{Binding OutputDirectory, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="True"
+                         BorderThickness="0" Background="Transparent" Padding="6,4" VerticalContentAlignment="Center" />
+            </Border>
+            <Button Grid.Column="1" Content="Browse..." Click="Browse_OnClick" Margin="6,0,0,0"
+                    Style="{StaticResource FlatButtonStyle}" />
         </Grid>
 
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-            <Button Content="Cancel" Width="80" Margin="0,0,8,0" IsCancel="True" Click="Cancel_OnClick" />
-            <Button Content="Export" Width="90" IsDefault="True" IsEnabled="{Binding CanExport}" Click="Export_OnClick" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="Cancel" MinWidth="80" Margin="0,0,8,0" IsCancel="True" Click="Cancel_OnClick"
+                    Style="{StaticResource FlatButtonStyle}" />
+            <Button Content="Export" MinWidth="96" IsDefault="True" IsEnabled="{Binding CanExport}" Click="Export_OnClick"
+                    Style="{StaticResource PrimaryButtonStyle}" />
         </StackPanel>
     </StackPanel>
 </Window>

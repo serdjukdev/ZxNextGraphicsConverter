@@ -27,6 +27,22 @@ public partial class ExportFolderRowViewModel : ObservableObject
     public string FolderPath { get; }
     public int AssetCount { get; }
 
+    /// <summary>Left accent-bar colour for this row, matching the project tree's category-type tints
+    /// (4bpp green / 8bpp blue / Layer2 violet); a map's grid/metatile/object rows get the neutral tint.
+    /// Derived from <see cref="FolderPath"/> ("sprite/8bpp/walk", "layer2/256x192/images", "map/level1").</summary>
+    public System.Windows.Media.Brush RowAccent =>
+        FolderPath.StartsWith("layer2/", StringComparison.Ordinal) ? UiPalette.Layer2Accent
+        : FolderPath.StartsWith("map/", StringComparison.Ordinal) ? UiPalette.NeutralAccent
+        : FolderPath.Contains("8bpp", StringComparison.Ordinal) ? UiPalette.EightBppAccent
+        : UiPalette.FourBppAccent;
+
+    /// <summary>Soft selection fill for this row, matching the same tints.</summary>
+    public System.Windows.Media.Brush RowSelectionFill =>
+        FolderPath.StartsWith("layer2/", StringComparison.Ordinal) ? UiPalette.Layer2Selection
+        : FolderPath.StartsWith("map/", StringComparison.Ordinal) ? UiPalette.NeutralSelection
+        : FolderPath.Contains("8bpp", StringComparison.Ordinal) ? UiPalette.EightBppSelection
+        : UiPalette.FourBppSelection;
+
     /// <summary>Displayed instead of AssetCount/ChunkCount/DataBytes when !IsChunkConfigurable — those are always 0 for the asm-embedded rows (no Placements/Chunks at all), and showing a bare "0" reads as "empty/broken" rather than "not applicable to this row kind."</summary>
     public string AssetCountDisplay => IsChunkConfigurable ? AssetCount.ToString() : "—";
 

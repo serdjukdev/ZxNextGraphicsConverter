@@ -149,6 +149,26 @@ public class AssetImporterTests
     }
 
     [Fact]
+    public void FlatPaletteFull_SharedPaletteCategory_AdviceDoesNotSuggestAnotherSubfolder()
+    {
+        var project = new ProjectState();
+        // Fill the shared Tile8Bpp palette right up (every slot with a low-blue colour) so a high-blue
+        // colour can't fit.
+        var palette = project.GetOrCreateFolderPalette(AssetCategory.Tile8Bpp, "tile/8bpp/images");
+        for (var i = 0; i < 256 && palette.FreeSlotCount > 0; i++) palette.TryAdd(new NextColor((byte)(i & 7), (byte)((i >> 3) & 7), (byte)((i >> 6) & 3)));
+        Assert.Equal(0, palette.FreeSlotCount);
+
+        var source = MakeSource("blue_tile", 8, 8);
+        var result = AssetImporter.Import(project, source, SolidColorWithTransparentCorner(8, 8, (0, 0, 255)),
+            AssetCategory.Tile8Bpp, "tile/8bpp/images/bank_a", DitherMode.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(ImportFailureReason.FlatPaletteFull, result.Reason);
+        Assert.DoesNotContain("different sub-folder", result.Error);   // that advice is only right for Layer2
+        Assert.Contains("re-quantize the whole category", result.Error);
+    }
+
+    [Fact]
     public void Layer2_640x256x4_TooManyColors_ReportsFlatPaletteFull()
     {
         var project = new ProjectState();

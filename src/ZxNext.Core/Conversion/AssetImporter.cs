@@ -231,9 +231,14 @@ public static class AssetImporter
 
         if (slotsNeeded > palette.FreeSlotCount)
         {
+            // Sprite8Bpp/Tile8Bpp share one palette across the whole category (root + every sub-folder),
+            // so "move it to another sub-folder" no longer buys a fresh palette there; only Layer2
+            // sub-folders still have independent palettes.
+            var advice = category.SharesPaletteAcrossFolders()
+                ? "This category shares one palette across its root and every sub-folder, so reduce this image's colours, or re-quantize the whole category with a lower colour count."
+                : "Put it in a different sub-folder (each has its own palette), or reduce colours.";
             return new ImportResult(false, null,
-                $"The palette for '{folderPath}' has {palette.FreeSlotCount} free colour(s) but this image needs {slotsNeeded} more (capacity {category.FlatPaletteCapacity()}). " +
-                "Put it in a different sub-folder (its own palette) or reduce colours.",
+                $"The palette for '{folderPath}' has {palette.FreeSlotCount} free colour(s) but this image needs {slotsNeeded} more (capacity {category.FlatPaletteCapacity()}). {advice}",
                 ImportFailureReason.FlatPaletteFull);
         }
 

@@ -31,4 +31,20 @@ public class ObjectTypesExporterTests
         var project = new ProjectState();
         Assert.Null(ObjectTypesExporter.Export(project));
     }
+
+    [Fact]
+    public void Export_SanitizesTypeNames_AndDeCollides()
+    {
+        var project = new ProjectState();
+        project.ObjectTypes.Add(new ObjectType { Name = "big door" });   // space
+        project.ObjectTypes.Add(new ObjectType { Name = "big.door" });   // '.' -> same sanitized label
+        project.ObjectTypes.Add(new ObjectType { Name = "9lives" });     // leading digit
+
+        var asm = ObjectTypesExporter.Export(project)!.AsmText;
+
+        Assert.Contains("obj_big_door: equ 0", asm);
+        Assert.Contains("obj_big_door_2: equ 1", asm);   // de-collided
+        Assert.Contains("obj__9lives: equ 2", asm);      // leading digit gets an underscore
+        Assert.DoesNotContain("obj_big door", asm);       // never emits a raw name with a space
+    }
 }

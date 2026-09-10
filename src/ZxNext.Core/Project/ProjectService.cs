@@ -16,6 +16,12 @@ public static class ProjectService
 {
     public const string FileExtension = ".zxngc";
 
+    /// <summary>The <c>project.json</c> schema version this build writes and understands. Bump when a change
+    /// needs a load-time migration that can't be driven by simple field-presence defaults. v1 -> v2: the
+    /// 8bpp sprite/tile categories moved from one flat palette per sub-folder to one shared across the
+    /// whole category (see <see cref="MergeLegacyPerSubfolderPalettes"/>).</summary>
+    public const int CurrentFormatVersion = 2;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -26,6 +32,7 @@ public static class ProjectService
     {
         var dto = new ProjectManifestDto
         {
+            FormatVersion = CurrentFormatVersion,
             Sprite4BppBank = ToDto(project.Sprite4BppBank),
             Tile4BppBank = ToDto(project.Tile4BppBank),
             MetatileGridSize = project.MetatileGridSize
@@ -344,9 +351,98 @@ public static class ProjectService
                 .Select(g => (int?)g.Key)
                 .FirstOrDefault();
 
+        if (dto.FormatVersion > CurrentFormatVersion)
+        {
+            project.LoadWarnings.Add(
+                $"This project was saved by a newer version of the app (project format v{dto.FormatVersion}; this build understands v{CurrentFormatVersion}). " +
+                "It has been opened, but anything newer than this build knows about may be missing or misread. Save over it with this build only if that's OK.");
+        }
+
+        MergeLegacyPerSubfolderPalettes(project);
+
         EnsureReservedBlankAssets(project);
 
         return project;
+    }
+
+    /// <summary>
+    /// Format v1 -> v2 fixup. Before the shared-sub-folder-palette change, a Sprite8Bpp / Tile8Bpp project
+    /// with user sub-folders saved one independent flat palette per sub-folder; v2 shares one palette across
+    /// the whole category. This folds every stale per-sub-folder palette into the category-root palette,
+    /// keeping the root's colours at their exact slot positions (so root assets need no remap) and appending
+    /// each sub-folder's colours to the first free slots, then re-indexes every affected sub-folder asset's
+    /// 8bpp pixel bytes to the merged slot positions. If the combined colour count won't fit one palette it
+    /// records a warning and leaves that category alone (a re-quantize will rebuild it). A no-op for a v2
+    /// project (its palette dict already holds only the category-root key) and for a category with no
+    /// sub-folders.
+    /// </summary>
+    private static void MergeLegacyPerSubfolderPalettes(ProjectState project)
+    {
+        foreach (var category in new[] { AssetCategory.Sprite8Bpp, AssetCategory.Tile8Bpp })
+        {
+            var dict = project.FolderPalettesFor(category);
+            var rootKey = category.ToFolderPath();
+            var staleKeys = dict.Keys.Where(k => k != rootKey).ToList();
+            if (staleKeys.Count == 0) continue;
+
+            var capacity = category.FlatPaletteCapacity();
+            dict.TryGetValue(rootKey, out var root);
+
+            var distinct = new HashSet<NextColor>();
+            if (root is not null)
+                foreach (var c in root.Slots) if (c is { } rc) distinct.Add(rc);
+            foreach (var k in staleKeys)
+                foreach (var c in dict[k].Slots) if (c is { } sc) distinct.Add(sc);
+
+            var needsTransparent = root?.TransparentIndex >= 0 || staleKeys.Any(k => dict[k].TransparentIndex >= 0);
+
+            if (distinct.Count + (needsTransparent ? 1 : 0) > capacity)
+            {
+                project.LoadWarnings.Add(
+                    $"{category}'s sub-folders together use more than {capacity} colours under the old per-sub-folder palette " +
+                    "layout, so they can't be merged into one shared palette automatically. Re-quantize this category to rebuild it; " +
+                    "its colours may look wrong until then.");
+                continue;
+            }
+
+            var merged = new NextPalette(capacity, root?.TransparentIndex ?? -1);
+            if (root is not null)
+                for (var i = 0; i < Math.Min(capacity, root.Slots.Count); i++) merged.SetAt(i, root.Slots[i]);
+            if (merged.TransparentIndex < 0 && needsTransparent) merged.EnsureTransparentIndexReserved();
+
+            foreach (var staleKey in staleKeys)
+            {
+                var stale = dict[staleKey];
+                var lut = new int[capacity];
+                for (var oldIdx = 0; oldIdx < capacity; oldIdx++)
+                {
+                    if (oldIdx == stale.TransparentIndex)
+                    {
+                        lut[oldIdx] = merged.TransparentIndex >= 0 ? merged.TransparentIndex : oldIdx;
+                        continue;
+                    }
+                    var color = oldIdx < stale.Slots.Count ? stale.Slots[oldIdx] : null;
+                    lut[oldIdx] = color is { } c ? merged.TryAdd(c) : oldIdx;
+                }
+
+                foreach (var asset in project.Assets)
+                {
+                    if (asset.Category != category || asset.FolderPath != staleKey) continue;
+                    var pixels = asset.PackedPixelData;
+                    for (var p = 0; p < pixels.Length; p++)
+                    {
+                        int oldIdx = pixels[p];
+                        if (oldIdx < capacity && lut[oldIdx] >= 0) pixels[p] = (byte)lut[oldIdx];
+                    }
+                }
+            }
+
+            dict.Clear();
+            dict[rootKey] = merged;
+            project.LoadWarnings.Add(
+                $"{category}'s per-sub-folder palettes were merged into one shared palette to match this build's format. " +
+                "Check the colours still look right, and re-quantize the category if not.");
+        }
     }
 
     /// <summary>

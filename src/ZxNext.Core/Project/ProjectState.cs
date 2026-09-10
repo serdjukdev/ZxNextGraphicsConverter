@@ -49,6 +49,12 @@ public class ProjectState
     /// <summary>Project-wide list of user-defined map-object categories (e.g. "portal", "character"). See <see cref="ObjectType"/> for why this is project-wide rather than per-map.</summary>
     public List<ObjectType> ObjectTypes { get; } = [];
 
+    /// <summary>Non-fatal notes produced while loading this project from an older/newer <c>.zxngc</c>
+    /// (a format version from a newer build, an on-load palette migration that had to drop or rebuild
+    /// something). Empty for a project created in-app or loaded cleanly. The app surfaces these to the
+    /// user once, right after opening.</summary>
+    public List<string> LoadWarnings { get; } = [];
+
     /// <summary>
     /// Next value in the PER-KIND creation-order sequence for metatiles — deliberately NOT a single
     /// global counter across every <see cref="MetatileKind"/> like <see cref="GraphicsAsset.SortIndex"/>

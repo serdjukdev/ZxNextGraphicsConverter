@@ -1614,6 +1614,13 @@ public partial class MainViewModel : ObservableObject
             loadSucceeded = true;
         });
 
+        if (loadSucceeded && _project.LoadWarnings.Count > 0)
+        {
+            MessageBox.Show(
+                string.Join("\n\n", _project.LoadWarnings),
+                "Project opened with notes", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
         if (loadSucceeded && _project.MetatileGridSize is null) MetatileGridSizeNeeded?.Invoke();
     }
 

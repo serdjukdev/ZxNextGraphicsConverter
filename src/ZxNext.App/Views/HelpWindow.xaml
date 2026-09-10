@@ -54,7 +54,7 @@
                     </Expander.Header>
                     <StackPanel Style="{StaticResource SectionContentStyle}">
                         <TextBlock Style="{StaticResource TermStyle}" Text="File → New Project... / Open Project..." />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Creates a new .zxngc project (in its own new subfolder) or opens an existing one. If the current project has unsaved changes, you're asked to save/discard/cancel first." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Creates a new .zxngc project (in its own new subfolder) or opens an existing one. If the current project has unsaved changes, you're asked to save/discard/cancel first. A .zxngc records the app's project-format version: opening one made by a newer build, or one old enough to need a data migration on load (e.g. an early 8bpp sub-folder palette layout), still works and shows a one-time note about what was adjusted." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="File → Recent Projects" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="The last projects you opened or saved, most recent first." />
@@ -369,7 +369,7 @@
                         <TextBlock Style="{StaticResource CodeBlockStyle}" Text="Object record (8 bytes):&#10;  byte 0    spriteIndex&#10;  bytes 1-2 X  (int16, little-endian)&#10;  bytes 3-4 Y  (int16, little-endian)&#10;  byte 5    type    (obj_&lt;name&gt; index from object_types.asm, 0xFF = no type)&#10;  byte 6    connect (index of the linked object in THIS file, 0xFF = no link)&#10;  byte 7    userByte (the per-object User Byte 0-255, set in the Map Editor)" />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="object_types.asm" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="One project-wide file (not per-map), only written if the project has any Object Types defined: see the Map Editor's 'Manage Types...' dialog. One `obj_&lt;name&gt;: equ &lt;index&gt;` line per type, in list order; that index is exactly what every map's _objects.asm writes as the `type` byte, so it's consistent across every map in the export." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="One project-wide file (not per-map), only written if the project has any Object Types defined: see the Map Editor's 'Manage Types...' dialog. One `obj_&lt;name&gt;: equ &lt;index&gt;` line per type, in list order; that index is exactly what every map's _objects.asm writes as the `type` byte, so it's consistent across every map in the export. The name is put through the assembler-label sanitizer (a space or '.' becomes '_') and de-collided per file, like every other exported name label." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Layer2 export" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="One image = one blob spanning consecutive chunks, byte order depends on resolution: 256x192 is plain row-major; 320x256 is column-major (top-to-bottom, then next column); 640x256x4 is column-major AND packs 2 adjacent pixels per byte (high nibble = left pixel)." />

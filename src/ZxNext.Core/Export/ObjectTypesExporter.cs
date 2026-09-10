@@ -24,9 +24,14 @@ public static class ObjectTypesExporter
         var sb = new StringBuilder();
         sb.Append("; object_types.asm -- project-wide object type IDs, shared by every map's *_objects.asm\n");
         sb.Append("; obj_<name>: equ <type index> -- a map's objects row writes this index as an object record's `type` byte (0xFF = no type assigned)\n");
+        // Type names come straight from the "Manage Types..." dialog with no character restrictions, so
+        // they go through the shared assembler-label sanitizer (a name with a space or '.' would otherwise
+        // break sjasmplus) and are de-collided per file, matching every other exported name label.
+        var usedLabels = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < project.ObjectTypes.Count; i++)
         {
-            sb.Append("obj_").Append(project.ObjectTypes[i].Name).Append(": equ ").Append(i).Append('\n');
+            var label = AsmLabel.SanitizeUnique(project.ObjectTypes[i].Name, usedLabels);
+            sb.Append("obj_").Append(label).Append(": equ ").Append(i).Append('\n');
         }
 
         return new FolderExportResult(RowKey, "", [], [], sb.ToString(), $"{RowKey}.asm", null, IsChunked: false);

@@ -517,4 +517,97 @@ public class ProjectServiceTests : IDisposable
 
         Assert.Null(loaded.MetatileGridSize);
     }
+
+    [Fact]
+    public void Load_ProjectFromANewerFormatVersion_LoadsWithAWarning()
+    {
+        const string json = """
+        {
+          "FormatVersion": 999,
+          "SourceImages": [],
+          "Sprite4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Tile4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Sprite8BppFolderPalettes": {},
+          "Tile8BppFolderPalettes": {},
+          "Layer2_256x192FolderPalettes": {},
+          "Layer2_320x256FolderPalettes": {},
+          "Layer2_640x256x4FolderPalettes": {},
+          "Assets": []
+        }
+        """;
+
+        using (var stream = new FileStream(_tempProjectFile, FileMode.Create, FileAccess.Write))
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            using var entryStream = zip.CreateEntry("project.json", CompressionLevel.Fastest).Open();
+            using var writer = new StreamWriter(entryStream);
+            writer.Write(json);
+        }
+
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        Assert.Contains(loaded.LoadWarnings, w => w.Contains("newer version"));
+    }
+
+    /// <summary>
+    /// A project saved under format v1 with a Tile8Bpp sub-folder that had its OWN independent flat
+    /// palette (the pre-shared-palette layout). On load it must be folded into one shared category
+    /// palette: the root folder's colours keep their exact slot positions (root assets unchanged), the
+    /// sub-folder's colours append to free slots, and every sub-folder asset's 8bpp pixel bytes are
+    /// re-indexed to match. A warning is recorded so the user can eyeball the result.
+    /// </summary>
+    [Fact]
+    public void Load_LegacyTile8BppProjectWithPerSubfolderPalettes_MergesThemAndRemapsSubfolderPixels()
+    {
+        const string legacyJson = """
+        {
+          "FormatVersion": 1,
+          "SourceImages": [],
+          "Sprite4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Tile4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Sprite8BppFolderPalettes": {},
+          "Tile8BppFolderPalettes": {
+            "tile/8bpp/images": { "TransparentIndex": 0, "Colors": [ null, { "R3": 7, "G3": 0, "B3": 0 }, { "R3": 0, "G3": 7, "B3": 0 }, null ] },
+            "tile/8bpp/bank_a": { "TransparentIndex": 0, "Colors": [ null, { "R3": 0, "G3": 0, "B3": 7 }, { "R3": 7, "G3": 0, "B3": 0 }, null ] }
+          },
+          "Layer2_256x192FolderPalettes": {},
+          "Layer2_320x256FolderPalettes": {},
+          "Layer2_640x256x4FolderPalettes": {},
+          "Assets": [
+            { "Id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "Name": "root_tile", "Category": "Tile8Bpp", "Width": 2, "Height": 1, "FolderPath": "tile/8bpp/images", "SortIndex": 0, "PaletteSlotIndex": 0, "PackedDataFile": "assets/a1.bin" },
+            { "Id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "Name": "bank_tile", "Category": "Tile8Bpp", "Width": 2, "Height": 1, "FolderPath": "tile/8bpp/bank_a", "SortIndex": 1, "PaletteSlotIndex": 0, "PackedDataFile": "assets/a2.bin" }
+          ],
+          "Metatiles": [],
+          "Maps": []
+        }
+        """;
+
+        using (var stream = new FileStream(_tempProjectFile, FileMode.Create, FileAccess.Write))
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            using (var entryStream = zip.CreateEntry("project.json", CompressionLevel.Fastest).Open())
+            using (var writer = new StreamWriter(entryStream))
+                writer.Write(legacyJson);
+            using (var entryStream = zip.CreateEntry("assets/a1.bin", CompressionLevel.Fastest).Open())
+                entryStream.Write([1, 2]); // root_tile: red, green
+            using (var entryStream = zip.CreateEntry("assets/a2.bin", CompressionLevel.Fastest).Open())
+                entryStream.Write([1, 2]); // bank_tile: blue, red (indices into bank_a's own palette)
+        }
+
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        // One shared palette, keyed by the category root only.
+        Assert.Equal(["tile/8bpp/images"], loaded.Tile8BppFolderPalettes.Keys.OrderBy(k => k));
+        var merged = loaded.Tile8BppFolderPalettes["tile/8bpp/images"];
+        Assert.Equal(new NextColor(7, 0, 0), merged.Slots[1]); // root red, unmoved
+        Assert.Equal(new NextColor(0, 7, 0), merged.Slots[2]); // root green, unmoved
+        Assert.Equal(new NextColor(0, 0, 7), merged.Slots[3]); // bank_a blue, appended
+
+        var rootTile = Assert.Single(loaded.Assets, a => a.Name == "root_tile");
+        var bankTile = Assert.Single(loaded.Assets, a => a.Name == "bank_tile");
+        Assert.Equal([1, 2], rootTile.PackedPixelData);            // unchanged
+        Assert.Equal([3, 1], bankTile.PackedPixelData);            // blue 1->3, red 2->1
+
+        Assert.Contains(loaded.LoadWarnings, w => w.Contains("Tile8Bpp") && w.Contains("merged"));
+    }
 }

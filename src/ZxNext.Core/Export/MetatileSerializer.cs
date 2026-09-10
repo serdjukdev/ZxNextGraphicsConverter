@@ -18,7 +18,7 @@ public static class MetatileSerializer
     {
         var tileCategory = metatile.Kind == MetatileKind.FourBpp ? AssetCategory.Tile4Bpp : AssetCategory.Tile8Bpp;
 
-        if (AssetExportIndexer.ExceedsExportableCap(tileCategory, projectAssets))
+        if (AssetExportIndexer.PlacementExceedsExportableCap(tileCategory, projectAssets))
         {
             return new MetatileSerializeResult(false, null,
                 $"{tileCategory} has more than {AssetExportIndexer.MaxAssetsPerCategory} assets — reduce it below " +
@@ -38,7 +38,7 @@ public static class MetatileSerializer
                     $"Metatile '{metatile.Name}' cell {i} references a tile that no longer exists.");
             }
 
-            var tileIndex = (byte)AssetExportIndexer.IndexOf(tileAsset, projectAssets);
+            var tileIndex = (byte)AssetExportIndexer.PlacementIndexOf(tileAsset, projectAssets);
 
             if (metatile.Kind == MetatileKind.FourBpp)
             {

@@ -6,14 +6,14 @@ namespace ZxNext.Core.Tests;
 
 public class MetatileSerializerTests
 {
-    private static GraphicsAsset FakeTile(string name, int sortIndex, AssetCategory category = AssetCategory.Tile4Bpp, int paletteSlotIndex = 0) => new()
+    private static GraphicsAsset FakeTile(string name, int sortIndex, AssetCategory category = AssetCategory.Tile4Bpp, int paletteSlotIndex = 0, string? folderPath = null) => new()
     {
         Name = name,
         Category = category,
         Width = 8,
         Height = 8,
         PackedPixelData = new byte[32],
-        FolderPath = category == AssetCategory.Tile4Bpp ? "tile/4bpp/images" : "tile/8bpp/images",
+        FolderPath = folderPath ?? (category == AssetCategory.Tile4Bpp ? "tile/4bpp/images" : "tile/8bpp/images"),
         SortIndex = sortIndex,
         PaletteSlotIndex = paletteSlotIndex
     };
@@ -166,6 +166,31 @@ public class MetatileSerializerTests
         Assert.False(result.Success);
         Assert.Null(result.Data);
         Assert.Contains("256", result.Error);
+    }
+
+    [Fact]
+    public void Serialize_EightBpp_TileIndexIgnoresSubfolderTiles_MatchesRootScopedNumbering()
+    {
+        // Sub-folder Tile8Bpp tiles are their own "bank" content, never placed in a metatile — their
+        // presence must NOT shift a root tile's tileIndex byte away from its t8_<name> label.
+        var subA = FakeTile("sub_a", sortIndex: 0, AssetCategory.Tile8Bpp, folderPath: "tile/8bpp/images/bank_a");
+        var subB = FakeTile("sub_b", sortIndex: 1, AssetCategory.Tile8Bpp, folderPath: "tile/8bpp/images/bank_a");
+        var rootGrass = FakeTile("grass", sortIndex: 2, AssetCategory.Tile8Bpp);
+        var rootWater = FakeTile("water", sortIndex: 3, AssetCategory.Tile8Bpp);
+        var assets = new List<GraphicsAsset> { subA, subB, rootGrass, rootWater };
+
+        var metatile = new Metatile
+        {
+            Name = "m",
+            Kind = MetatileKind.EightBpp,
+            GridSize = 2,
+            Cells = FourCellsReferencing(rootGrass.Id, rootWater.Id, rootGrass.Id, rootWater.Id)
+        };
+
+        var result = MetatileSerializer.Serialize(metatile, assets);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal([0, 1, 0, 1], result.Data); // grass=0, water=1 (root-scoped), not 2 and 3
     }
 
     [Fact]

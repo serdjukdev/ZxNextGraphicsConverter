@@ -77,7 +77,7 @@ public partial class TreeNodeViewModel : ObservableObject
     [ObservableProperty]
     private WriteableBitmap? thumbnail;
 
-    /// <summary>"[N]" where N is this asset's real export index — the exact same 0-based rank <c>ZxNext.Core.Export.AssetExportIndexer.IndexOf</c> computes at export time (see <c>ProjectTreeViewModel.RefreshExportIndices</c>). Null for folder nodes. Pre-formatted as a display string (not just the raw int) so nothing in XAML needs a converter/StringFormat to hide it for folders.</summary>
+    /// <summary>"[N]" where N is this asset's real export index within its own folder — for a root-folder asset the number a metatile/sprite placement stores (and its <c>t8_/s8_</c> label); for a sub-folder asset that sub-folder's own local export index. See <c>ProjectTreeViewModel.RefreshExportIndices</c>. Null for folder nodes. Pre-formatted as a display string (not just the raw int) so nothing in XAML needs a converter/StringFormat to hide it for folders.</summary>
     [ObservableProperty]
     private string? indexLabel;
 

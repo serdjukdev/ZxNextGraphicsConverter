@@ -129,10 +129,10 @@ public static class MapExporter
     private static GridLayerExportResult ExportGridLayerTileMode(MapAsset map, MetatileKind kind, MapGridLayer layer, string layerSuffix, ProjectState project)
     {
         var tileCategory = kind == MetatileKind.FourBpp ? AssetCategory.Tile4Bpp : AssetCategory.Tile8Bpp;
-        if (AssetExportIndexer.ExceedsExportableCap(tileCategory, project.Assets))
+        if (AssetExportIndexer.PlacementExceedsExportableCap(tileCategory, project.Assets))
         {
             throw new InvalidOperationException(
-                $"{tileCategory} has more than {AssetExportIndexer.MaxAssetsPerCategory} assets — reduce it below " +
+                $"{tileCategory} has more than {AssetExportIndexer.MaxAssetsPerCategory} placeable (root-folder) assets — reduce it below " +
                 $"{AssetExportIndexer.MaxAssetsPerCategory} to export map '{map.Name}''s {layerSuffix} layer.");
         }
 
@@ -155,7 +155,7 @@ public static class MapExporter
                 throw new InvalidOperationException($"Map '{map.Name}' ({layerSuffix} layer) cell {i} references a tile that no longer exists.");
             }
 
-            var tileIndex = (byte)AssetExportIndexer.IndexOf(tileAsset, project.Assets);
+            var tileIndex = (byte)AssetExportIndexer.PlacementIndexOf(tileAsset, project.Assets);
             gridBytes[i * bytesPerCell] = tileIndex;
 
             if (kind == MetatileKind.FourBpp)

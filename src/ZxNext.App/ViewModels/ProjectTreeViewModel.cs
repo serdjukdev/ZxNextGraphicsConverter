@@ -158,23 +158,27 @@ public partial class ProjectTreeViewModel : ObservableObject
 
     /// <summary>
     /// Re-derives every leaf node's <see cref="TreeNodeViewModel.IndexLabel"/> ("[N]") for one category —
-    /// the SAME 0-based rank <see cref="ZxNext.Core.Export.AssetExportIndexer.IndexOf"/> computes for
-    /// export, so what's shown here can never drift from what actually gets exported. This is category-
-    /// WIDE (not per-folder — export numbering doesn't care about sub-folders either) and touches every
-    /// leaf, not just the one that changed, because adding/removing/reordering ONE asset shifts the rank
-    /// of every OTHER asset that sorts after it. Cheap enough to just always re-run in full rather than
-    /// track which specific siblings actually moved.
+    /// the SAME 0-based number that asset gets in the exported .asm, so what's shown here can never drift
+    /// from what actually gets exported. Numbering is now PER FOLDER: a root-folder asset's "[N]" is its
+    /// metatile/sprite placement index (and its <c>t8_/s8_</c> label); a sub-folder asset's "[N]" is that
+    /// sub-folder's own local export index (its <c>t8_&lt;subfolder&gt;_&lt;name&gt;</c> label). Touches
+    /// every leaf, not just the one that changed, because adding/removing/reordering ONE asset shifts the
+    /// number of every OTHER asset in that folder that sorts after it.
     /// </summary>
     public void RefreshExportIndices(AssetCategory category, ProjectState project)
     {
-        var categoryAssets = project.Assets.Where(a => a.Category == category).ToList();
         foreach (var folder in AllFolders().Where(f => f.Category == category))
         {
+            var folderAssets = project.Assets
+                .Where(a => a.Category == category && a.FolderPath == folder.FolderPath)
+                .OrderBy(a => a.SortIndex)
+                .ToList();
+
             foreach (var node in folder.Children)
             {
                 if (node.AssetId is not { } id) continue;
-                var asset = categoryAssets.FirstOrDefault(a => a.Id == id);
-                node.IndexLabel = asset is null ? null : $"[{AssetExportIndexer.IndexOf(asset, categoryAssets)}]";
+                var pos = folderAssets.FindIndex(a => a.Id == id);
+                node.IndexLabel = pos < 0 ? null : $"[{pos}]";
             }
         }
     }

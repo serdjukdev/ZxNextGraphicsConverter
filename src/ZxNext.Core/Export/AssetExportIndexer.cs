@@ -37,4 +37,25 @@ public static class AssetExportIndexer
     /// <summary>True when <paramref name="category"/> has more assets than fit in one export-index byte — the caller should block export with a clear message rather than silently producing a wrapped/invalid index.</summary>
     public static bool ExceedsExportableCap(AssetCategory category, IReadOnlyList<GraphicsAsset> projectAssets) =>
         projectAssets.Count(a => a.Category == category) > MaxAssetsPerCategory;
+
+    /// <summary>
+    /// The dense 0-based number a metatile cell / map sprite placement stores for "which asset". Only a
+    /// category ROOT-folder asset is ever placeable — a Tile8Bpp/Sprite8Bpp user sub-folder holds separate
+    /// "bank" content that the Metatile/Map placement system deliberately excludes — so this ranks among
+    /// root-folder assets of the category ONLY. That makes it equal to the <c>s8_/t8_/...</c> label the root
+    /// export gives the same asset; <see cref="IndexOf"/>'s whole-category rank would drift away from that
+    /// label the moment any sub-folder asset exists.
+    /// </summary>
+    public static int PlacementIndexOf(GraphicsAsset asset, IReadOnlyList<GraphicsAsset> projectAssets) =>
+        IndexOf(asset, RootFolderAssets(asset.Category, projectAssets));
+
+    /// <summary><see cref="ExceedsExportableCap"/> counting only the placeable (root-folder) assets — the ceiling that actually matters is on the one-byte placement index, which only ever addresses a root asset.</summary>
+    public static bool PlacementExceedsExportableCap(AssetCategory category, IReadOnlyList<GraphicsAsset> projectAssets) =>
+        RootFolderAssets(category, projectAssets).Count > MaxAssetsPerCategory;
+
+    private static List<GraphicsAsset> RootFolderAssets(AssetCategory category, IReadOnlyList<GraphicsAsset> projectAssets)
+    {
+        var rootPath = category.ToFolderPath();
+        return projectAssets.Where(a => a.Category == category && a.FolderPath == rootPath).ToList();
+    }
 }

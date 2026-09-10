@@ -224,6 +224,63 @@ public partial class ProjectTreeViewModel : ObservableObject
         return parent;
     }
 
+    /// <summary>Re-derives every asset's <see cref="GraphicsAsset.SortIndex"/> for one category from the
+    /// CURRENT tree layout: folders in ordinal path order (so the category root, being a path prefix, comes
+    /// first), each folder's leaves in their tree order, numbered 0..n. Safe because a GraphicsAsset's
+    /// SortIndex is a pure sort key (never an exported literal — see AssetExportIndexer), so a full
+    /// renumber only re-derives what export/placement/[N] already compute from order. Used after a
+    /// cross-folder move, where the moved asset needs a slot between two others that may be numerically
+    /// adjacent.</summary>
+    private void RenumberCategory(AssetCategory category, ProjectState project)
+    {
+        var ordered = AllFolders()
+            .Where(f => f.Category == category)
+            .OrderBy(f => f.FolderPath, StringComparer.Ordinal)
+            .SelectMany(f => f.Children)
+            .Select(n => n.AssetId is { } id ? project.Assets.FirstOrDefault(a => a.Id == id) : null)
+            .Where(a => a is not null)
+            .ToList();
+        for (var i = 0; i < ordered.Count; i++) ordered[i]!.SortIndex = i;
+    }
+
+    /// <summary>Moves a leaf asset node into a DIFFERENT folder of the same category (only offered for the
+    /// shared-palette sprite/8bpp-tile categories — the palette is shared so no re-quantize is needed).
+    /// <paramref name="targetNeighbourId"/> null appends to the end of the target folder; otherwise the
+    /// node lands immediately before/after that neighbour. Reparents the node, updates both FolderPath
+    /// properties, renumbers the whole category's SortIndex from the new layout, and refreshes the
+    /// per-folder "[N]" labels. The caller checks reference integrity first. Returns false on any invalid
+    /// combination.</summary>
+    public bool MoveAssetToFolder(Guid assetId, string targetFolderPath, ProjectState project, Guid? targetNeighbourId = null, bool insertAfter = false)
+    {
+        var node = FindLeafNode(assetId);
+        var source = node is null ? null : AllFolders().FirstOrDefault(f => f.Children.Contains(node));
+        var target = AllFolders().FirstOrDefault(f => f.FolderPath == targetFolderPath);
+        var asset = project.Assets.FirstOrDefault(a => a.Id == assetId);
+        if (node is null || source is null || target is null || asset is null || ReferenceEquals(source, target)) return false;
+
+        source.Children.Remove(node);
+
+        var insertAt = target.Children.Count;
+        if (targetNeighbourId is { } neighbourId)
+        {
+            var neighbourIndex = -1;
+            for (var i = 0; i < target.Children.Count; i++)
+            {
+                if (target.Children[i].AssetId == neighbourId) { neighbourIndex = i; break; }
+            }
+            if (neighbourIndex >= 0) insertAt = insertAfter ? neighbourIndex + 1 : neighbourIndex;
+        }
+        target.Children.Insert(Math.Clamp(insertAt, 0, target.Children.Count), node);
+
+        node.FolderPath = targetFolderPath;
+        asset.FolderPath = targetFolderPath;
+
+        RenumberCategory(asset.Category, project);
+        RefreshExportIndices(asset.Category, project);
+        SelectedNode = node;
+        return true;
+    }
+
     /// <summary>
     /// Swaps one leaf node for another representing a re-quantized replacement asset, keeping its
     /// position in the list (re-quantize would otherwise always append to the end via

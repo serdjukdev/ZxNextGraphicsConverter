@@ -222,7 +222,7 @@ public class ExportServiceTests : IDisposable
         Assert.Contains("s4_hero_pal:\n    db ", row.AsmText);
         Assert.Contains("s4_anim1_walk_0: equ 0\n", row.AsmText);        // sub-folder name folded in, local index
         Assert.Contains("s4_anim1_walk_0_pal:\n    db ", row.AsmText);
-        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(row.AsmText, @"(?m)^s4_pal_table:$").Count); // exactly one shared label (not the comment mentioning it)
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(row.AsmText, @"(?m)^s4_pal_table:$")); // exactly one shared label (not the comment mentioning it)
         var rootLabelAt = row.AsmText.IndexOf("s4_hero: equ", StringComparison.Ordinal);
         var subLabelAt = row.AsmText.IndexOf("s4_anim1_walk_0: equ", StringComparison.Ordinal);
         Assert.True(rootLabelAt >= 0 && rootLabelAt < subLabelAt); // root labels come before the sub-folder's

@@ -738,6 +738,30 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Called by the tree view (Ctrl+R) to start re-quantizing the currently selected asset.</summary>
+    /// <summary>Drag-and-drop from the tree: move an asset into another folder of the same category. Only
+    /// the shared-palette categories (Sprite4Bpp / Sprite8Bpp / Tile8Bpp) offer this — the palette is
+    /// shared so no re-quantize is needed, just a FolderPath change. Blocked (with a message) if the move
+    /// would take a currently-referenced asset out of the root, since a sub-folder asset can't be map-placed
+    /// or used in a metatile.</summary>
+    public void MoveAssetToFolder(Guid assetId, string targetFolderPath)
+    {
+        var asset = _project.Assets.FirstOrDefault(a => a.Id == assetId);
+        if (asset is null || !asset.Category.SubfoldersShareOneExportRow()) return;
+
+        var check = ReferenceIntegrityService.CanMoveAssetToFolder(_project, asset, targetFolderPath);
+        if (!check.CanDelete)
+        {
+            MessageBox.Show(check.BlockingReason, "Can't move", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (Tree.MoveAssetToFolder(assetId, targetFolderPath, _project))
+        {
+            HasUnsavedChanges = true;
+            PixelEditor.StatusText = $"Moved {asset.Name} to {targetFolderPath}.";
+        }
+    }
+
     [RelayCommand]
     private void RequestReQuantize()
     {
@@ -1504,15 +1528,13 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Drag-and-drop reorder from the tree: moves <paramref name="draggedAssetId"/> to sit immediately
-    /// before/after <paramref name="targetAssetId"/>, then renumbers real export indices to match. Only
-    /// ever touches SortIndex/tree position, never FolderPath — an 8bpp category's sub-folders each own a
-    /// separate flat palette, so "moving" a tile to a DIFFERENT folder would mean re-quantizing it, a
-    /// fundamentally different (and riskier) operation this does not attempt; both nodes must already
-    /// share one folder for those categories (4bpp categories have no sub-folders to begin with, so this
-    /// is never a restriction for them). No-op (silently) on any invalid combination — the caller (a
-    /// completed drag) has no user-visible way to report a rejection anyway; DragOver already only offers
-    /// the Move cursor for combinations this will actually accept.
+    /// Drag-and-drop from the tree: drop <paramref name="draggedAssetId"/> immediately before/after
+    /// <paramref name="targetAssetId"/>. Within one folder this is a plain reorder (permutes existing
+    /// SortIndex values). Across two folders of a shared-palette category (Sprite4Bpp / Sprite8Bpp /
+    /// Tile8Bpp) it also MOVES the asset into the target's folder — the palette is shared so no re-quantize
+    /// is needed, just a FolderPath change and a category-wide SortIndex renumber. A cross-folder move that
+    /// would take a currently-referenced asset out of the root shows a blocking message. No-op (silently)
+    /// on any other invalid combination.
     /// </summary>
     public void ReorderAsset(Guid draggedAssetId, Guid targetAssetId, bool insertAfter)
     {
@@ -1522,8 +1544,24 @@ public partial class MainViewModel : ObservableObject
         if (dragged is null || target is null) return;
         if (dragged.IsReservedBlank) return; // must always stay first
         if (dragged.Category != target.Category) return;
-        if (dragged.FolderPath != target.FolderPath) return; // reorder never crosses folders (would need a re-quantize / re-bank, or leave the tree inconsistent); Tile4Bpp has no sub-folders so this never restricts it
         if (target.IsReservedBlank && !insertAfter) return; // would bump it out of the first slot
+
+        if (dragged.FolderPath != target.FolderPath)
+        {
+            if (!dragged.Category.SubfoldersShareOneExportRow()) return; // Layer2 sub-folder move = re-quantize, not offered here; Tile4Bpp has none
+            var check = ReferenceIntegrityService.CanMoveAssetToFolder(_project, dragged, target.FolderPath);
+            if (!check.CanDelete)
+            {
+                MessageBox.Show(check.BlockingReason, "Can't move", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            if (Tree.MoveAssetToFolder(draggedAssetId, target.FolderPath, _project, targetAssetId, insertAfter))
+            {
+                HasUnsavedChanges = true;
+                PixelEditor.StatusText = $"Moved {dragged.Name} to {target.FolderPath}.";
+            }
+            return;
+        }
 
         var draggedNode = Tree.FindLeafNode(draggedAssetId);
         var targetNode = Tree.FindLeafNode(targetAssetId);

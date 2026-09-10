@@ -6,14 +6,14 @@ namespace ZxNext.Core.Tests;
 
 public class ReferenceIntegrityServiceTests
 {
-    private static GraphicsAsset FakeAsset(string name, AssetCategory category) => new()
+    private static GraphicsAsset FakeAsset(string name, AssetCategory category, string? folderPath = null) => new()
     {
         Name = name,
         Category = category,
         Width = category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp ? 16 : 8,
         Height = category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp ? 16 : 8,
         PackedPixelData = [],
-        FolderPath = "x"
+        FolderPath = folderPath ?? "x"
     };
 
     private static MapAsset FakeMap(string name, int width = 2, int height = 2, int gridSize = 2) => new(width, height)
@@ -180,6 +180,55 @@ public class ReferenceIntegrityServiceTests
         project.ObjectTypes.Add(type);
 
         Assert.True(ReferenceIntegrityService.CanDeleteObjectType(project, type).CanDelete);
+    }
+
+    [Fact]
+    public void CanMoveAssetToFolder_PlacedSpriteLeavingRoot_Blocked()
+    {
+        var project = new ProjectState();
+        var hero = FakeAsset("hero", AssetCategory.Sprite8Bpp, "sprite/8bpp/images");
+        project.Assets.Add(hero);
+        var map = FakeMap("level1");
+        map.SpriteLayer.Add(new SpritePlacement { SpriteAssetId = hero.Id, X = 0, Y = 0 });
+        project.Maps.Add(map);
+
+        var check = ReferenceIntegrityService.CanMoveAssetToFolder(project, hero, "sprite/8bpp/images/walk");
+
+        Assert.False(check.CanDelete);
+        Assert.Contains("level1", check.BlockingReason);
+    }
+
+    [Fact]
+    public void CanMoveAssetToFolder_UnplacedSprite_OrMovingIntoRoot_Allowed()
+    {
+        var project = new ProjectState();
+        var loose = FakeAsset("loose", AssetCategory.Sprite8Bpp, "sprite/8bpp/images");
+        var placed = FakeAsset("placed", AssetCategory.Sprite8Bpp, "sprite/8bpp/images/walk");
+        project.Assets.Add(loose);
+        project.Assets.Add(placed);
+        var map = FakeMap("level1");
+        map.SpriteLayer.Add(new SpritePlacement { SpriteAssetId = placed.Id, X = 0, Y = 0 }); // (can't actually happen, but the check must not care)
+        project.Maps.Add(map);
+
+        Assert.True(ReferenceIntegrityService.CanMoveAssetToFolder(project, loose, "sprite/8bpp/images/walk").CanDelete);   // unplaced root -> sub-folder
+        Assert.True(ReferenceIntegrityService.CanMoveAssetToFolder(project, placed, "sprite/8bpp/images").CanDelete);       // sub-folder -> root, always fine
+    }
+
+    [Fact]
+    public void CanMoveAssetToFolder_TileUsedInMetatileLeavingRoot_Blocked()
+    {
+        var project = new ProjectState();
+        var tile = FakeAsset("grass", AssetCategory.Tile8Bpp, "tile/8bpp/images");
+        project.Assets.Add(tile);
+        project.Metatiles.Add(new Metatile
+        {
+            Name = "grass_block",
+            Kind = MetatileKind.EightBpp,
+            GridSize = 2,
+            Cells = Enumerable.Range(0, 4).Select(_ => new MetatileCell { TileAssetId = tile.Id }).ToList()
+        });
+
+        Assert.False(ReferenceIntegrityService.CanMoveAssetToFolder(project, tile, "tile/8bpp/images/bank_a").CanDelete);
     }
 
     private static Metatile MetatileServiceCreate(ProjectState project, MetatileKind kind = MetatileKind.FourBpp)

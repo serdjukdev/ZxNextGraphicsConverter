@@ -188,6 +188,14 @@
                                     <Setter TargetName="RowBorder" Property="CornerRadius" Value="3" />
                                     <Setter TargetName="RowBorder" Property="Margin" Value="2,1" />
                                 </DataTrigger>
+                                <!-- "Drop here to move the dragged asset into this folder" highlight. -->
+                                <DataTrigger Binding="{Binding IsMoveDropTarget}" Value="True">
+                                    <Setter TargetName="RowBorder" Property="Background" Value="#FFD3E0F2" />
+                                    <Setter TargetName="RowBorder" Property="BorderBrush" Value="#FF5B84C0" />
+                                    <Setter TargetName="RowBorder" Property="BorderThickness" Value="2" />
+                                    <Setter TargetName="RowBorder" Property="CornerRadius" Value="4" />
+                                    <Setter TargetName="RowBorder" Property="Margin" Value="2,1" />
+                                </DataTrigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Setter.Value>

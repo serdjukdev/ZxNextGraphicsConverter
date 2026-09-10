@@ -30,6 +30,7 @@ public partial class MainWindow : Window
         _viewModel = viewModel;
         ProjectTreeViewControl.AssetDropRequested += OnAssetDropRequested;
         ProjectTreeViewControl.AssetReorderRequested += _viewModel.ReorderAsset;
+        ProjectTreeViewControl.AssetMoveToFolderRequested += _viewModel.MoveAssetToFolder;
         ProjectTreeViewControl.RenameAssetRequested += OnRenameAssetRequested;
         ProjectTreeViewControl.ReQuantizeContextRequested += _viewModel.RequestReQuantizeById;
         ProjectTreeViewControl.ReQuantizeSelectedRequested += OnReQuantizeSelectedRequested;

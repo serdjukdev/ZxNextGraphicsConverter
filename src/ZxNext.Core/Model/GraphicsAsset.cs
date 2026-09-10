@@ -14,7 +14,11 @@ public class GraphicsAsset
     public required int Width { get; init; }
     public required int Height { get; init; }
     public required byte[] PackedPixelData { get; set; }
-    public required string FolderPath { get; init; }
+
+    /// <summary>Which category folder (root or a user sub-folder) this asset lives in. Settable: an asset can be
+    /// moved between sub-folders of a shared-palette category (the palette is shared, so no re-quantize) — see
+    /// <c>ProjectTreeViewModel.MoveAssetToFolder</c>.</summary>
+    public required string FolderPath { get; set; }
 
     /// <summary>
     /// Monotonically increasing creation order, assigned once at import time and preserved across

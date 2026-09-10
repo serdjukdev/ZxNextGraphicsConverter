@@ -94,6 +94,41 @@ public static class ReferenceIntegrityService
         return new DeletionCheck(true, null);
     }
 
+    /// <summary>
+    /// Whether an asset may be moved to <paramref name="targetFolderPath"/> (a within-category folder
+    /// move, only offered for the shared-palette sprite/8bpp-tile categories). The only move that fails is
+    /// one taking a currently-referenced asset OUT of the category root: a sub-folder asset is a separate
+    /// bank the placement/metatile system can't address, so a placed sprite / a metatile-used tile must
+    /// have its references cleared first. Moving into the root, or between sub-folders, is always fine.
+    /// </summary>
+    public static DeletionCheck CanMoveAssetToFolder(ProjectState project, GraphicsAsset asset, string targetFolderPath)
+    {
+        var rootPath = asset.Category.ToFolderPath();
+        var leavingRoot = asset.FolderPath == rootPath && targetFolderPath != rootPath;
+        if (!leavingRoot) return new DeletionCheck(true, null);
+
+        if (asset.Category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp)
+        {
+            var metatiles = FindMetatilesReferencingTile(project, asset.Id);
+            if (metatiles.Count > 0)
+            {
+                return new DeletionCheck(false,
+                    $"Can't move '{asset.Name}' into a sub-folder: it's used in metatile(s) {string.Join(", ", metatiles.Select(m => m.Name))}, and a sub-folder tile can't be referenced by a metatile. Remove it from those metatiles first.");
+            }
+        }
+        else if (asset.Category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp)
+        {
+            var maps = FindMapsReferencingSprite(project, asset.Id);
+            if (maps.Count > 0)
+            {
+                return new DeletionCheck(false,
+                    $"Can't move '{asset.Name}' into a sub-folder: it's placed on map(s) {string.Join(", ", maps.Select(m => m.Name))}, and a sub-folder sprite can't be placed on a map. Remove those placements first.");
+            }
+        }
+
+        return new DeletionCheck(true, null);
+    }
+
     /// <summary>Every MapAsset with at least one SpritePlacement whose TypeId is the given object type.</summary>
     public static List<MapAsset> FindMapsReferencingObjectType(ProjectState project, Guid typeId) =>
         project.Maps.Where(m => m.SpriteLayer.Any(s => s.TypeId == typeId)).ToList();

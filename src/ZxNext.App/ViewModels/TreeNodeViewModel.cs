@@ -41,7 +41,8 @@ public partial class TreeNodeViewModel : ObservableObject
     /// <summary>Set on every root category folder and on any user-created sub-folder under them.</summary>
     public AssetCategory? Category { get; init; }
 
-    public string? FolderPath { get; init; }
+    /// <summary>Settable so an asset leaf can be reparented into another folder in place (see <c>ProjectTreeViewModel.MoveAssetToFolder</c>) without tearing its tree container down.</summary>
+    public string? FolderPath { get; set; }
 
     /// <summary>True only for the four fixed root category folders (not for user-created sub-folders) — used to decide where the "add sub-folder" button appears.</summary>
     public bool IsCategoryRoot { get; init; }
@@ -74,6 +75,10 @@ public partial class TreeNodeViewModel : ObservableObject
 
     [ObservableProperty]
     private bool showDropIndicatorBelow;
+
+    /// <summary>True on the FOLDER node currently hovered as a "drop the dragged asset here to move it into this folder" target (see ProjectTreeView's CanMoveToFolder). Drives a highlight on the folder chip.</summary>
+    [ObservableProperty]
+    private bool isMoveDropTarget;
 
     /// <summary>Small native-size render of the asset's own pixels (see <c>ZxNext.App.Rendering.NextBitmapRenderer</c>) — null for folder nodes. Re-set whenever the underlying asset's pixels/palette could have changed (add/replace, or a live pixel-edit stroke on the currently selected asset); NOT eagerly re-rendered for every OTHER asset sharing a palette slot that just changed colour — same "catches up next time it's shown/touched" tolerance the Pixel Editor/Image Viewer already have (see MainViewModel.RefreshSelectedAssetRender's own doc comment).</summary>
     [ObservableProperty]

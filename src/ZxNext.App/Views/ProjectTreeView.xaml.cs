@@ -22,6 +22,9 @@ public partial class ProjectTreeView : UserControl
     /// <summary>Raised when a tile/sprite row is dropped onto another one to reorder — see <see cref="MainViewModel.ReorderAsset"/> for what actually happens with it.</summary>
     public event Action<Guid, Guid, bool>? AssetReorderRequested;
 
+    /// <summary>Drag an asset row onto a FOLDER of the same shared-palette category (Sprite4Bpp / Sprite8Bpp / Tile8Bpp): move it into that folder. (Guid assetId, string targetFolderPath).</summary>
+    public event Action<Guid, string>? AssetMoveToFolderRequested;
+
     /// <summary>Raised from the right-click "Rename..." menu item.</summary>
     public event Action<Guid>? RenameAssetRequested;
 
@@ -306,11 +309,34 @@ public partial class ProjectTreeView : UserControl
 
     private void ClearDropIndicator()
     {
+        SetMoveDropTarget(null);
         if (_dropIndicatorNode is null) return;
         _dropIndicatorNode.ShowDropIndicatorAbove = false;
         _dropIndicatorNode.ShowDropIndicatorBelow = false;
         _dropIndicatorNode = null;
     }
+
+    /// <summary>The folder node currently highlighted as the "drop here to move the dragged asset into this folder" target.</summary>
+    private TreeNodeViewModel? _moveDropTargetNode;
+
+    private void SetMoveDropTarget(TreeNodeViewModel? node)
+    {
+        if (ReferenceEquals(_moveDropTargetNode, node)) return;
+        if (_moveDropTargetNode is not null) _moveDropTargetNode.IsMoveDropTarget = false;
+        _moveDropTargetNode = node;
+        if (_moveDropTargetNode is not null) _moveDropTargetNode.IsMoveDropTarget = true;
+    }
+
+    /// <summary>Drag an asset row onto a FOLDER (not another row) of the same category, when both the drag
+    /// and the target are a shared-palette category (Sprite4Bpp / Sprite8Bpp / Tile8Bpp) and it's a
+    /// different folder: a move into that folder. Not offered for Layer2 (each sub-folder has its own
+    /// palette, so a move would need a re-quantize) or Tile4Bpp (no sub-folders).</summary>
+    private static bool CanMoveToFolder(TreeNodeViewModel dragged, TreeNodeViewModel? target) =>
+        dragged is { IsFolder: false, IsReservedBlank: false } &&
+        target is { IsFolder: true, Category: { } cat } &&
+        cat == dragged.Category &&
+        cat.SubfoldersShareOneExportRow() &&
+        target.FolderPath != dragged.FolderPath;
 
     /// <summary>Which half of the hovered row's container the pointer is over — shared by DragOver (live indicator/cursor feedback) and Drop (the actual decision), so they can never disagree. Defaults to "after" when the container can't be resolved (e.g. a stale/torn-down visual mid-drag) rather than silently doing nothing.</summary>
     private static bool IsInsertAfter(DependencyObject? originalSource, DragEventArgs e)
@@ -415,13 +441,21 @@ public partial class ProjectTreeView : UserControl
                 }
                 target!.ShowDropIndicatorAbove = !insertAfter;
                 target.ShowDropIndicatorBelow = insertAfter;
+                e.Effects = DragDropEffects.Move;
+            }
+            else if (CanMoveToFolder(dragged, target))
+            {
+                ClearDropIndicator();
+                SetMoveDropTarget(target);
+                e.Effects = DragDropEffects.Move;
             }
             else
             {
                 ClearDropIndicator();
+                SetMoveDropTarget(null);
+                e.Effects = DragDropEffects.None;
             }
 
-            e.Effects = valid ? DragDropEffects.Move : DragDropEffects.None;
             e.Handled = true;
             return;
         }
@@ -432,11 +466,17 @@ public partial class ProjectTreeView : UserControl
 
     private void Tree_OnDragLeave(object sender, DragEventArgs e) => ClearDropIndicator();
 
-    /// <summary>Cheap pre-check shared by DragOver (live cursor feedback) and Drop (before actually raising the request) — same category and same folder (reorder never crosses folders: it would mean re-quantizing / re-banking, and Tile4Bpp has no sub-folders so this never restricts it). Does NOT check the reserved-blank "never insert before it" rule — that needs the resolved before/after side, only computed at Drop.</summary>
+    /// <summary>Cheap pre-check shared by DragOver (live cursor feedback) and Drop (before raising the
+    /// request) — dropping an asset row onto another asset row of the same category. Within one folder it's
+    /// a reorder; across two folders of a shared-palette category (Sprite4Bpp / Sprite8Bpp / Tile8Bpp) it's
+    /// a move-and-position, which the reorder request also handles. Layer2 (independent per-folder palettes)
+    /// and Tile4Bpp (no sub-folders) stay same-folder only. Does NOT check the reserved-blank "never insert
+    /// before it" rule — that needs the resolved before/after side, only computed at Drop.</summary>
     private static bool CanReorder(TreeNodeViewModel dragged, TreeNodeViewModel? target) =>
-        target is { IsFolder: false } && target != dragged &&
-        target.Category == dragged.Category &&
-        target.FolderPath == dragged.FolderPath;
+        dragged is { IsFolder: false, IsReservedBlank: false } &&
+        target is { IsFolder: false, Category: { } cat } && target != dragged &&
+        cat == dragged.Category &&
+        (target.FolderPath == dragged.FolderPath || cat.SubfoldersShareOneExportRow());
 
     private void Tree_OnDrop(object sender, DragEventArgs e)
     {
@@ -455,7 +495,15 @@ public partial class ProjectTreeView : UserControl
             var originalSource = e.OriginalSource as DependencyObject;
             var target = FindAncestorDataContext<TreeNodeViewModel>(originalSource);
             ClearDropIndicator();
-            if (!CanReorder(dragged, target)) return;
+
+            if (!CanReorder(dragged, target))
+            {
+                if (CanMoveToFolder(dragged, target) && dragged.AssetId is { } movedId)
+                {
+                    AssetMoveToFolderRequested?.Invoke(movedId, target!.FolderPath!);
+                }
+                return;
+            }
             if (dragged.AssetId is not { } draggedId || target!.AssetId is not { } targetId) return;
 
             var insertAfter = IsInsertAfter(originalSource, e);

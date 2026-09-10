@@ -610,4 +610,67 @@ public class ProjectServiceTests : IDisposable
 
         Assert.Contains(loaded.LoadWarnings, w => w.Contains("Tile8Bpp") && w.Contains("merged"));
     }
+
+    /// <summary>An older build let a Sprite8Bpp sub-folder sprite be dropped on a map. Such placements
+    /// export a meaningless spriteIndex, so Load must remove them (keeping root-folder placements) and note it.</summary>
+    [Fact]
+    public void Load_MapWithASubfolderSpritePlaced_DropsThatPlacement_KeepsRootOnes_Warns()
+    {
+        const string json = """
+        {
+          "FormatVersion": 2,
+          "SourceImages": [],
+          "Sprite4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Tile4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Sprite8BppFolderPalettes": {},
+          "Tile8BppFolderPalettes": {},
+          "Layer2_256x192FolderPalettes": {},
+          "Layer2_320x256FolderPalettes": {},
+          "Layer2_640x256x4FolderPalettes": {},
+          "Assets": [
+            { "Id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "Name": "hero", "Category": "Sprite8Bpp", "Width": 16, "Height": 16, "FolderPath": "sprite/8bpp/images", "SortIndex": 0, "PackedDataFile": "assets/a1.bin" },
+            { "Id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "Name": "walk_00", "Category": "Sprite8Bpp", "Width": 16, "Height": 16, "FolderPath": "sprite/8bpp/images/walk", "SortIndex": 1, "PackedDataFile": "assets/a2.bin" }
+          ],
+          "Metatiles": [],
+          "Maps": [
+            {
+              "Id": "11111111-1111-1111-1111-111111111111",
+              "Name": "level1",
+              "SortIndex": 0,
+              "Width": 2,
+              "Height": 2,
+              "MetatileGridSize": 2,
+              "TilemapDataFile": "maps/m_tilemap.bin",
+              "TileLayer8BppDataFile": "maps/m_8bpp.bin",
+              "SpriteLayer": [
+                { "Id": "cccccccc-cccc-cccc-cccc-cccccccccccc", "SpriteAssetId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "X": 0, "Y": 0, "UserByte": 0 },
+                { "Id": "dddddddd-dddd-dddd-dddd-dddddddddddd", "SpriteAssetId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "X": 8, "Y": 8, "UserByte": 0 }
+              ],
+              "TilemapLayerVisible": true,
+              "TileLayer8BppVisible": true,
+              "SpriteLayerVisible": true
+            }
+          ]
+        }
+        """;
+
+        using (var stream = new FileStream(_tempProjectFile, FileMode.Create, FileAccess.Write))
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            using (var entryStream = zip.CreateEntry("project.json", CompressionLevel.Fastest).Open())
+            using (var writer = new StreamWriter(entryStream))
+                writer.Write(json);
+            using (var e = zip.CreateEntry("assets/a1.bin", CompressionLevel.Fastest).Open()) e.Write(new byte[128]);
+            using (var e = zip.CreateEntry("assets/a2.bin", CompressionLevel.Fastest).Open()) e.Write(new byte[128]);
+            using (var e = zip.CreateEntry("maps/m_tilemap.bin", CompressionLevel.Fastest).Open()) e.Write(new byte[4]);
+            using (var e = zip.CreateEntry("maps/m_8bpp.bin", CompressionLevel.Fastest).Open()) e.Write(new byte[4]);
+        }
+
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        var map = Assert.Single(loaded.Maps);
+        var kept = Assert.Single(map.SpriteLayer);
+        Assert.Equal(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), kept.SpriteAssetId); // the root sprite stays
+        Assert.Contains(loaded.LoadWarnings, w => w.Contains("sub-folder sprite"));
+    }
 }

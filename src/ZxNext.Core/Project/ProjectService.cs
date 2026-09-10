@@ -359,10 +359,33 @@ public static class ProjectService
         }
 
         MergeLegacyPerSubfolderPalettes(project);
+        DropUnplaceableSpritePlacements(project);
 
         EnsureReservedBlankAssets(project);
 
         return project;
+    }
+
+    /// <summary>
+    /// Sub-folder sprites are a separate "bank" the object/placement system can't address; an earlier build
+    /// still let them be dropped onto a map. Any such placement exports a meaningless spriteIndex, so remove
+    /// them on load (older maps only — the Map Editor no longer offers sub-folder sprites) and note it.
+    /// </summary>
+    private static void DropUnplaceableSpritePlacements(ProjectState project)
+    {
+        var assetsById = project.Assets.ToDictionary(a => a.Id);
+        var removed = 0;
+        foreach (var map in project.Maps)
+        {
+            removed += map.SpriteLayer.RemoveAll(p =>
+                assetsById.TryGetValue(p.SpriteAssetId, out var a) && a.FolderPath != a.Category.ToFolderPath());
+        }
+        if (removed > 0)
+        {
+            project.LoadWarnings.Add(
+                $"{removed} sprite placement(s) referenced a sub-folder sprite and were removed from their map(s). " +
+                "Sub-folder sprites are a separate bank and can't be placed on a map any more; use a root-folder sprite instead.");
+        }
     }
 
     /// <summary>

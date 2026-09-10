@@ -707,11 +707,15 @@ public partial class MapEditorViewModel : ObservableObject
         PaintAttributes = new MetatileCellViewModel(_project, isFourBpp: true) { TileAsset = tileAsset };
     }
 
-    /// <summary>Sprite4Bpp and Sprite8Bpp mixed together — both are freely placeable on the same Sprite layer, unlike the Kind-locked grid layers.</summary>
+    /// <summary>Sprite4Bpp and Sprite8Bpp mixed together — both are freely placeable on the same Sprite layer,
+    /// unlike the Kind-locked grid layers. Only ROOT-folder sprites: a user sub-folder holds separate "bank"
+    /// content (own binary, per-file-local label) that the object/placement system can't address, matching
+    /// how Tile8Bpp sub-folder tiles are kept out of the Metatile Editor.</summary>
     private void RefreshSpritePalette()
     {
         SpritePalette = new ObservableCollection<TilePaletteItemViewModel>(
-            _project.Assets.Where(a => a.Category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp)
+            _project.Assets.Where(a => a.Category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp
+                                       && a.FolderPath == a.Category.ToFolderPath())
                 .OrderBy(a => a.Category).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(a => new TilePaletteItemViewModel(a, _project, _renderCache)));
     }

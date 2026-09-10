@@ -21,14 +21,14 @@ public class MapExporterTests
         IsReservedBlank = isReservedBlank
     };
 
-    private static GraphicsAsset FakeSprite(string name, int sortIndex, AssetCategory category = AssetCategory.Sprite4Bpp) => new()
+    private static GraphicsAsset FakeSprite(string name, int sortIndex, AssetCategory category = AssetCategory.Sprite4Bpp, string? folderPath = null) => new()
     {
         Name = name,
         Category = category,
         Width = 16,
         Height = 16,
         PackedPixelData = new byte[128],
-        FolderPath = "sprite/4bpp/images",
+        FolderPath = folderPath ?? category.ToFolderPath(),
         SortIndex = sortIndex
     };
 
@@ -416,6 +416,36 @@ public class MapExporterTests
         Assert.False(success);
         Assert.Null(result);
         Assert.NotNull(error);
+    }
+
+    [Fact]
+    public void ExportObjects_SpriteIndexIgnoresSubfolderSprites_MatchesRootScopedNumbering()
+    {
+        // Sub-folder Sprite8Bpp sprites have LOWER SortIndex — plain IndexOf would push the root sprite to 2.
+        var subA = FakeSprite("sub_a", sortIndex: 0, AssetCategory.Sprite8Bpp, "sprite/8bpp/images/bank_a");
+        var subB = FakeSprite("sub_b", sortIndex: 1, AssetCategory.Sprite8Bpp, "sprite/8bpp/images/bank_a");
+        var hero = FakeSprite("hero", sortIndex: 2, AssetCategory.Sprite8Bpp);
+        var assets = new List<GraphicsAsset> { subA, subB, hero };
+
+        var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [new SpritePlacement { SpriteAssetId = hero.Id, X = 0, Y = 0 }]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, assets, []);
+
+        Assert.True(success, error);
+        Assert.Equal(0, ExtractDbBytes(result!.AsmText, "level1_objects")[0]); // hero -> 0, not 2
+    }
+
+    [Fact]
+    public void ExportObjects_PlacesASubfolderSprite_Blocked()
+    {
+        var sub = FakeSprite("frame_00", sortIndex: 0, AssetCategory.Sprite8Bpp, "sprite/8bpp/images/walk");
+        var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [new SpritePlacement { SpriteAssetId = sub.Id, X = 0, Y = 0 }]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, [sub], []);
+
+        Assert.False(success);
+        Assert.Null(result);
+        Assert.Contains("sub-folder", error);
     }
 
     [Fact]

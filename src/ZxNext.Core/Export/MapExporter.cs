@@ -250,15 +250,21 @@ public static class MapExporter
             {
                 return (false, null, $"Map '{map.Name}' places a sprite that no longer exists.");
             }
+            if (asset.FolderPath != asset.Category.ToFolderPath())
+            {
+                return (false, null,
+                    $"Map '{map.Name}' places sprite '{asset.Name}', which lives in a sub-folder. Sub-folder sprites are a " +
+                    "separate bank and can't be placed on a map. Move it to the category root, or remove it from the map.");
+            }
             referencedCategories.Add(asset.Category);
         }
 
         foreach (var category in referencedCategories)
         {
-            if (AssetExportIndexer.ExceedsExportableCap(category, projectAssets))
+            if (AssetExportIndexer.PlacementExceedsExportableCap(category, projectAssets))
             {
                 return (false, null,
-                    $"{category} has more than {AssetExportIndexer.MaxAssetsPerCategory} assets — reduce it below " +
+                    $"{category} has more than {AssetExportIndexer.MaxAssetsPerCategory} placeable (root-folder) sprites — reduce it below " +
                     $"{AssetExportIndexer.MaxAssetsPerCategory} to export map '{map.Name}''s sprite layer.");
             }
         }
@@ -276,7 +282,7 @@ public static class MapExporter
         {
             var placement = map.SpriteLayer[i];
             var asset = projectAssets.First(a => a.Id == placement.SpriteAssetId);
-            var spriteIndex = (byte)AssetExportIndexer.IndexOf(asset, projectAssets);
+            var spriteIndex = (byte)AssetExportIndexer.PlacementIndexOf(asset, projectAssets);
 
             byte typeByte = NoneByte;
             string? typeName = null;

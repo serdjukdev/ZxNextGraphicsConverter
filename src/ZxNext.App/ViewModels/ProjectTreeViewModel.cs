@@ -24,11 +24,12 @@ public partial class ProjectTreeViewModel : ObservableObject
     private TreeNodeViewModel? selectedNode;
 
     /// <summary>
-    /// Raised by <see cref="ReplaceAssetNode"/> when it swaps out the CURRENTLY SELECTED node's tree
-    /// item (re-quantize) — the view uses it to recover keyboard focus that WPF drops when the old
-    /// container is torn down. Deliberately not tied to <see cref="SelectedNode"/> changes in general
-    /// (see <c>ProjectTreeView.OnNodeReplacedInPlace</c> for why re-focusing on every selection change
-    /// was a bug).
+    /// Raised whenever a node's tree item is torn down and rebuilt in a Remove+Insert (re-quantize's
+    /// <see cref="ReplaceAssetNode"/>, or a cross-folder move in <see cref="MoveAssetToFolder"/>) — the
+    /// view uses it to re-focus that node's new container, which also scrolls it back into view instead of
+    /// letting the ScrollViewer snap to the top. Deliberately not tied to <see cref="SelectedNode"/>
+    /// changes in general (see <c>ProjectTreeView.OnNodeReplacedInPlace</c> for why re-focusing on every
+    /// selection change was a bug).
     /// </summary>
     public event Action<TreeNodeViewModel>? NodeReplacedInPlace;
 
@@ -278,6 +279,10 @@ public partial class ProjectTreeViewModel : ObservableObject
         RenumberCategory(asset.Category, project);
         RefreshExportIndices(asset.Category, project);
         SelectedNode = node;
+        // The reparent above is a Remove+Insert, which makes WPF's TreeView tear the node's container
+        // down and rebuild it (and the ScrollViewer snap to the top). Same recovery as re-quantize:
+        // the view re-focuses the new container, which scrolls it back into view where it landed.
+        NodeReplacedInPlace?.Invoke(node);
         return true;
     }
 

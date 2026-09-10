@@ -12,16 +12,16 @@ namespace ZxNext.Core.Export;
 public static class AsmMapGenerator
 {
     /// <param name="subfolderName">
-    /// Null for a category's root folder; the sub-folder's own name (no slashes — only Sprite8Bpp/Tile8Bpp
-    /// and the Layer2 categories support one level of user-created sub-folders, see
-    /// <c>AssetCategoryExtensions.UsesPaletteBank</c>) otherwise. Folded into Sprite8Bpp/Tile8Bpp's
-    /// per-item labels since two different sub-folders can otherwise legally reuse the same asset name;
-    /// ignored by every other category for now.
+    /// Null for a category's root folder; the sub-folder's own name (no slashes) otherwise. Folded into the
+    /// per-item labels (<c>s4_&lt;subfolder&gt;_&lt;name&gt;</c>, <c>s8_&lt;subfolder&gt;_&lt;name&gt;</c>, ...)
+    /// since two different sub-folders can otherwise legally reuse the same asset name. Used by Sprite4Bpp /
+    /// Sprite8Bpp / Tile8Bpp (see <c>AssetCategoryExtensions.SubfoldersShareOneExportRow</c>); Tile4Bpp has
+    /// no sub-folders and Layer2's are handled by <c>Layer2Exporter</c>, so it is ignored there.
     /// </param>
     public static string Generate(IReadOnlyList<AssetPlacement> placements, int chunkCount, AssetCategory category, string? subfolderName = null) =>
         category switch
         {
-            AssetCategory.Sprite4Bpp => GenerateSprite4Bpp(placements),
+            AssetCategory.Sprite4Bpp => GenerateSprite4Bpp(placements, subfolderName),
             AssetCategory.Sprite8Bpp => GenerateBareIndex(placements, "s8", "Sprite8Bpp", subfolderName),
             AssetCategory.Tile4Bpp => GenerateTile4Bpp(placements),
             AssetCategory.Tile8Bpp => GenerateBareIndex(placements, "t8", "Tile8Bpp", subfolderName),
@@ -29,28 +29,42 @@ public static class AsmMapGenerator
         };
 
     /// <summary>
-    /// Sprite4Bpp: <c>s4_&lt;name&gt;: equ &lt;pattern number&gt;</c> (the 0-based sprite pattern index, i.e.
-    /// the spriteIndex byte a map's <c>_objects.asm</c> writes) plus <c>s4_&lt;name&gt;_pal: db &lt;n&gt;</c>
-    /// (that sprite's 4bpp palette offset 0-15, for bits 7:4 of its attribute byte). A <c>s4_pal_table:</c>
-    /// label marks the start of that same run of palette-offset bytes, so code can also index into it by
-    /// pattern number instead of by name. No bank/byte-offset record: 4bpp sprite patterns upload as one
-    /// contiguous blob (chunk 0, then 1, ...).
+    /// Sprite4Bpp: <c>s4_&lt;name&gt;: equ &lt;pattern number&gt;</c> plus <c>s4_&lt;name&gt;_pal: db &lt;n&gt;</c>
+    /// (that sprite's 4bpp palette slot 0-15, for bits 7:4 of its attribute byte). Patterns upload as one
+    /// contiguous blob, so there is no per-sprite bank or byte offset.
+    /// <para>
+    /// Root export (<paramref name="subfolderName"/> null): the pattern number is the same 0-based rank a
+    /// map's <c>_objects.asm</c> writes as the sprite's <c>spriteIndex</c> byte, and a single
+    /// <c>s4_pal_table:</c> label sits right before the first <c>_pal</c> byte so code can read a slot by
+    /// index. The <c>_pal</c> bytes of the root and every sub-folder are emitted back to back (nothing
+    /// between them assembles to bytes), so <c>s4_pal_table</c> covers the whole run: root sprites at their
+    /// spriteIndex, then each sub-folder's sprites in order. A user sub-folder is a separate binary the game
+    /// bank-loads on its own; its labels become <c>s4_&lt;subfolder&gt;_&lt;name&gt;</c>, the pattern number
+    /// is local to that sub-folder's own export, and it emits no <c>s4_pal_table</c> of its own.
+    /// </para>
     /// </summary>
-    private static string GenerateSprite4Bpp(IReadOnlyList<AssetPlacement> placements)
+    private static string GenerateSprite4Bpp(IReadOnlyList<AssetPlacement> placements, string? subfolderName)
     {
         var sb = new StringBuilder();
-        sb.Append("; Sprite4Bpp graphics map.\n");
-        sb.Append("; s4_<name>: equ <n>      -- 0-based sprite pattern number (the spriteIndex byte in a map's _objects.asm).\n");
-        sb.Append("; s4_<name>_pal: db <n>   -- this sprite's 4bpp palette offset (0-15): bits 7:4 of its attribute byte.\n");
-        sb.Append("; s4_pal_table:           -- the same palette-offset bytes back to back, indexable by pattern number.\n");
+        sb.Append("; Sprite4Bpp graphics map").Append(subfolderName is null ? "" : $" (sub-folder '{subfolderName}')").Append(".\n");
+        sb.Append("; s4_..._<name>: equ <n>      -- 0-based sprite pattern number").Append(subfolderName is null ? " (the spriteIndex byte in a map's _objects.asm)" : " within this sub-folder's own binary").Append(".\n");
+        sb.Append("; s4_..._<name>_pal: db <n>   -- this sprite's 4bpp palette slot (0-15): bits 7:4 of its attribute byte.\n");
+        if (subfolderName is null)
+        {
+            sb.Append("; s4_pal_table:              -- start of the _pal byte run (root sprites, then every sub-folder in order), indexable by pattern number.\n");
+        }
         sb.Append("; Patterns upload as one contiguous blob, so there is no per-sprite bank or byte offset.\n");
         sb.Append('\n');
-        sb.Append("s4_pal_table:\n");
+        if (subfolderName is null)
+        {
+            sb.Append("s4_pal_table:\n");
+        }
 
+        var folderPrefix = subfolderName is null ? "" : subfolderName + "_";
         var used = new HashSet<string>();
         for (var i = 0; i < placements.Count; i++)
         {
-            var label = "s4_" + AsmLabel.SanitizeUnique(placements[i].Name, used);
+            var label = "s4_" + AsmLabel.SanitizeUnique(folderPrefix + placements[i].Name, used);
             sb.Append(label).Append(": equ ").Append(i).Append('\n');
             sb.Append(label).Append("_pal:\n");
             sb.Append("    db ").Append(placements[i].PaletteSlotIndex).Append('\n');

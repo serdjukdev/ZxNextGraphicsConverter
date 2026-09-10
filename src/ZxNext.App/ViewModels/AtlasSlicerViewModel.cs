@@ -140,7 +140,7 @@ public partial class AtlasSlicerViewModel : ObservableObject
         // sub-folder tile's exported label is a per-file LOCAL index, which would never match the
         // project-wide tileIndex byte a metatile cell actually needs), so auto-building a metatile from
         // them here would create exactly the same trap through a different door.
-        var isSubfolder = category.SharesPaletteAcrossFolders() && folderPath != category.ToFolderPath();
+        var isSubfolder = category.SubfoldersShareOneExportRow() && folderPath != category.ToFolderPath();
         SupportsMetatileBlockSlicing = category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp && project.MetatileGridSize != 1 && !isSubfolder;
         ResolvedGridSize = project.MetatileGridSize;
 

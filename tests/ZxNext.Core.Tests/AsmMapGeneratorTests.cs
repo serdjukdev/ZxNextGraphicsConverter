@@ -97,9 +97,28 @@ public class AsmMapGeneratorTests
         Assert.Contains("s4_hero_pal:\n    db 0\n", text);
         Assert.Contains("s4_enemy_robot_01: equ 1\n", text);        // spaces and '.' sanitized to '_'
         Assert.Contains("s4_enemy_robot_01_pal:\n    db 8\n", text);
-        Assert.Contains("s4_pal_table:\ns4_hero: equ 0\n", text); // table-start label right before the first entry
+        Assert.Contains("s4_pal_table:\ns4_hero: equ 0\n", text);    // one shared label, right before the first _pal byte
         Assert.DoesNotContain("slot_", text);                       // no bank/offset record for 4bpp sprites
         Assert.DoesNotContain(" dw ", text);
+    }
+
+    [Fact]
+    public void Generate_Sprite4Bpp_SubfolderFoldsItsNameIntoTheLabels_OnlyRootEmitsPalTable()
+    {
+        var placements = new List<AssetPlacement>
+        {
+            new("hero", 0, 0, IsFourBpp: true, PaletteSlotIndex: 3),
+        };
+
+        var root = AsmMapGenerator.Generate(placements, chunkCount: 1, AssetCategory.Sprite4Bpp);
+        var walk = AsmMapGenerator.Generate(placements, chunkCount: 1, AssetCategory.Sprite4Bpp, subfolderName: "walk");
+
+        Assert.Contains("s4_hero: equ 0\n", root);
+        Assert.Contains("s4_pal_table:\n", root);
+        Assert.Contains("s4_walk_hero: equ 0\n", walk);
+        Assert.Contains("s4_walk_hero_pal:\n    db 3\n", walk);
+        // Concatenating root + sub-folder asm (what UnifyAcrossSubfolders does) must leave exactly one s4_pal_table.
+        Assert.DoesNotContain("s4_pal_table", walk);
     }
 
     [Fact]

@@ -336,10 +336,21 @@ public partial class MainWindow : Window
     private static bool IsPaletteFullReason(ImportFailureReason reason) =>
         reason is ImportFailureReason.PaletteOverflow or ImportFailureReason.FlatPaletteFull;
 
-    /// <summary>Shown whenever an import/re-quantize can't fit into its palette — lets the user reduce just this tile's colours, or (4bpp bank categories, and shared-palette Sprite8Bpp/Tile8Bpp) rebuild the whole category's palette from scratch at a lower colour cap.</summary>
+    /// <summary>Shown whenever an import/re-quantize can't fit into its palette — lets the user reduce just this tile's colours, or (4bpp bank categories, and shared-palette Sprite8Bpp/Tile8Bpp) rebuild the whole category's palette from scratch at a lower colour cap. For a 4bpp bank it first repacks the bank tightly and retries automatically, since 16 slots is a tight budget.</summary>
     private async Task HandlePaletteOverflowAsync(string message, AssetCategory category, Func<int, ImportOutcome> retryWithMaxColors)
     {
         var maxUsableColors = category.UsesPaletteBank() ? PaletteBank.SlotUsableColors : category.FlatPaletteCapacity() - 1;
+
+        // 4bpp only has 16 palette slots. Before bothering the user, repack the whole bank as tightly as
+        // possible (colours don't change, only which slot each sprite reads from) and retry the import.
+        if (category.UsesPaletteBank())
+        {
+            await _viewModel.TryOptimizeBankToMakeRoomAsync(category);
+            var retried = retryWithMaxColors(maxUsableColors);
+            if (retried.Success) return;
+            message = retried.Error ?? message;
+        }
+
         var vm = new PaletteOverflowViewModel(message, maxUsableColors, showReQuantizeCategoryOption: category.UsesPaletteBank() || category.SharesPaletteAcrossFolders());
         var dialog = new PaletteOverflowWindow { DataContext = vm, Owner = this };
         if (dialog.ShowDialog() != true) return;

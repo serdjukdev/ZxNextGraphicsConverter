@@ -199,6 +199,40 @@ public class ExportServiceTests : IDisposable
         Assert.Equal(2, Directory.GetFiles(_outputDir, "*.spr").Length);
     }
 
+    /// <summary>Sprite4Bpp gets the same sub-folder collapse as Sprite8Bpp (one .asm, one .pal, separate
+    /// binaries), differing only in that every sprite also carries its 4bpp palette-slot byte.</summary>
+    [Fact]
+    public void ExportAll_Sprite4BppRootAndSubfolder_CollapseToOneRow_WithPerSpritePaletteSlotByte()
+    {
+        var project = new ProjectState();
+        var rootSource = new SourceImage { FileName = "hero", FilePath = _tempSourceFile, Width = 16, Height = 16 };
+        var subSource = new SourceImage { FileName = "walk_0", FilePath = _tempSourceFile, Width = 16, Height = 16 };
+        project.SourceImages.Add(rootSource);
+        project.SourceImages.Add(subSource);
+        var rgba = new byte[16 * 16 * 4];
+
+        Assert.True(AssetImporter.Import(project, rootSource, rgba, AssetCategory.Sprite4Bpp, "sprite/4bpp/images", DitherMode.None).Success);
+        Assert.True(AssetImporter.Import(project, subSource, rgba, AssetCategory.Sprite4Bpp, "sprite/4bpp/images/anim1", DitherMode.None).Success);
+
+        var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
+        var row = results.Single(r => r.RowKey == "sprite/4bpp/images"); // no separate sub-folder row
+
+        Assert.Equal("sprite_4bpp_images_gfx.asm", row.AsmFileName);
+        Assert.Contains("s4_hero: equ 0\n", row.AsmText);
+        Assert.Contains("s4_hero_pal:\n    db ", row.AsmText);
+        Assert.Contains("s4_anim1_walk_0: equ 0\n", row.AsmText);        // sub-folder name folded in, local index
+        Assert.Contains("s4_anim1_walk_0_pal:\n    db ", row.AsmText);
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(row.AsmText, @"(?m)^s4_pal_table:$").Count); // exactly one shared label (not the comment mentioning it)
+        var rootLabelAt = row.AsmText.IndexOf("s4_hero: equ", StringComparison.Ordinal);
+        var subLabelAt = row.AsmText.IndexOf("s4_anim1_walk_0: equ", StringComparison.Ordinal);
+        Assert.True(rootLabelAt >= 0 && rootLabelAt < subLabelAt); // root labels come before the sub-folder's
+
+        ExportService.WriteToDisk(results, _outputDir);
+        Assert.Single(Directory.GetFiles(_outputDir, "*.asm"));
+        Assert.Single(Directory.GetFiles(_outputDir, "*.pal"));
+        Assert.Equal(2, Directory.GetFiles(_outputDir, "*.spr").Length); // separate binary per sub-folder
+    }
+
     /// <summary>Same collapse (and same LOCAL-index label format) as Sprite8Bpp — Tile8Bpp mirrors it exactly
     /// (no slot/offset, per-file-local equ index), by explicit user decision even though this means the
     /// label will NOT match a metatile cell's tileIndex byte once sub-folders are involved.</summary>

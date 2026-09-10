@@ -57,11 +57,11 @@ public static class ExportService
         {
             var category = categoryBatch.Key;
 
-            // Sprite8Bpp/Tile8Bpp sub-folders are "banks" of the same logical content (see
-            // AssetCategoryExtensions.SharesPaletteAcrossFolders) — the whole category is ONE row (sized
+            // Sprite4Bpp/Sprite8Bpp/Tile8Bpp sub-folders are "banks" of one shared palette (see
+            // AssetCategoryExtensions.SubfoldersShareOneExportRow) — the whole category is ONE row (sized
             // by the category root's key, not each sub-folder's own path) even though every sub-folder
             // still gets its own separate binary. Every other category keeps one row per folder.
-            var sizeLookupKey = category.SharesPaletteAcrossFolders() ? category.ToFolderPath() : null;
+            var sizeLookupKey = category.SubfoldersShareOneExportRow() ? category.ToFolderPath() : null;
             var perFolder = categoryBatch
                 .Select(g => ExportFolder(project, g.Key, g.OrderBy(a => a.SortIndex).ToList(),
                     chunkSizeForRow(sizeLookupKey ?? g.Key).ToByteBoundary(), pixelOrderForRow(sizeLookupKey ?? g.Key)))
@@ -144,8 +144,9 @@ public static class ExportService
     /// cref="FolderExportResult.Chunks"/> and <see cref="FolderExportResult.Placements"/> are the
     /// concatenation of every folder's own (each chunk file keeps its own distinct, folder-specific name,
     /// so every sub-folder still gets its own separate binary on disk) — only the address-map text and the
-    /// palette file physically collapse into one shared file, since every folder's palette is already the
-    /// SAME <see cref="Model.NextPalette"/> object (see <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/>).
+    /// palette file physically collapse into one shared file, since every folder in the category shares one
+    /// palette anyway (the same flat <see cref="Model.NextPalette"/> for 8bpp, the one 16-slot bank for
+    /// Sprite4Bpp — see <see cref="AssetCategoryExtensions.SubfoldersShareOneExportRow"/>).
     /// </summary>
     private static FolderExportResult UnifyAcrossSubfolders(AssetCategory category, List<FolderExportResult> perFolder)
     {

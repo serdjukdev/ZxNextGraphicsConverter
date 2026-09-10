@@ -44,15 +44,33 @@ public static class AssetCategoryExtensions
         category is AssetCategory.Sprite4Bpp or AssetCategory.Tile4Bpp;
 
     /// <summary>
-    /// True for the two flat-palette categories whose user-created sub-folders are meant as "banks" of
+    /// True for the two FLAT-palette categories whose user-created sub-folders are meant as "banks" of
     /// the SAME logical content (Sprite8Bpp's animation-frame-bank technique; Tile8Bpp's 8x8 tiles all
     /// destined for one Layer2 target) rather than independent, unrelated images — so unlike Layer2 (each
     /// image genuinely independent), the whole category (root + every sub-folder) shares ONE
     /// <see cref="ZxNext.Core.Model.NextPalette"/> instead of each folder getting its own. See
-    /// <see cref="ZxNext.Core.Project.ProjectState.GetOrCreateFolderPalette"/>.
+    /// <see cref="ZxNext.Core.Project.ProjectState.GetOrCreateFolderPalette"/>. Purely a flat-palette-dict
+    /// concept — a <see cref="UsesPaletteBank"/> category (Sprite4Bpp) also shares one palette across its
+    /// sub-folders, but that's its one 16-slot bank, not a dict entry, so it is NOT listed here. For the
+    /// "collapse sub-folders into one export row" behaviour those two cases have in common, use
+    /// <see cref="SubfoldersShareOneExportRow"/>.
     /// </summary>
     public static bool SharesPaletteAcrossFolders(this AssetCategory category) =>
         category is AssetCategory.Sprite8Bpp or AssetCategory.Tile8Bpp;
+
+    /// <summary>
+    /// True for every category whose sub-folders are "banks" of one shared palette (Sprite8Bpp / Tile8Bpp's
+    /// shared flat palette, Sprite4Bpp's shared 16-slot bank) rather than independent images (Layer2). Such
+    /// a category exports as ONE address-map .asm and ONE palette file for the whole category, with a
+    /// separate binary per sub-folder. Only sub-folder support that differs from
+    /// <see cref="SharesPaletteAcrossFolders"/> is the palette storage; the export collapse is identical.
+    /// </summary>
+    public static bool SubfoldersShareOneExportRow(this AssetCategory category) =>
+        category is AssetCategory.Sprite8Bpp or AssetCategory.Tile8Bpp or AssetCategory.Sprite4Bpp;
+
+    /// <summary>True for a category that supports user-created sub-folders (everything except Tile4Bpp — its tiles feed the metatile system and gain nothing from a bank split).</summary>
+    public static bool SupportsSubfolders(this AssetCategory category) =>
+        category is not AssetCategory.Tile4Bpp;
 
     public static bool IsLayer2(this AssetCategory category) =>
         category is AssetCategory.Layer2_256x192 or AssetCategory.Layer2_320x256 or AssetCategory.Layer2_640x256x4;

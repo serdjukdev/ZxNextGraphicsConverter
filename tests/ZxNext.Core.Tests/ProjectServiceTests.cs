@@ -69,6 +69,30 @@ public class ProjectServiceTests : IDisposable
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsASprite4BppSubfolderAsset_KeepsFolderPathAndSlot()
+    {
+        var project = new ProjectState();
+        var root = new SourceImage { FileName = "hero", FilePath = _tempSourceFile, Width = 16, Height = 16 };
+        var frame = new SourceImage { FileName = "walk_0", FilePath = _tempSourceFile, Width = 16, Height = 16 };
+        project.SourceImages.Add(root);
+        project.SourceImages.Add(frame);
+        var rgba = new byte[16 * 16 * 4];
+        for (var i = 0; i < 16 * 16; i++) { rgba[i * 4] = 200; rgba[i * 4 + 3] = 255; }
+
+        Assert.True(AssetImporter.Import(project, root, rgba, AssetCategory.Sprite4Bpp, "sprite/4bpp/images", DitherMode.None, null).Success);
+        var sub = AssetImporter.Import(project, frame, rgba, AssetCategory.Sprite4Bpp, "sprite/4bpp/images/anim1", DitherMode.None, null);
+        Assert.True(sub.Success, sub.Error);
+
+        ProjectService.Save(project, _tempProjectFile);
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        var loadedSub = Assert.Single(loaded.Assets, a => a.Name == sub.Asset!.Name);
+        Assert.Equal("sprite/4bpp/images/anim1", loadedSub.FolderPath);
+        Assert.Equal(sub.Asset!.PaletteSlotIndex, loadedSub.PaletteSlotIndex);
+        Assert.Empty(loaded.LoadWarnings);
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsAssetIsLockedFlag()
     {
         var project = new ProjectState();

@@ -41,8 +41,8 @@ The genuine 512-colour Next picker, grouped into 8 blocks by R value:
 
   | Category | Cell size | Palette model |
   |---|---|---|
-  | Sprite 4bpp / Tile 4bpp | 16×16 / 8×8 | Shared 16-slot palette bank (15 usable colours/slot), auto-allocated across all tiles/sprites in the category |
-  | Sprite 8bpp / Tile 8bpp | 16×16 / 8×8 | One flat 256-colour palette per folder (user-created sub-folders get their own) |
+  | Sprite 4bpp / Tile 4bpp | 16×16 / 8×8 | Shared 16-slot palette bank (15 usable colours/slot), auto-allocated across the whole category (Sprite4Bpp sub-folders included) |
+  | Sprite 8bpp / Tile 8bpp | 16×16 / 8×8 | One flat 256-colour palette shared across the category, sub-folders included |
   | Layer2 256×192 / 320×256 | full screen | One flat 256-colour palette per folder |
   | Layer2 640×256×4 | full screen | One flat 16-colour palette per folder |
 

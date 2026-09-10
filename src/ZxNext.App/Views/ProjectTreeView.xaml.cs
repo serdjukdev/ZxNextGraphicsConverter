@@ -432,11 +432,11 @@ public partial class ProjectTreeView : UserControl
 
     private void Tree_OnDragLeave(object sender, DragEventArgs e) => ClearDropIndicator();
 
-    /// <summary>Cheap pre-check shared by DragOver (live cursor feedback) and Drop (before actually raising the request) — same category, and for an 8bpp category (per-folder palette, unlike 4bpp's single shared bank) the same folder too, since crossing folders there would mean re-quantizing, not just reordering. Does NOT check the reserved-blank "never insert before it" rule — that needs the resolved before/after side, only computed at Drop.</summary>
+    /// <summary>Cheap pre-check shared by DragOver (live cursor feedback) and Drop (before actually raising the request) — same category and same folder (reorder never crosses folders: it would mean re-quantizing / re-banking, and Tile4Bpp has no sub-folders so this never restricts it). Does NOT check the reserved-blank "never insert before it" rule — that needs the resolved before/after side, only computed at Drop.</summary>
     private static bool CanReorder(TreeNodeViewModel dragged, TreeNodeViewModel? target) =>
         target is { IsFolder: false } && target != dragged &&
         target.Category == dragged.Category &&
-        (dragged.Category!.Value.UsesPaletteBank() || target.FolderPath == dragged.FolderPath);
+        target.FolderPath == dragged.FolderPath;
 
     private void Tree_OnDrop(object sender, DragEventArgs e)
     {

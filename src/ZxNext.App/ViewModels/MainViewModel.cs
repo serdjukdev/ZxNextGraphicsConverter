@@ -690,6 +690,24 @@ public partial class MainViewModel : ObservableObject
     /// only slot assignments shift. Not undoable (clears the undo stack), same reasoning as the
     /// other bulk palette operations.
     /// </summary>
+    /// <summary>Repacks a 4bpp bank into as few slots as possible (see <see cref="PaletteBankOptimizer"/>)
+    /// with NO confirmation prompt — used by the palette-overflow flow to try to make room before asking
+    /// the user to reduce colours, since the 16-slot bank is tight. Colours never change, only which slot
+    /// each sprite/tile reads from. Clears the undo stack (bulk palette change) and marks the project dirty.
+    /// Returns true if the repack actually reduced the slot count.</summary>
+    public async Task<bool> TryOptimizeBankToMakeRoomAsync(AssetCategory category)
+    {
+        if (!category.UsesPaletteBank()) return false;
+
+        var result = await Task.Run(() => PaletteBankOptimizer.Optimize(_project, category));
+        if (!result.Success) return false;
+
+        _undoStack.Clear();
+        HasUnsavedChanges = true;
+        OnSelectionChanged();
+        return result.SlotsAfter < result.SlotsBefore;
+    }
+
     private async Task OptimizeCurrentBankAsync()
     {
         if (PaletteStrip.CurrentBank?.Category is not { } category) return;
@@ -793,7 +811,10 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        if (category.SharesPaletteAcrossFolders())
+        // A category whose sub-folders share one palette (8bpp's flat palette, Sprite4Bpp's 16-slot bank):
+        // a per-folder re-quantize can't free space another sub-folder is holding in that shared palette,
+        // so the whole category is rebuilt in one pass, applying the new dither only to the target folder.
+        if (category.SubfoldersShareOneExportRow())
         {
             var (succeeded, failed) = await RebuildCategoryFromScratchAsync(
                 category, a => a.FolderPath == folderPath ? newDitherMode : a.DitherMode, maxColorsPerTile: null, "Re-quantizing folder...");
@@ -1501,7 +1522,7 @@ public partial class MainViewModel : ObservableObject
         if (dragged is null || target is null) return;
         if (dragged.IsReservedBlank) return; // must always stay first
         if (dragged.Category != target.Category) return;
-        if (!dragged.Category.UsesPaletteBank() && dragged.FolderPath != target.FolderPath) return;
+        if (dragged.FolderPath != target.FolderPath) return; // reorder never crosses folders (would need a re-quantize / re-bank, or leave the tree inconsistent); Tile4Bpp has no sub-folders so this never restricts it
         if (target.IsReservedBlank && !insertAfter) return; // would bump it out of the first slot
 
         var draggedNode = Tree.FindLeafNode(draggedAssetId);
@@ -1702,7 +1723,7 @@ public partial class MainViewModel : ObservableObject
 
         var sharedCategory = Enum.GetValues<AssetCategory>()
             .Cast<AssetCategory?>()
-            .FirstOrDefault(c => c!.Value.SharesPaletteAcrossFolders() && c.Value.ToFolderPath() == rowKey);
+            .FirstOrDefault(c => c!.Value.SubfoldersShareOneExportRow() && c.Value.ToFolderPath() == rowKey);
 
         if (sharedCategory is { } category)
         {

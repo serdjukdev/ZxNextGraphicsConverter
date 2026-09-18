@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: deleting a Sprite4Bpp or Tile4Bpp sub-folder crashed with a "not a flat-folder-palette category" error, because folder deletion always tried to compact the flat per-folder palette even though those two categories share a 16-slot palette bank instead. The assets were actually removed under the hood, but the crash left the folder showing stale (now-empty) rows in the tree until the project was reloaded, and deleting sprites from those stale rows reported "0" to delete. Deleting a folder in any category now compacts whichever palette storage that category actually uses.
+
 ## v0.6.0 (2026-09-11)
 
 - Added: you can now drag a tile/sprite row between folders of a shared-palette category (Sprite4Bpp / Sprite8Bpp / Tile8Bpp). Drop it on a row in another folder to move it there and position it before/after that row, or drop it straight onto a folder to move it to the end. Useful for slicing a spritesheet into the root and then sorting the frames into sub-folders. Because the palette is shared across the category there is no re-quantize. Moving a root asset that's currently placed on a map or used in a metatile into a sub-folder is refused (a sub-folder asset can't be referenced); moving into the root, or between sub-folders, always works. After such a move the tree keeps the moved row in view instead of scrolling to the top. Layer2 and Tile4Bpp reorder within one folder only, as before.

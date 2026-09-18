@@ -1365,12 +1365,13 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Permanently deletes a user-created 8bpp sub-folder and every tile/sprite in it. The category's
-    /// palette (shared across every sub-folder — see <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/>)
-    /// is compacted afterward, NOT removed — the root and any other sub-folder may still be using it. Not
-    /// undoable — unlike single-asset delete, a folder can hold many assets, and safely snapshotting all
-    /// of that just for undo isn't worth the complexity for a rare, deliberate, explicitly-confirmed
-    /// action (same call already made for bulk category re-quantize).
+    /// Permanently deletes a user-created sub-folder and every tile/sprite in it. Afterward, whatever the
+    /// category's colours live in is compacted, NOT removed — the root and any other sub-folder may still
+    /// be using it: the shared flat palette (see <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/>)
+    /// for Sprite8Bpp/Tile8Bpp, or the category's <see cref="AssetCategoryExtensions.UsesPaletteBank"/>
+    /// bank for Sprite4Bpp/Tile4Bpp. Not undoable — unlike single-asset delete, a folder can hold many
+    /// assets, and safely snapshotting all of that just for undo isn't worth the complexity for a rare,
+    /// deliberate, explicitly-confirmed action (same call already made for bulk category re-quantize).
     /// </summary>
     public void DeleteFolder(TreeNodeViewModel folderNode)
     {
@@ -1396,7 +1397,8 @@ public partial class MainViewModel : ObservableObject
         if (ScrollableMessageWindow.Show(message, "Delete folder", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
 
         foreach (var asset in affected) _project.RemoveAsset(asset.Id);
-        _project.CompactFlatPalette(category, folderPath);
+        if (category.UsesPaletteBank()) _project.CompactPaletteBank(category);
+        else _project.CompactFlatPalette(category, folderPath);
         Tree.RemoveFolderNode(folderNode);
         _undoStack.Clear();
 

@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using ZxNext.Core.Conversion;
 using ZxNext.Core.Editing;
 using ZxNext.Core.Model;
+using ZxNext.Core.Settings;
 
 namespace ZxNext.Core.Project;
 
@@ -367,12 +368,14 @@ public static class ProjectService
     }
 
     /// <summary>
-    /// Sub-folder sprites are a separate "bank" the object/placement system can't address; an earlier build
-    /// still let them be dropped onto a map. Any such placement exports a meaningless spriteIndex, so remove
-    /// them on load (older maps only — the Map Editor no longer offers sub-folder sprites) and note it.
+    /// Sub-folder sprites are a separate "bank" the object/placement system can't address by default; an
+    /// earlier build still let them be dropped onto a map. Any such placement exports a meaningless
+    /// spriteIndex unless <see cref="AppSettings.SubfolderAssetsInEditor"/> is on, so remove them on load
+    /// when that setting is off (legacy-fix pass) and note it.
     /// </summary>
     private static void DropUnplaceableSpritePlacements(ProjectState project)
     {
+        if (AppSettingsStore.Load().SubfolderAssetsInEditor ?? false) return;
         var assetsById = project.Assets.ToDictionary(a => a.Id);
         var removed = 0;
         foreach (var map in project.Maps)
@@ -384,7 +387,7 @@ public static class ProjectService
         {
             project.LoadWarnings.Add(
                 $"{removed} sprite placement(s) referenced a sub-folder sprite and were removed from their map(s). " +
-                "Sub-folder sprites are a separate bank and can't be placed on a map any more; use a root-folder sprite instead.");
+                "Sub-folder sprites can't be placed on a map unless \"Allow sub-folder assets in map/metatile editor\" is on in Settings.");
         }
     }
 

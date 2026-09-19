@@ -38,6 +38,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private int defaultMetatileGridSize;
 
     [ObservableProperty] private bool exportSubfolders;
+    [ObservableProperty] private bool subfolderAssetsInEditor;
 
     [ObservableProperty] private string mapEditorTileGridColorHex;
     [ObservableProperty] private double mapEditorTileGridOpacity;
@@ -63,6 +64,7 @@ public partial class SettingsViewModel : ObservableObject
         defaultMetatileGridSize = s.DefaultMetatileGridSize ?? 2;
 
         exportSubfolders = s.ExportSubfolders ?? false;
+        subfolderAssetsInEditor = s.SubfolderAssetsInEditor ?? false;
 
         mapEditorTileGridColorHex = s.MapEditorTileGridColorHex ?? DefaultTileGridColorHex;
         mapEditorTileGridOpacity = s.MapEditorTileGridOpacity ?? 0.12;
@@ -99,6 +101,7 @@ public partial class SettingsViewModel : ObservableObject
         s.DefaultMetatileGridSize = DefaultMetatileGridSize;
 
         s.ExportSubfolders = ExportSubfolders ? true : null;
+        s.SubfolderAssetsInEditor = SubfolderAssetsInEditor ? true : null;
 
         s.MapEditorTileGridColorHex = NullIfDefault(MapEditorTileGridColorHex, DefaultTileGridColorHex);
         s.MapEditorTileGridOpacity = MapEditorTileGridOpacity;

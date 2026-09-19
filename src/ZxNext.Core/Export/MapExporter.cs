@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
+using ZxNext.Core.Settings;
 
 namespace ZxNext.Core.Export;
 
@@ -160,7 +161,9 @@ public static class MapExporter
                 throw new InvalidOperationException($"Map '{map.Name}' ({layerSuffix} layer) cell {i} references a tile that no longer exists.");
             }
 
-            var tileIndex = (byte)AssetExportIndexer.PlacementIndexOf(tileAsset, project.Assets);
+            var tileIndex = (byte)(AssetExportIndexer.IsSubfolderAsset(tileAsset)
+                ? AssetExportIndexer.SubfolderLocalIndexOf(tileAsset, project.Assets)
+                : AssetExportIndexer.PlacementIndexOf(tileAsset, project.Assets));
             gridBytes[i * bytesPerCell] = tileIndex;
 
             if (kind == MetatileKind.FourBpp)
@@ -249,6 +252,7 @@ public static class MapExporter
 
     private static (bool Success, List<ObjectRecord>? Records, string? Error) BuildObjectRecords(MapAsset map, IReadOnlyList<GraphicsAsset> projectAssets, IReadOnlyList<ObjectType> objectTypes)
     {
+        var subfolderAssetsAllowed = AppSettingsStore.Load().SubfolderAssetsInEditor ?? false;
         var referencedCategories = new HashSet<AssetCategory>();
         foreach (var placement in map.SpriteLayer)
         {
@@ -257,13 +261,13 @@ public static class MapExporter
             {
                 return (false, null, $"Map '{map.Name}' places a sprite that no longer exists.");
             }
-            if (asset.FolderPath != asset.Category.ToFolderPath())
+            if (AssetExportIndexer.IsSubfolderAsset(asset) && !subfolderAssetsAllowed)
             {
                 return (false, null,
-                    $"Map '{map.Name}' places sprite '{asset.Name}', which lives in a sub-folder. Sub-folder sprites are a " +
-                    "separate bank and can't be placed on a map. Move it to the category root, or remove it from the map.");
+                    $"Map '{map.Name}' places sprite '{asset.Name}', which lives in a sub-folder. Sub-folder sprites can't be placed on a map unless \"Allow sub-folder assets in map/metatile editor\" is on in Settings.");
             }
-            referencedCategories.Add(asset.Category);
+            if (!AssetExportIndexer.IsSubfolderAsset(asset))
+                referencedCategories.Add(asset.Category);
         }
 
         foreach (var category in referencedCategories)
@@ -289,7 +293,9 @@ public static class MapExporter
         {
             var placement = map.SpriteLayer[i];
             var asset = projectAssets.First(a => a.Id == placement.SpriteAssetId);
-            var spriteIndex = (byte)AssetExportIndexer.PlacementIndexOf(asset, projectAssets);
+            var spriteIndex = (byte)(AssetExportIndexer.IsSubfolderAsset(asset)
+                ? AssetExportIndexer.SubfolderLocalIndexOf(asset, projectAssets)
+                : AssetExportIndexer.PlacementIndexOf(asset, projectAssets));
 
             byte typeByte = NoneByte;
             string? typeName = null;

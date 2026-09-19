@@ -55,6 +55,8 @@
                         <TextBlock Text="Export" FontWeight="Bold" FontSize="12" Margin="0,16,0,0" />
                         <CheckBox Content="Organise output into sub-folders matching the project tree" IsChecked="{Binding ExportSubfolders}" Margin="0,6,0,0" />
                         <TextBlock Text="Creates a sub-folder per category (e.g. Sprite8Bpp/) and per user sub-folder inside it. Off by default for compatibility with existing projects." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,2,0,0" />
+                        <CheckBox Content="Allow sub-folder assets in map/metatile editor" IsChecked="{Binding SubfolderAssetsInEditor}" Margin="0,6,0,0" />
+                        <TextBlock Text="Sprite4Bpp/Sprite8Bpp sub-folder sprites appear in the map editor palette; Tile8Bpp sub-folder tiles appear in the metatile editor. Indices are local to the sub-folder binary. Turning this off removes any existing sub-folder placements." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,2,0,0" />
 
                         <TextBlock Text="Default dither mode for new imports" FontWeight="Bold" FontSize="12" Margin="0,16,0,0" />
                         <ComboBox ItemsSource="{Binding AvailableDitherModes}" SelectedItem="{Binding DefaultDitherMode}" Width="160" HorizontalAlignment="Left" Margin="0,6,0,0" />

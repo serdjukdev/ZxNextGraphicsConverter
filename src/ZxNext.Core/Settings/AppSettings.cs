@@ -51,6 +51,9 @@ public class AppSettings
     /// <summary>When true, <see cref="ZxNext.Core.Export.ExportService.WriteToDisk"/> mirrors the project tree's sub-folder structure under the chosen output directory (each category in its own named sub-folder, each sub-folder in its own sub-directory). Null/false = flat output (original behaviour).</summary>
     public bool? ExportSubfolders { get; set; }
 
+    /// <summary>When true, assets in user sub-folders appear in the map/metatile editors: Sprite4Bpp and Sprite8Bpp sub-folder sprites in the map editor sprite palette, Tile8Bpp sub-folder tiles in the metatile editor tile palette. Their export index is local to the sub-folder binary. Null/false = sub-folder assets excluded from the editors (original behaviour).</summary>
+    public bool? SubfolderAssetsInEditor { get; set; }
+
     /// <summary>The map last selected in the Map Editor, restored on next open. Global (not per-project) like the other "Last..." fields above — a stale id from a different/previous project just fails to match and falls back to no selection, same as before this existed.</summary>
     public Guid? LastSelectedMapId { get; set; }
 

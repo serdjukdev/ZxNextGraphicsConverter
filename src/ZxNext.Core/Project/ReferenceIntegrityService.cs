@@ -1,4 +1,5 @@
 using ZxNext.Core.Model;
+using ZxNext.Core.Settings;
 
 namespace ZxNext.Core.Project;
 
@@ -97,9 +98,11 @@ public static class ReferenceIntegrityService
     /// <summary>
     /// Whether an asset may be moved to <paramref name="targetFolderPath"/> (a within-category folder
     /// move, only offered for the shared-palette sprite/8bpp-tile categories). The only move that fails is
-    /// one taking a currently-referenced asset OUT of the category root: a sub-folder asset is a separate
-    /// bank the placement/metatile system can't address, so a placed sprite / a metatile-used tile must
-    /// have its references cleared first. Moving into the root, or between sub-folders, is always fine.
+    /// one taking a currently-referenced asset OUT of the category root when sub-folder assets are not
+    /// allowed in the editors: a placed sprite / a metatile-used tile must have its references cleared
+    /// first. When <see cref="AppSettings.SubfolderAssetsInEditor"/> is on, the placement/metatile system
+    /// addresses sub-folder assets by local index, so the move is safe (the Guid reference stays intact).
+    /// Moving into the root, or between sub-folders, is always fine.
     /// </summary>
     public static DeletionCheck CanMoveAssetToFolder(ProjectState project, GraphicsAsset asset, string targetFolderPath)
     {
@@ -107,22 +110,33 @@ public static class ReferenceIntegrityService
         var leavingRoot = asset.FolderPath == rootPath && targetFolderPath != rootPath;
         if (!leavingRoot) return new DeletionCheck(true, null);
 
-        if (asset.Category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp)
+        var subfolderAssetsAllowed = AppSettingsStore.Load().SubfolderAssetsInEditor ?? false;
+
+        if (asset.Category is AssetCategory.Tile4Bpp)
         {
             var metatiles = FindMetatilesReferencingTile(project, asset.Id);
             if (metatiles.Count > 0)
             {
                 return new DeletionCheck(false,
-                    $"Can't move '{asset.Name}' into a sub-folder: it's used in metatile(s) {string.Join(", ", metatiles.Select(m => m.Name))}, and a sub-folder tile can't be referenced by a metatile. Remove it from those metatiles first.");
+                    $"Can't move '{asset.Name}' into a sub-folder: it's used in metatile(s) {string.Join(", ", metatiles.Select(m => m.Name))}. Remove it from those metatiles first.");
             }
         }
-        else if (asset.Category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp)
+        else if (asset.Category is AssetCategory.Tile8Bpp && !subfolderAssetsAllowed)
+        {
+            var metatiles = FindMetatilesReferencingTile(project, asset.Id);
+            if (metatiles.Count > 0)
+            {
+                return new DeletionCheck(false,
+                    $"Can't move '{asset.Name}' into a sub-folder: it's used in metatile(s) {string.Join(", ", metatiles.Select(m => m.Name))}. Turn on \"Allow sub-folder assets in map/metatile editor\" in Settings, or remove it from those metatiles first.");
+            }
+        }
+        else if ((asset.Category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp) && !subfolderAssetsAllowed)
         {
             var maps = FindMapsReferencingSprite(project, asset.Id);
             if (maps.Count > 0)
             {
                 return new DeletionCheck(false,
-                    $"Can't move '{asset.Name}' into a sub-folder: it's placed on map(s) {string.Join(", ", maps.Select(m => m.Name))}, and a sub-folder sprite can't be placed on a map. Remove those placements first.");
+                    $"Can't move '{asset.Name}' into a sub-folder: it's placed on map(s) {string.Join(", ", maps.Select(m => m.Name))}. Turn on \"Allow sub-folder assets in map/metatile editor\" in Settings, or remove those placements first.");
             }
         }
 

@@ -38,7 +38,9 @@ public static class MetatileSerializer
                     $"Metatile '{metatile.Name}' cell {i} references a tile that no longer exists.");
             }
 
-            var tileIndex = (byte)AssetExportIndexer.PlacementIndexOf(tileAsset, projectAssets);
+            var tileIndex = (byte)(AssetExportIndexer.IsSubfolderAsset(tileAsset)
+                ? AssetExportIndexer.SubfolderLocalIndexOf(tileAsset, projectAssets)
+                : AssetExportIndexer.PlacementIndexOf(tileAsset, projectAssets));
 
             if (metatile.Kind == MetatileKind.FourBpp)
             {

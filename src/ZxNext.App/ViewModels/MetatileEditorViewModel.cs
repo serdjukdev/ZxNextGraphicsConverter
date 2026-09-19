@@ -8,6 +8,7 @@ using ZxNext.App.Views;
 using ZxNext.Core.Conversion;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
+using ZxNext.Core.Settings;
 
 namespace ZxNext.App.ViewModels;
 
@@ -168,19 +169,20 @@ public partial class MetatileEditorViewModel : ObservableObject
     /// <summary>
     /// Tile8Bpp sub-folders are "banks" of the same logical content (see
     /// <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/> — e.g. whichever Layer2 tile set
-    /// is currently active), addressed by the game directly rather than through the Map/Metatile
-    /// placement system, and their exported <c>t8_&lt;name&gt;: equ</c> label is deliberately a per-file
-    /// LOCAL index (see <see cref="ZxNext.Core.Export.AsmMapGenerator"/>'s remarks), NOT the project-wide
-    /// rank a metatile cell's tileIndex byte actually uses. So a sub-folder tile placed into a metatile
-    /// here would export with a tileIndex the generated label doesn't match — excluded from this palette
-    /// entirely, by explicit design, so a metatile can only ever be built from ROOT tiles. Tile4Bpp has no
-    /// sub-folders at all (a palette-bank category), so this is a no-op for it.
+    /// is currently active), addressed by the game directly. By default, sub-folder tiles are excluded
+    /// because their exported <c>t8_subfolder_name: equ N</c> label is a per-file LOCAL index, not the
+    /// project-wide rank a metatile cell's tileIndex uses. When <see cref="AppSettings.SubfolderAssetsInEditor"/>
+    /// is on, Tile8Bpp sub-folder tiles are included and their tileIndex at export IS the local sub-folder
+    /// index, which matches the label. Tile4Bpp has no sub-folders (palette-bank category), so always root-only.
     /// </summary>
     private void RefreshTilePalette()
     {
         var category = SelectedKind == MetatileKind.FourBpp ? AssetCategory.Tile4Bpp : AssetCategory.Tile8Bpp;
+        var includeSubfolders = category == AssetCategory.Tile8Bpp
+                                && (AppSettingsStore.Load().SubfolderAssetsInEditor ?? false);
         TilePalette = new ObservableCollection<TilePaletteItemViewModel>(
-            _project.Assets.Where(a => a.Category == category && a.FolderPath == category.ToFolderPath())
+            _project.Assets.Where(a => a.Category == category
+                                       && (includeSubfolders || a.FolderPath == category.ToFolderPath()))
                 .OrderBy(a => a.SortIndex).Select(a => new TilePaletteItemViewModel(a, _project, _renderCache)));
     }
 

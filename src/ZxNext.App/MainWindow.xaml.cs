@@ -483,9 +483,51 @@ public partial class MainWindow : Window
     /// </summary>
     private void Settings_OnClick(object sender, RoutedEventArgs e)
     {
+        var wasSubfolderAssetsInEditor = AppSettingsStore.Load().SubfolderAssetsInEditor ?? false;
         var vm = new SettingsViewModel();
         var dialog = new SettingsWindow { DataContext = vm, Owner = this };
-        dialog.ShowDialog();
+        if (dialog.ShowDialog() != true) return;
+        var nowSubfolderAssetsInEditor = AppSettingsStore.Load().SubfolderAssetsInEditor ?? false;
+        if (wasSubfolderAssetsInEditor && !nowSubfolderAssetsInEditor)
+            DropSubfolderEditorPlacements(_viewModel.Project);
+    }
+
+    private void DropSubfolderEditorPlacements(ProjectState project)
+    {
+        var assetsById = project.Assets.ToDictionary(a => a.Id);
+        var droppedSprites = 0;
+        foreach (var map in project.Maps)
+        {
+            droppedSprites += map.SpriteLayer.RemoveAll(p =>
+                assetsById.TryGetValue(p.SpriteAssetId, out var a) && a.FolderPath != a.Category.ToFolderPath());
+        }
+
+        var tile8BppRootPath = AssetCategory.Tile8Bpp.ToFolderPath();
+        var blankTile8Bpp = project.Assets.FirstOrDefault(a => a.Category == AssetCategory.Tile8Bpp && a.IsReservedBlank);
+        var droppedCells = 0;
+        if (blankTile8Bpp is not null)
+        {
+            foreach (var metatile in project.Metatiles.Where(m => m.Kind == MetatileKind.EightBpp))
+            {
+                foreach (var cell in metatile.Cells)
+                {
+                    if (assetsById.TryGetValue(cell.TileAssetId, out var tile) && tile.FolderPath != tile8BppRootPath)
+                    {
+                        cell.TileAssetId = blankTile8Bpp.Id;
+                        droppedCells++;
+                    }
+                }
+            }
+        }
+
+        if (droppedSprites == 0 && droppedCells == 0) return;
+        _viewModel.HasUnsavedChanges = true;
+        var parts = new List<string>();
+        if (droppedSprites > 0) parts.Add($"{droppedSprites} sprite placement(s)");
+        if (droppedCells > 0) parts.Add($"{droppedCells} metatile cell(s)");
+        MessageBox.Show(
+            $"{string.Join(" and ", parts)} referencing sub-folder assets were removed because \"Allow sub-folder assets in map/metatile editor\" was turned off.",
+            "Sub-folder placements removed", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void MetatileEditor_OnClick(object sender, RoutedEventArgs e)

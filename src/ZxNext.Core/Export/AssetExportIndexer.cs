@@ -53,6 +53,28 @@ public static class AssetExportIndexer
     public static bool PlacementExceedsExportableCap(AssetCategory category, IReadOnlyList<GraphicsAsset> projectAssets) =>
         RootFolderAssets(category, projectAssets).Count > MaxAssetsPerCategory;
 
+    /// <summary>True when <paramref name="asset"/> lives in a user sub-folder rather than the category root.</summary>
+    public static bool IsSubfolderAsset(GraphicsAsset asset) =>
+        asset.FolderPath != asset.Category.ToFolderPath();
+
+    /// <summary>
+    /// 0-based position of <paramref name="asset"/> within its own sub-folder's SortIndex-ordered sequence —
+    /// the LOCAL index that matches the <c>t8_subfolder_name: equ N</c> / <c>s8_subfolder_name: equ N</c>
+    /// label written by <see cref="AsmMapGenerator"/> for sub-folder exports. Only valid for sub-folder
+    /// assets (<see cref="IsSubfolderAsset"/> true); throws for a root-folder asset.
+    /// </summary>
+    public static int SubfolderLocalIndexOf(GraphicsAsset asset, IReadOnlyList<GraphicsAsset> projectAssets)
+    {
+        var subfolderAssets = projectAssets
+            .Where(a => a.Category == asset.Category && a.FolderPath == asset.FolderPath)
+            .OrderBy(a => a.SortIndex)
+            .ToList();
+        var index = subfolderAssets.FindIndex(a => a.Id == asset.Id);
+        if (index < 0)
+            throw new ArgumentException($"Asset '{asset.Name}' ({asset.Id}) is not present in the provided asset list.", nameof(asset));
+        return index;
+    }
+
     private static List<GraphicsAsset> RootFolderAssets(AssetCategory category, IReadOnlyList<GraphicsAsset> projectAssets)
     {
         var rootPath = category.ToFolderPath();

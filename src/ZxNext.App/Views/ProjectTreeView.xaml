@@ -225,7 +225,8 @@
                              NodeText_OnContextMenuOpening toggles Items[i].Visibility/Header by index
                              depending on the node and the current multi-selection. Item order:
                              0 Rename, 1 Re-quantize, 2 Delete, 3 Lock/Unlock, 4 Add sub-folder,
-                             5 Re-quantize folder, 6 Delete folder, 7 Delete unused, 8 Priority (Tile8Bpp only). -->
+                             5 Re-quantize folder, 6 Delete folder, 7 Delete unused,
+                             8 Lock all in folder, 9 Unlock all in folder, 10 Priority (Tile8Bpp only). -->
                         <Grid.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Rename..." Click="RenameMenuItem_OnClick" />
@@ -240,6 +241,10 @@
                                 <MenuItem Header="Delete folder..." Click="DeleteFolderMenuItem_OnClick" />
                                 <MenuItem Header="Delete unused..." Click="DeleteUnusedMenuItem_OnClick"
                                           ToolTip="Delete every tile/sprite here that no map places and that isn't locked" />
+                                <MenuItem Header="Lock all in folder" Click="LockAllFolderMenuItem_OnClick"
+                                          ToolTip="Lock every tile/sprite in this folder to protect it from deletion" />
+                                <MenuItem Header="Unlock all in folder" Click="UnlockAllFolderMenuItem_OnClick"
+                                          ToolTip="Remove the delete-lock from every tile/sprite in this folder" />
                                 <MenuItem Header="Priority" Click="PriorityMenuItem_OnClick"
                                           ToolTip="Layer2 priority: a priority tile draws on top of every layer on real hardware" />
                             </ContextMenu>

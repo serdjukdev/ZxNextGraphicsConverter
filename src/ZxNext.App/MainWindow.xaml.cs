@@ -38,6 +38,7 @@ public partial class MainWindow : Window
         ProjectTreeViewControl.DeleteFolderRequested += _viewModel.DeleteFolder;
         ProjectTreeViewControl.ReQuantizeFolderRequested += OnReQuantizeFolderRequested;
         ProjectTreeViewControl.DeleteUnusedRequested += _viewModel.DeleteUnusedAssets;
+        ProjectTreeViewControl.SetLockOnFolderRequested += _viewModel.SetLockOnFolder;
         ProjectTreeViewControl.SetAssetLockRequested += _viewModel.SetAssetLock;
         ProjectTreeViewControl.SetLockOnSelectionRequested += _viewModel.SetLockOnSelectedAssets;
         ProjectTreeViewControl.SetAssetPriorityRequested += _viewModel.SetAssetPriority;

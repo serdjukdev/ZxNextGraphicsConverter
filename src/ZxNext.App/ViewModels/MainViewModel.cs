@@ -1287,6 +1287,35 @@ public partial class MainViewModel : ObservableObject
             : $"Unlocked {changed} tile(s)/sprite(s).";
     }
 
+    /// <summary>
+    /// Lock or unlock every non-blank asset directly in the given folder (right-click "Lock all" /
+    /// "Unlock all"). For a category root, only the root-folder assets (not sub-folders); for a
+    /// sub-folder, only that sub-folder's own assets.
+    /// </summary>
+    public void SetLockOnFolder(TreeNodeViewModel folderNode, bool locked)
+    {
+        if (!folderNode.IsFolder || folderNode.Category is not { } category || folderNode.FolderPath is not { } folderPath) return;
+
+        var targets = _project.Assets
+            .Where(a => a.Category == category && a.FolderPath == folderPath && !a.IsReservedBlank)
+            .ToList();
+
+        var changed = 0;
+        foreach (var asset in targets)
+        {
+            if (asset.IsLocked == locked) continue;
+            asset.IsLocked = locked;
+            if (Tree.FindLeafNode(asset.Id) is { } node) node.IsLocked = locked;
+            changed++;
+        }
+
+        if (changed == 0) return;
+        HasUnsavedChanges = true;
+        PixelEditor.StatusText = locked
+            ? $"Locked {changed} tile(s)/sprite(s) in '{folderNode.Name}'."
+            : $"Unlocked {changed} tile(s)/sprite(s) in '{folderNode.Name}'.";
+    }
+
     /// <summary>Toggles the Layer2 priority flag on one Tile8Bpp tile — driven by the green up-arrow on its tree row.</summary>
     public void SetAssetPriority(Guid assetId, bool priority)
     {

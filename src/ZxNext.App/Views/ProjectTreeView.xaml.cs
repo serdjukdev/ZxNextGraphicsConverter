@@ -46,6 +46,9 @@ public partial class ProjectTreeView : UserControl
     /// <summary>Raised from a folder's (category root or sub-folder) right-click "Delete unused..." menu item.</summary>
     public event Action<TreeNodeViewModel>? DeleteUnusedRequested;
 
+    /// <summary>Raised from a folder's right-click "Lock all" / "Unlock all" menu item (bool = lock vs unlock).</summary>
+    public event Action<TreeNodeViewModel, bool>? SetLockOnFolderRequested;
+
     /// <summary>Raised from the row's padlock button — toggles the "never delete" lock on that one asset (bool = the new locked state).</summary>
     public event Action<Guid, bool>? SetAssetLockRequested;
 
@@ -607,9 +610,15 @@ public partial class ProjectTreeView : UserControl
                 : Visibility.Collapsed;
         }
 
+        if (menu.Items[8] is MenuItem lockAllItem)
+            lockAllItem.Visibility = node.IsFolder ? Visibility.Visible : Visibility.Collapsed;
+
+        if (menu.Items[9] is MenuItem unlockAllItem)
+            unlockAllItem.Visibility = node.IsFolder ? Visibility.Visible : Visibility.Collapsed;
+
         // "Priority" (Layer2 draw-on-top) is Tile8Bpp-leaf only. Header flips to "No priority" when
         // every asset in the target set is already priority.
-        if (menu.Items[8] is MenuItem priorityItem)
+        if (menu.Items[10] is MenuItem priorityItem)
         {
             priorityItem.Visibility = node.IsTile8Bpp && !node.IsReservedBlank ? Visibility.Visible : Visibility.Collapsed;
             if (priorityItem.Visibility == Visibility.Visible)
@@ -702,6 +711,18 @@ public partial class ProjectTreeView : UserControl
     {
         if (sender is not MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement { DataContext: TreeNodeViewModel { IsFolder: true } node } } }) return;
         DeleteUnusedRequested?.Invoke(node);
+    }
+
+    private void LockAllFolderMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement { DataContext: TreeNodeViewModel { IsFolder: true } node } } }) return;
+        SetLockOnFolderRequested?.Invoke(node, true);
+    }
+
+    private void UnlockAllFolderMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement { DataContext: TreeNodeViewModel { IsFolder: true } node } } }) return;
+        SetLockOnFolderRequested?.Invoke(node, false);
     }
 
     private void ReQuantizeFolderMenuItem_OnClick(object sender, RoutedEventArgs e)

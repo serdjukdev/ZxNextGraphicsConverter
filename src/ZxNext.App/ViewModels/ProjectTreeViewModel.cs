@@ -102,7 +102,16 @@ public partial class ProjectTreeViewModel : ObservableObject
 
         var node = new TreeNodeViewModel(name, isFolder: true) { Category = category, FolderPath = path };
         WireFolder(node);
-        parentFolder.Children.Add(node);
+        int insertIdx = 0;
+        for (int i = 0; i < parentFolder.Children.Count; i++)
+        {
+            if (!parentFolder.Children[i].IsFolder) break;
+            if (string.Compare(parentFolder.Children[i].FolderPath, path, StringComparison.Ordinal) < 0)
+                insertIdx = i + 1;
+            else
+                break;
+        }
+        parentFolder.Children.Insert(insertIdx, node);
         return node;
     }
 

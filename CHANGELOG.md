@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed: a newly created sub-folder appeared at the bottom of the tree instead of at its alphabetically sorted position among sibling sub-folders; it would only move to the right place after reloading the project.
 - Fixed: deleting a Sprite4Bpp or Tile4Bpp sub-folder crashed with a "not a flat-folder-palette category" error, because folder deletion always tried to compact the flat per-folder palette even though those two categories share a 16-slot palette bank instead. The assets were actually removed under the hood, but the crash left the folder showing stale (now-empty) rows in the tree until the project was reloaded, and deleting sprites from those stale rows reported "0" to delete. Deleting a folder in any category now compacts whichever palette storage that category actually uses.
 
 ## v0.6.0 (2026-09-11)

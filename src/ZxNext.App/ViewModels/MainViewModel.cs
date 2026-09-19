@@ -1789,7 +1789,8 @@ public partial class MainViewModel : ObservableObject
     {
         await RunBusyAsync("Exporting...", async _ =>
         {
-            await Task.Run(() => ExportService.WriteToDisk(results, outputDirectory));
+            var exportSubfolders = AppSettingsStore.Load().ExportSubfolders ?? false;
+            await Task.Run(() => ExportService.WriteToDisk(results, outputDirectory, exportSubfolders));
         });
     }
 

@@ -35,6 +35,18 @@ public static class AssetCategoryExtensions
         _ => throw new System.ArgumentOutOfRangeException(nameof(category))
     };
 
+    /// <summary>Returns the category whose <see cref="ToFolderPath"/> is a prefix of (or equal to) the given <paramref name="folderPath"/>. Returns null when no category matches — for example the <c>map/…</c> or empty paths used by map/object export results.</summary>
+    public static AssetCategory? CategoryFromFolderPath(string folderPath)
+    {
+        foreach (AssetCategory c in System.Enum.GetValues<AssetCategory>())
+        {
+            var root = c.ToFolderPath();
+            if (folderPath == root || folderPath.StartsWith(root + "/", System.StringComparison.Ordinal))
+                return c;
+        }
+        return null;
+    }
+
     /// <summary>Drives nibble-vs-byte pixel packing (<see cref="ZxNext.Core.Editing.AssetPixelEditor"/>, the bitmap renderer). NOT the same as <see cref="UsesPaletteBank"/> — Layer2_640x256x4 is 4 bits/pixel but uses one flat image-wide palette, not the 16-slot per-tile bank.</summary>
     public static bool Is4BitPerPixel(this AssetCategory category) =>
         category is AssetCategory.Sprite4Bpp or AssetCategory.Tile4Bpp or AssetCategory.Layer2_640x256x4;

@@ -444,7 +444,8 @@ public partial class MainWindow : Window
             .Where(r => includedRowKeys.Contains(r.RowKey))
             .ToList();
 
-        var existing = ExportService.ListOutputFileNames(results)
+        var exportSubfolders = AppSettingsStore.Load().ExportSubfolders ?? false;
+        var existing = ExportService.ListOutputFileNames(results, exportSubfolders)
             .Where(name => File.Exists(Path.Combine(vm.OutputDirectory, name)))
             .ToList();
         if (existing.Count > 0)

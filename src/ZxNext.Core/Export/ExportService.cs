@@ -125,7 +125,8 @@ public static class ExportService
                 isPixelOrderConfigurable ? TilePixelReorder.Apply(a.PackedPixelData, a.Width, a.Height, pixelOrder) : a.PackedPixelData,
                 a.Category.UsesPaletteBank(), a.PaletteSlotIndex))
             .ToList();
-        var (chunks, placements) = BinaryChunker.Pack(exportables, baseFileName, category.BinaryFileExtension(), chunkSizeBytes);
+        var (rawChunks, placements) = BinaryChunker.Pack(exportables, baseFileName, category.BinaryFileExtension(), chunkSizeBytes);
+        var chunks = rawChunks.Select(c => c with { FolderPath = folderPath }).ToList();
         var subfolderName = folderPath == category.ToFolderPath() ? null : folderPath[(category.ToFolderPath().Length + 1)..];
         var asmText = AsmMapGenerator.Generate(placements, chunks.Count, category, subfolderName);
 
@@ -169,31 +170,62 @@ public static class ExportService
         };
     }
 
-    public static void WriteToDisk(IEnumerable<FolderExportResult> results, string outputDirectory)
+    public static void WriteToDisk(IEnumerable<FolderExportResult> results, string outputDirectory, bool exportSubfolders = false)
     {
         Directory.CreateDirectory(outputDirectory);
         foreach (var result in results)
         {
+            var asmPalDir = exportSubfolders ? GetOutputSubdir(outputDirectory, result.FolderPath) : outputDirectory;
+            Directory.CreateDirectory(asmPalDir);
+
             foreach (var chunk in result.Chunks)
             {
-                File.WriteAllBytes(Path.Combine(outputDirectory, chunk.FileName), chunk.Data);
+                var chunkDir = exportSubfolders ? GetOutputSubdir(outputDirectory, chunk.FolderPath ?? result.FolderPath) : outputDirectory;
+                Directory.CreateDirectory(chunkDir);
+                File.WriteAllBytes(Path.Combine(chunkDir, chunk.FileName), chunk.Data);
             }
             if (result.PaletteFile is { } paletteFile)
-            {
-                File.WriteAllBytes(Path.Combine(outputDirectory, paletteFile.FileName), paletteFile.Data);
-            }
-            File.WriteAllText(Path.Combine(outputDirectory, result.AsmFileName), result.AsmText);
+                File.WriteAllBytes(Path.Combine(asmPalDir, paletteFile.FileName), paletteFile.Data);
+            File.WriteAllText(Path.Combine(asmPalDir, result.AsmFileName), result.AsmText);
         }
     }
 
-    /// <summary>Every filename this export would write, for an overwrite check before actually writing anything. Deduplicated — a category unified across sub-folders (see <see cref="UnifyAcrossSubfolders"/>) repeats the same asm/palette filename on every one of its rows.</summary>
-    public static List<string> ListOutputFileNames(IEnumerable<FolderExportResult> results) =>
-        results.SelectMany(r =>
+    /// <summary>Every relative file path this export would write, for an overwrite check before actually writing anything. When <paramref name="exportSubfolders"/> is true paths are relative (e.g. <c>Sprite8Bpp\walk\walk_gfx.spr</c>); otherwise they are bare filenames. Deduplicated — a category unified across sub-folders repeats the same asm/palette filename on every one of its rows.</summary>
+    public static List<string> ListOutputFileNames(IEnumerable<FolderExportResult> results, bool exportSubfolders = false)
+    {
+        return results.SelectMany(r =>
         {
-            var names = r.Chunks.Select(c => c.FileName).Append(r.AsmFileName);
-            return r.PaletteFile is { } paletteFile ? names.Append(paletteFile.FileName) : names;
+            var asmPalPrefix = exportSubfolders ? GetRelativeSubdir(r.FolderPath) : "";
+            var names = r.Chunks.Select(c =>
+            {
+                var prefix = exportSubfolders ? GetRelativeSubdir(c.FolderPath ?? r.FolderPath) : "";
+                return prefix.Length > 0 ? Path.Combine(prefix, c.FileName) : c.FileName;
+            }).Append(asmPalPrefix.Length > 0 ? Path.Combine(asmPalPrefix, r.AsmFileName) : r.AsmFileName);
+            if (r.PaletteFile is { } pal)
+                names = names.Append(asmPalPrefix.Length > 0 ? Path.Combine(asmPalPrefix, pal.FileName) : pal.FileName);
+            return names;
         }).Distinct().ToList();
+    }
 
     private static string SanitizeFileName(string folderPath) =>
         folderPath.Replace('/', '_').Replace('\\', '_').Replace(':', '_');
+
+    /// <summary>Absolute output directory for a given asset <paramref name="folderPath"/> when <c>exportSubfolders=true</c>. Falls back to <paramref name="baseDir"/> for non-asset results (maps, object types) whose folder paths don't match any category.</summary>
+    private static string GetOutputSubdir(string baseDir, string folderPath)
+    {
+        var rel = GetRelativeSubdir(folderPath);
+        return rel.Length > 0 ? Path.Combine(baseDir, rel) : baseDir;
+    }
+
+    /// <summary>Relative sub-directory for a given asset <paramref name="folderPath"/> (e.g. <c>Sprite8Bpp\walk</c>). Returns an empty string for non-asset folder paths so the caller can fall back to the base output directory.</summary>
+    private static string GetRelativeSubdir(string folderPath)
+    {
+        var category = AssetCategoryExtensions.CategoryFromFolderPath(folderPath);
+        if (category is null) return "";
+        var categoryName = category.Value.ToString();
+        var rootPath = category.Value.ToFolderPath();
+        if (folderPath == rootPath) return categoryName;
+        var sub = folderPath[(rootPath.Length + 1)..].Replace('/', Path.DirectorySeparatorChar);
+        return Path.Combine(categoryName, sub);
+    }
 }

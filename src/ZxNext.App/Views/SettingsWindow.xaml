@@ -52,6 +52,10 @@
                             <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding ObjectsSuffix, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,2" />
                         </Grid>
 
+                        <TextBlock Text="Export" FontWeight="Bold" FontSize="12" Margin="0,16,0,0" />
+                        <CheckBox Content="Organise output into sub-folders matching the project tree" IsChecked="{Binding ExportSubfolders}" Margin="0,6,0,0" />
+                        <TextBlock Text="Creates a sub-folder per category (e.g. Sprite8Bpp/) and per user sub-folder inside it. Off by default for compatibility with existing projects." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,2,0,0" />
+
                         <TextBlock Text="Default dither mode for new imports" FontWeight="Bold" FontSize="12" Margin="0,16,0,0" />
                         <ComboBox ItemsSource="{Binding AvailableDitherModes}" SelectedItem="{Binding DefaultDitherMode}" Width="160" HorizontalAlignment="Left" Margin="0,6,0,0" />
 

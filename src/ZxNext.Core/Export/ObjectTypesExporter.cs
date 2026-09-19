@@ -1,4 +1,5 @@
 using System.Text;
+using ZxNext.Core.Model;
 using ZxNext.Core.Project;
 
 namespace ZxNext.Core.Export;
@@ -34,6 +35,7 @@ public static class ObjectTypesExporter
             sb.Append("obj_").Append(label).Append(": equ ").Append(i).Append('\n');
         }
 
-        return new FolderExportResult(RowKey, "", [], [], sb.ToString(), $"{RowKey}.asm", null, IsChunked: false);
+        return new FolderExportResult(RowKey, "", [], [], sb.ToString(), $"{RowKey}.asm", null, IsChunked: false,
+            ExportSubdirHint: "");
     }
 }

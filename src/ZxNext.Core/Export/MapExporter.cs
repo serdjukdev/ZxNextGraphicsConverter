@@ -93,9 +93,13 @@ public static class MapExporter
             remappedGrid[i] = localIndexBySortIndex[layer.MetatileIndices[i]];
         }
 
+        var tileCategory = kind == MetatileKind.FourBpp ? AssetCategory.Tile4Bpp : AssetCategory.Tile8Bpp;
+        var tileCategoryName = tileCategory.ToString();
+
         var gridRowKey = ExportFileNaming.GridRowKey(map.Name, layerSuffix);
         var gridResult = new FolderExportResult(gridRowKey, $"map/{map.Name}", [], [],
-            GenerateGridAsm(gridRowKey, map.Width, map.Height, remappedGrid), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false);
+            GenerateGridAsm(gridRowKey, map.Width, map.Height, remappedGrid), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false,
+            ExportSubdirHint: tileCategoryName);
 
         var metatilesByGlobalSortIndex = project.Metatiles.Where(m => m.Kind == kind).ToDictionary(m => m.SortIndex);
         var orderedMetatiles = new List<Metatile>(usedSortIndices.Count);
@@ -111,7 +115,8 @@ public static class MapExporter
         var metatilesRowKey = ExportFileNaming.MetatilesRowKey(map.Name, layerSuffix);
         var metatilesAsm = GenerateMetatilesAsm(metatilesRowKey, kind, map.MetatileGridSize, orderedMetatiles, project.Assets);
         var metatilesResult = new FolderExportResult(metatilesRowKey, $"map/{map.Name}", [], [],
-            metatilesAsm, $"{SanitizeFileName(metatilesRowKey)}.asm", null, IsChunked: false);
+            metatilesAsm, $"{SanitizeFileName(metatilesRowKey)}.asm", null, IsChunked: false,
+            ExportSubdirHint: tileCategoryName);
 
         return new GridLayerExportResult(gridResult, metatilesResult);
     }
@@ -172,7 +177,8 @@ public static class MapExporter
 
         var gridRowKey = ExportFileNaming.GridRowKey(map.Name, layerSuffix);
         var gridResult = new FolderExportResult(gridRowKey, $"map/{map.Name}", [], [],
-            GenerateTileModeGridAsm(gridRowKey, map.Width, map.Height, kind, gridBytes), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false);
+            GenerateTileModeGridAsm(gridRowKey, map.Width, map.Height, kind, gridBytes), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false,
+            ExportSubdirHint: tileCategory.ToString());
 
         return new GridLayerExportResult(gridResult, null);
     }
@@ -236,7 +242,8 @@ public static class MapExporter
                 .Append(',').Append(r.Type).Append(',').Append(r.Connect).Append(',').Append(r.UserByte).Append('\n');
         }
 
-        var result = new FolderExportResult(rowKey, $"map/{map.Name}", [], [], sb.ToString(), $"{SanitizeFileName(rowKey)}.asm", null, IsChunked: false);
+        var result = new FolderExportResult(rowKey, $"map/{map.Name}", [], [], sb.ToString(), $"{SanitizeFileName(rowKey)}.asm", null, IsChunked: false,
+            ExportSubdirHint: "");
         return (true, result, null);
     }
 

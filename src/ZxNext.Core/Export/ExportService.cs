@@ -22,7 +22,8 @@ public record FolderExportResult(
     string AsmFileName,
     ChunkFile? PaletteFile,
     bool IsChunked = true,
-    bool IsPixelOrderConfigurable = false);
+    bool IsPixelOrderConfigurable = false,
+    string? ExportSubdirHint = null);
 
 /// <summary>
 /// Orchestrates export: groups the project's assets by tree folder (so each folder gets its
@@ -175,12 +176,12 @@ public static class ExportService
         Directory.CreateDirectory(outputDirectory);
         foreach (var result in results)
         {
-            var asmPalDir = exportSubfolders ? GetOutputSubdir(outputDirectory, result.FolderPath) : outputDirectory;
+            var asmPalDir = exportSubfolders ? ResolveOutputDir(outputDirectory, result.FolderPath, result.ExportSubdirHint) : outputDirectory;
             Directory.CreateDirectory(asmPalDir);
 
             foreach (var chunk in result.Chunks)
             {
-                var chunkDir = exportSubfolders ? GetOutputSubdir(outputDirectory, chunk.FolderPath ?? result.FolderPath) : outputDirectory;
+                var chunkDir = exportSubfolders ? ResolveOutputDir(outputDirectory, chunk.FolderPath ?? result.FolderPath, null) : outputDirectory;
                 Directory.CreateDirectory(chunkDir);
                 File.WriteAllBytes(Path.Combine(chunkDir, chunk.FileName), chunk.Data);
             }
@@ -195,10 +196,10 @@ public static class ExportService
     {
         return results.SelectMany(r =>
         {
-            var asmPalPrefix = exportSubfolders ? GetRelativeSubdir(r.FolderPath) : "";
+            var asmPalPrefix = exportSubfolders ? ResolveRelativeSubdir(r.FolderPath, r.ExportSubdirHint) : "";
             var names = r.Chunks.Select(c =>
             {
-                var prefix = exportSubfolders ? GetRelativeSubdir(c.FolderPath ?? r.FolderPath) : "";
+                var prefix = exportSubfolders ? ResolveRelativeSubdir(c.FolderPath ?? r.FolderPath, null) : "";
                 return prefix.Length > 0 ? Path.Combine(prefix, c.FileName) : c.FileName;
             }).Append(asmPalPrefix.Length > 0 ? Path.Combine(asmPalPrefix, r.AsmFileName) : r.AsmFileName);
             if (r.PaletteFile is { } pal)
@@ -210,22 +211,31 @@ public static class ExportService
     private static string SanitizeFileName(string folderPath) =>
         folderPath.Replace('/', '_').Replace('\\', '_').Replace(':', '_');
 
-    /// <summary>Absolute output directory for a given asset <paramref name="folderPath"/> when <c>exportSubfolders=true</c>. Falls back to <paramref name="baseDir"/> for non-asset results (maps, object types) whose folder paths don't match any category.</summary>
-    private static string GetOutputSubdir(string baseDir, string folderPath)
+    private static string ResolveOutputDir(string baseDir, string folderPath, string? hint)
     {
-        var rel = GetRelativeSubdir(folderPath);
+        var rel = ResolveRelativeSubdir(folderPath, hint);
         return rel.Length > 0 ? Path.Combine(baseDir, rel) : baseDir;
     }
 
-    /// <summary>Relative sub-directory for a given asset <paramref name="folderPath"/> (e.g. <c>Sprite8Bpp\walk</c>). Returns an empty string for non-asset folder paths so the caller can fall back to the base output directory.</summary>
-    private static string GetRelativeSubdir(string folderPath)
+    /// <summary>
+    /// Relative sub-directory for a file when <c>exportSubfolders=true</c>.
+    /// <paramref name="hint"/> wins when set (e.g. <c>"Tile4Bpp"</c> for a map grid row that belongs to the tile category root).
+    /// Without a hint: asset categories use their enum name as the top folder (e.g. <c>Sprite8Bpp\walk</c>);
+    /// non-asset paths (maps: <c>map/MapName</c>) are used verbatim; empty path stays at root.
+    /// </summary>
+    private static string ResolveRelativeSubdir(string folderPath, string? hint)
     {
+        if (hint is not null) return hint;
+        if (string.IsNullOrEmpty(folderPath)) return "";
         var category = AssetCategoryExtensions.CategoryFromFolderPath(folderPath);
-        if (category is null) return "";
-        var categoryName = category.Value.ToString();
-        var rootPath = category.Value.ToFolderPath();
-        if (folderPath == rootPath) return categoryName;
-        var sub = folderPath[(rootPath.Length + 1)..].Replace('/', Path.DirectorySeparatorChar);
-        return Path.Combine(categoryName, sub);
+        if (category is not null)
+        {
+            var categoryName = category.Value.ToString();
+            var rootPath = category.Value.ToFolderPath();
+            if (folderPath == rootPath) return categoryName;
+            var sub = folderPath[(rootPath.Length + 1)..].Replace('/', Path.DirectorySeparatorChar);
+            return Path.Combine(categoryName, sub);
+        }
+        return folderPath.Replace('/', Path.DirectorySeparatorChar);
     }
 }

@@ -36,11 +36,10 @@ public static class AsmMapGenerator
     /// Root export (<paramref name="subfolderName"/> null): the pattern number is the same 0-based rank a
     /// map's <c>_objects.asm</c> writes as the sprite's <c>spriteIndex</c> byte, and a single
     /// <c>s4_pal_table:</c> label sits right before the first <c>_pal</c> byte so code can read a slot by
-    /// index. The <c>_pal</c> bytes of the root and every sub-folder are emitted back to back (nothing
-    /// between them assembles to bytes), so <c>s4_pal_table</c> covers the whole run: root sprites at their
-    /// spriteIndex, then each sub-folder's sprites in order. A user sub-folder is a separate binary the game
-    /// bank-loads on its own; its labels become <c>s4_&lt;subfolder&gt;_&lt;name&gt;</c>, the pattern number
-    /// is local to that sub-folder's own export, and it emits no <c>s4_pal_table</c> of its own.
+    /// index (<c>s4_pal_table + spriteIndex</c>).
+    /// Sub-folder export: the pattern number is the local 0-based rank within this sub-folder's own binary.
+    /// A <c>s4_&lt;subfolder&gt;_pal_table:</c> label sits before the first <c>_pal</c> byte so code can
+    /// read a slot by local index the same way (<c>s4_&lt;subfolder&gt;_pal_table + localIndex</c>).
     /// </para>
     /// </summary>
     private static string GenerateSprite4Bpp(IReadOnlyList<AssetPlacement> placements, string? subfolderName)
@@ -49,16 +48,17 @@ public static class AsmMapGenerator
         sb.Append("; Sprite4Bpp graphics map").Append(subfolderName is null ? "" : $" (sub-folder '{subfolderName}')").Append(".\n");
         sb.Append("; s4_..._<name>: equ <n>      -- 0-based sprite pattern number").Append(subfolderName is null ? " (the spriteIndex byte in a map's _objects.asm)" : " within this sub-folder's own binary").Append(".\n");
         sb.Append("; s4_..._<name>_pal: db <n>   -- this sprite's 4bpp palette slot (0-15): bits 7:4 of its attribute byte.\n");
+        var sanitizedFolder = subfolderName is null ? null : AsmLabel.Sanitize(subfolderName);
         if (subfolderName is null)
-        {
-            sb.Append("; s4_pal_table:              -- start of the _pal byte run (root sprites, then every sub-folder in order), indexable by pattern number.\n");
-        }
+            sb.Append("; s4_pal_table:              -- start of the _pal byte run, indexable by spriteIndex.\n");
+        else
+            sb.Append($"; s4_{sanitizedFolder}_pal_table: -- start of the _pal byte run, indexable by local sprite index.\n");
         sb.Append("; Patterns upload as one contiguous blob, so there is no per-sprite bank or byte offset.\n");
         sb.Append('\n');
         if (subfolderName is null)
-        {
             sb.Append("s4_pal_table:\n");
-        }
+        else
+            sb.Append($"s4_{sanitizedFolder}_pal_table:\n");
 
         var folderPrefix = subfolderName is null ? "" : subfolderName + "_";
         var used = new HashSet<string>();

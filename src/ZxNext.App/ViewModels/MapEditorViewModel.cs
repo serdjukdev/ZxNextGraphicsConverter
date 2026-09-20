@@ -379,6 +379,7 @@ public partial class MapEditorViewModel : ObservableObject
         mapItem.NotifySizeChanged();
         RenderPreview();
         RefreshSelectedMapThumbnail();
+        RefreshSpriteCounts();
         StatusText = successMessage;
         IsStatusError = false;
         MapResized?.Invoke();
@@ -423,6 +424,7 @@ public partial class MapEditorViewModel : ObservableObject
         _redoStack.Push(entry);
         HasChanges = true;
         RefreshSelectedMapThumbnail();
+        RefreshSpriteCounts();
     }
 
     [RelayCommand]
@@ -434,6 +436,7 @@ public partial class MapEditorViewModel : ObservableObject
         _undoStack.Push(entry);
         HasChanges = true;
         RefreshSelectedMapThumbnail();
+        RefreshSpriteCounts();
     }
 
     partial void OnSelectedMapChanged(MapListItemViewModel? value)
@@ -721,6 +724,16 @@ public partial class MapEditorViewModel : ObservableObject
                                        && (includeSubfolders || a.FolderPath == a.Category.ToFolderPath()))
                 .OrderBy(a => a.Category).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(a => new TilePaletteItemViewModel(a, _project, _renderCache)));
+        RefreshSpriteCounts();
+    }
+
+    private void RefreshSpriteCounts()
+    {
+        var counts = SelectedMap?.Map.SpriteLayer
+            .GroupBy(p => p.SpriteAssetId)
+            .ToDictionary(g => g.Key, g => g.Count());
+        foreach (var item in SpritePalette)
+            item.PlacedCount = counts is not null && counts.TryGetValue(item.Asset.Id, out var c) ? c : 0;
     }
 
     public void BeginStroke()
@@ -761,6 +774,7 @@ public partial class MapEditorViewModel : ObservableObject
                 var placeY = snapToGrid ? (pixelY / TileSnapSize) * TileSnapSize : pixelY;
                 var placement = new SpritePlacement { SpriteAssetId = SelectedPaletteSprite.Asset.Id, X = placeX, Y = placeY };
                 map.SpriteLayer.Add(placement);
+                RefreshSpriteCounts();
                 PushUndo(
                     undo: () => { map.SpriteLayer.Remove(placement); RenderPreview(); RefreshSelectedMapThumbnail(); },
                     redo: () => { map.SpriteLayer.Add(placement); RenderPreview(); RefreshSelectedMapThumbnail(); });
@@ -1011,6 +1025,7 @@ public partial class MapEditorViewModel : ObservableObject
             PushUndo(
                 undo: () => { map.SpriteLayer.AddRange(removed); RenderPreview(); RefreshSelectedMapThumbnail(); },
                 redo: () => { foreach (var sprite in removed) map.SpriteLayer.Remove(sprite); RenderPreview(); RefreshSelectedMapThumbnail(); });
+            RefreshSpriteCounts();
         }
         // A Sprite+Paint click already pushed its own single-placement undo action immediately in PaintOrEraseAt.
 
@@ -1206,6 +1221,7 @@ public partial class MapEditorViewModel : ObservableObject
             HasChanges = true;
             RenderPreview();
             RefreshSelectedMapThumbnail();
+            RefreshSpriteCounts();
             StatusText = $"Pasted {pasted.Count} sprite(s).";
             IsStatusError = false;
             return;
@@ -1314,6 +1330,7 @@ public partial class MapEditorViewModel : ObservableObject
             HasChanges = true;
             RenderPreview();
             RefreshSelectedMapThumbnail();
+            RefreshSpriteCounts();
         }
         else
         {
@@ -1423,6 +1440,7 @@ public partial class MapEditorViewModel : ObservableObject
             // LinkedPlacementId is deliberately NOT carried over — a copy starts unlinked (see design discussion 2026-08-23).
             var copies = SelectedSprites.Select(s => new SpritePlacement { SpriteAssetId = s.SpriteAssetId, X = s.X + deltaX, Y = s.Y + deltaY, TypeId = s.TypeId, UserByte = s.UserByte }).ToList();
             map.SpriteLayer.AddRange(copies);
+            RefreshSpriteCounts();
             PushUndo(
                 undo: () => { foreach (var copy in copies) map.SpriteLayer.Remove(copy); RenderPreview(); RefreshSelectedMapThumbnail(); },
                 redo: () =>

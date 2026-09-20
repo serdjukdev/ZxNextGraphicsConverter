@@ -22,4 +22,9 @@ public class TilePaletteItemViewModel(GraphicsAsset asset, ProjectState project,
 
     /// <summary>Tile8Bpp Layer2 priority tile (see <see cref="GraphicsAsset.IsPriority"/>) — shows a small green corner marker on the thumbnail.</summary>
     public bool IsPriority => Asset.IsPriority;
+
+    /// <summary>Set by MapEditorViewModel after each sprite-layer mutation — how many placements of this sprite asset the current map contains. Zero until set.</summary>
+    public int PlacedCount { get; set; }
+
+    public string ToolTipText => $"{Name} ({PlacedCount} on map)";
 }

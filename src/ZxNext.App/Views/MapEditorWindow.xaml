@@ -222,7 +222,7 @@
                     </ListBox.ItemsPanel>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding Name}">
+                            <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding ToolTipText}">
                                 <Image Source="{Binding Preview}" Width="48" Height="48" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
                                 <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="52" HorizontalAlignment="Center" />
                             </StackPanel>

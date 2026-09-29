@@ -1,4 +1,5 @@
 using System.Windows.Media.Imaging;
+using CommunityToolkit.Mvvm.ComponentModel;
 using ZxNext.App.Rendering;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
@@ -14,7 +15,7 @@ namespace ZxNext.App.ViewModels;
 /// tile/sprite a cell/placement references), the same reasoning <see cref="MapRenderCache"/>'s own doc
 /// comment already documents for the Map Editor's per-cell tile decode.
 /// </summary>
-public class TilePaletteItemViewModel(GraphicsAsset asset, ProjectState project, MapRenderCache? cache = null)
+public partial class TilePaletteItemViewModel(GraphicsAsset asset, ProjectState project, MapRenderCache? cache = null) : ObservableObject
 {
     public GraphicsAsset Asset { get; } = asset;
     public string Name => Asset.Name;
@@ -24,7 +25,9 @@ public class TilePaletteItemViewModel(GraphicsAsset asset, ProjectState project,
     public bool IsPriority => Asset.IsPriority;
 
     /// <summary>Set by MapEditorViewModel after each sprite-layer mutation — how many placements of this sprite asset the current map contains. Zero until set.</summary>
-    public int PlacedCount { get; set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ToolTipText))]
+    private int placedCount;
 
     public string ToolTipText => $"{Name} ({PlacedCount} on map)";
 }

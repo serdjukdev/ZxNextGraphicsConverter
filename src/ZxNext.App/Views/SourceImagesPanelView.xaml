@@ -8,6 +8,9 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              AllowDrop="True" Drop="Panel_OnDrop">
+    <UserControl.InputBindings>
+        <KeyBinding Key="V" Modifiers="Control" Command="{Binding PasteFromClipboardCommand}" />
+    </UserControl.InputBindings>
     <UserControl.Resources>
         <!-- Borderless "x" that only shows chrome on hover, matching the project tree's icon buttons. -->
         <Style x:Key="SourceDeleteButtonStyle" TargetType="Button">
@@ -38,7 +41,7 @@
     </UserControl.Resources>
     <DockPanel LastChildFill="True">
         <TextBlock DockPanel.Dock="Top" Text="Source Images" FontWeight="Bold" Margin="4,4,4,0" />
-        <TextBlock DockPanel.Dock="Top" Text="File → Import Images..., or drop files here" FontSize="10" Foreground="Gray" Margin="4,0,4,4" />
+        <TextBlock DockPanel.Dock="Top" Text="File → Import, drop files, or Ctrl+V to paste" FontSize="10" Foreground="Gray" Margin="4,0,4,4" />
         <ListBox ItemsSource="{Binding Images}" SelectedItem="{Binding SelectedImage}"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                  BorderThickness="0" Padding="2" AlternationCount="2"

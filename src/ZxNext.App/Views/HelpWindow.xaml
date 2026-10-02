@@ -66,7 +66,7 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="Saves a copy at a new name/location directly (unlike New Project, this does NOT create a wrapping subfolder: you're relocating/renaming an existing project, not starting fresh)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="File → Import Images..." />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens a multi-select file picker and adds the chosen images to the Source Images panel. You can also just drag image files from Windows Explorer onto that panel." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens a multi-select file picker and adds the chosen images to the Source Images panel. You can also just drag image files from Windows Explorer onto that panel, or click into the panel and press Ctrl+V to paste an image from the clipboard (screenshots, Snipping Tool, most image editors)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="File → Export for Next..." />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Opens the Export dialog: see the 'Export: what actually gets written' section below for the full data format." />
@@ -126,7 +126,7 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="Drag image files from Explorer onto the Source Images panel to import them. Drag a row from the Source Images panel onto a category or sub-folder in the tree to place it: an exact-size match imports directly; a Layer2 folder that doesn't match opens a crop/position dialog; anything oversized opens the Atlas Slicer (see below). Any of these can hit a palette-overflow: see the Palette Overflow dialog below. (For dragging a tile/sprite row ONTO ANOTHER one to reorder it, see the entry above.)" />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Source Images panel" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Each row shows a thumbnail, filename and size. The small '✕' button (or Delete key on a selected row) removes that source image: and, if it was ever used, every tile/sprite placed from it too, after an explicit confirmation naming the count." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Each row shows a thumbnail, filename and size. The small '✕' button (or Delete key on a selected row) removes that source image: and, if it was ever used, every tile/sprite placed from it too, after an explicit confirmation naming the count. Ctrl+V pastes an image from the clipboard as a new source image, named clipboard_&lt;timestamp&gt;. If the clipboard image carried no transparency (alpha) data (some apps' copy, including some Photoshop versions), a warning says so and the image is pasted fully opaque; export or save the image as a PNG file and import that instead if it needs transparency." />
                     </StackPanel>
                 </Expander>
 

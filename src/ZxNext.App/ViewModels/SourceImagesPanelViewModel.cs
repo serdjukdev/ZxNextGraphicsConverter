@@ -1,9 +1,12 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows;
+using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
 using ZxNext.App.Rendering;
+using ZxNext.App.Services;
 using ZxNext.Core.Imaging;
 using ZxNext.Core.Model;
 using ZxNext.Core.Settings;
@@ -36,6 +39,28 @@ public partial class SourceImagesPanelViewModel : ObservableObject
     private void DeleteSelectedImage()
     {
         if (SelectedImage is { } image) RequestDeleteImage(image.Model.Id);
+    }
+
+    [RelayCommand]
+    private void PasteFromClipboard()
+    {
+        var bitmap = ClipboardImageReader.TryGet(out var hadNoAlpha);
+        if (bitmap is null) return;
+        var tempPath = Path.Combine(Path.GetTempPath(), $"clipboard_{DateTime.Now:yyyyMMdd_HHmmss_fff}.png");
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using (var file = File.Create(tempPath))
+            encoder.Save(file);
+        AddFile(tempPath);
+
+        if (hadNoAlpha)
+        {
+            MessageBox.Show(
+                "The clipboard image had no transparency (alpha) data, so it was pasted fully opaque. " +
+                "This happens with some apps' copy, including some Photoshop versions. " +
+                "If the image needs transparency, export/save it as PNG and import that file instead.",
+                "No transparency in clipboard", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     public SourceImagesPanelViewModel(IImageDecoder decoder)

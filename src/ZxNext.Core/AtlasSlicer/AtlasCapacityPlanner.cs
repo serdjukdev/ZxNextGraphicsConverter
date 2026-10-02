@@ -87,6 +87,7 @@ public static class AtlasCapacityPlanner
     {
         var result = new bool[blockRects.Count];
         var seenSignatures = new HashSet<string>();
+        var seenMetatileSignatures = new HashSet<string>();
         var tilesUsed = 0;
         var metatilesUsed = 0;
 
@@ -94,7 +95,8 @@ public static class AtlasCapacityPlanner
         {
             var subRects = AtlasSliceParameters.ComputeSubCellRects(blockRects[i], gridSize);
             var forcedIncluded = alreadyIncluded is not null && i < alreadyIncluded.Count && alreadyIncluded[i];
-            var (allTransparent, newTileCount, subSignatures) = InspectBlock(sourceRgba32, sourceWidth, subRects, skipDuplicateCells, seenSignatures);
+            var (allTransparent, newTileCount, subSignatures, metatileSignature) =
+                InspectBlock(sourceRgba32, sourceWidth, subRects, skipDuplicateCells, seenSignatures);
 
             if (allTransparent)
             {
@@ -102,16 +104,22 @@ public static class AtlasCapacityPlanner
                 continue;
             }
 
-            var fitsBudget = tilesUsed + newTileCount <= remainingTileCapacity && metatilesUsed + 1 <= remainingMetatileCapacity;
+            // A block whose tile composition exactly matches an earlier included block costs no new
+            // metatile slot at all — see MainViewModel.ImportSlicedAsMetatilesAsync's whole-block dedup.
+            var isDuplicateMetatile = metatileSignature is not null && seenMetatileSignatures.Contains(metatileSignature);
+            var metatileCost = isDuplicateMetatile ? 0 : 1;
+
+            var fitsBudget = tilesUsed + newTileCount <= remainingTileCapacity && metatilesUsed + metatileCost <= remainingMetatileCapacity;
             if (forcedIncluded || fitsBudget)
             {
                 result[i] = true;
                 tilesUsed += newTileCount;
-                metatilesUsed += 1;
+                metatilesUsed += metatileCost;
                 foreach (var signature in subSignatures)
                 {
                     if (signature is not null) seenSignatures.Add(signature);
                 }
+                if (metatileSignature is not null) seenMetatileSignatures.Add(metatileSignature);
             }
         }
 
@@ -131,6 +139,7 @@ public static class AtlasCapacityPlanner
         bool skipDuplicateCells, IReadOnlyList<bool> includedUnits)
     {
         var seenSignatures = new HashSet<string>();
+        var seenMetatileSignatures = new HashSet<string>();
         var tilesUsed = 0;
         var metatilesUsed = 0;
 
@@ -139,15 +148,18 @@ public static class AtlasCapacityPlanner
             if (i >= includedUnits.Count || !includedUnits[i]) continue;
 
             var subRects = AtlasSliceParameters.ComputeSubCellRects(blockRects[i], gridSize);
-            var (allTransparent, newTileCount, subSignatures) = InspectBlock(sourceRgba32, sourceWidth, subRects, skipDuplicateCells, seenSignatures);
+            var (allTransparent, newTileCount, subSignatures, metatileSignature) =
+                InspectBlock(sourceRgba32, sourceWidth, subRects, skipDuplicateCells, seenSignatures);
             if (allTransparent) continue;
 
+            var isDuplicateMetatile = metatileSignature is not null && seenMetatileSignatures.Contains(metatileSignature);
             tilesUsed += newTileCount;
-            metatilesUsed += 1;
+            if (!isDuplicateMetatile) metatilesUsed += 1;
             foreach (var signature in subSignatures)
             {
                 if (signature is not null) seenSignatures.Add(signature);
             }
+            if (metatileSignature is not null) seenMetatileSignatures.Add(metatileSignature);
         }
 
         return (tilesUsed, metatilesUsed);
@@ -177,8 +189,8 @@ public static class AtlasCapacityPlanner
         return used;
     }
 
-    /// <summary>Reads one block's sub-tiles (WITHOUT committing anything to <paramref name="seenSignatures"/> — the caller decides whether this block ends up included before doing that): whether every sub-tile is transparent, how many are genuinely new (not transparent, not already in <paramref name="seenSignatures"/>), and each sub-tile's signature (null for a transparent one, or when duplicate-skipping is off) for the caller to commit afterward.</summary>
-    private static (bool AllTransparent, int NewTileCount, string?[] SubSignatures) InspectBlock(
+    /// <summary>Reads one block's sub-tiles (WITHOUT committing anything to <paramref name="seenSignatures"/> — the caller decides whether this block ends up included before doing that): whether every sub-tile is transparent, how many are genuinely new (not transparent, not already in <paramref name="seenSignatures"/>), each sub-tile's signature (null for a transparent one, or when duplicate-skipping is off) for the caller to commit afterward, and a whole-block MetatileSignature (null when duplicate-skipping is off) built from those same per-cell signatures — a transparent cell always contributes the same placeholder token since it resolves to the one shared reserved-blank tile at import time, matching MainViewModel.ImportSlicedAsMetatilesAsync's own whole-block dedup key.</summary>
+    private static (bool AllTransparent, int NewTileCount, string?[] SubSignatures, string? MetatileSignature) InspectBlock(
         byte[] sourceRgba32, int sourceWidth, IReadOnlyList<PixelRect> subRects, bool skipDuplicateCells, HashSet<string> seenSignatures)
     {
         var subSignatures = new string?[subRects.Count];
@@ -197,7 +209,11 @@ public static class AtlasCapacityPlanner
             if (!isDuplicate) newTileCount++;
         }
 
-        return (allTransparent, newTileCount, subSignatures);
+        var metatileSignature = skipDuplicateCells
+            ? string.Join('|', subSignatures.Select(s => s ?? "BLANK"))
+            : null;
+
+        return (allTransparent, newTileCount, subSignatures, metatileSignature);
     }
 
     /// <summary>Same alpha&lt;128 threshold as <c>TransparentTileDetector</c>/<c>AssetImporter</c> use for "this pixel is transparent."</summary>

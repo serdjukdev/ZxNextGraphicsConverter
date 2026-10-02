@@ -165,11 +165,30 @@ public class AtlasCapacityPlannerTests
     }
 
     [Fact]
-    public void PlanMetatileBlockSlice_MetatileCapBindsFirst_EvenWhenTilesWouldAllBeDuplicates()
+    public void PlanMetatileBlockSlice_WholeBlockDuplicate_IsFree_CostsNoMetatileSlot()
     {
-        // Both blocks use the EXACT SAME 4 colours, so block 1's tiles would all be free duplicates
-        // of block 0's — plenty of tile budget either way. Only the metatile cap should stop block 1.
+        // Both blocks use the EXACT SAME 4 colours in the EXACT SAME arrangement, so block 1 is a
+        // whole-metatile duplicate of block 0 — it should cost neither a tile nor a metatile slot,
+        // matching MainViewModel.ImportSlicedAsMetatilesAsync's own whole-block dedup.
         var rgba = BuildBlockRow(2, 2, _ => [(1, 0, 0), (2, 0, 0), (3, 0, 0), (4, 0, 0)], out var width);
+        var rects = BlockRects(2, 2);
+
+        var plan = AtlasCapacityPlanner.PlanMetatileBlockSlice(rgba, width, rects, gridSize: 2,
+            skipDuplicateCells: true, remainingTileCapacity: 100, remainingMetatileCapacity: 1);
+
+        Assert.Equal([true, true], plan);
+    }
+
+    [Fact]
+    public void PlanMetatileBlockSlice_MetatileCapBindsFirst_EvenWhenEveryTileIsReused()
+    {
+        // Both blocks use the SAME 4 colours, so every individual tile is a free duplicate (plenty of
+        // tile budget either way) — but block 1's cells are in a DIFFERENT arrangement (swapped pairs),
+        // so its metatile composition genuinely differs from block 0's: it's not a whole-block duplicate
+        // and should still cost a metatile slot. Only the metatile cap should stop block 1 here.
+        var rgba = BuildBlockRow(2, 2, block => block == 0
+            ? [(1, 0, 0), (2, 0, 0), (3, 0, 0), (4, 0, 0)]
+            : [(2, 0, 0), (1, 0, 0), (4, 0, 0), (3, 0, 0)], out var width);
         var rects = BlockRects(2, 2);
 
         var plan = AtlasCapacityPlanner.PlanMetatileBlockSlice(rgba, width, rects, gridSize: 2,

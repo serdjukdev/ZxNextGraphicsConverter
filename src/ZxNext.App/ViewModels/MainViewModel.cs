@@ -364,9 +364,11 @@ public partial class MainViewModel : ObservableObject
         await RunBusyAsync($"Slicing {source.Model.FileName} into metatiles...", async progress =>
         {
             var seenTileSignatures = new Dictionary<string, Guid>();
+            var seenMetatileSignatures = new Dictionary<string, Guid>();
             var newlyImported = new List<GraphicsAsset>();
             var metatilesCreated = 0;
             var metatilesReused = 0;
+            var duplicateMetatilesSkipped = 0;
             var tilesReused = 0;
             var blocksFailed = 0;
             var blocksExcludedBySelection = 0;
@@ -454,9 +456,26 @@ public partial class MainViewModel : ObservableObject
                         continue;
                     }
 
+                    // Whole-block dedup: this block's cells already reference whichever tile assets the
+                    // per-tile dedup above resolved to, so two blocks with the exact same tile composition
+                    // (same TileAssetId/transform in the same cell order) are pixel-identical metatiles.
+                    // Reuse the first one instead of creating another that just eats into the per-Kind cap.
+                    var metatileSignature = skipDuplicateCells
+                        ? string.Join('|', cells.Select(c => $"{c.TileAssetId}:{c.MirrorX}:{c.MirrorY}:{c.Rotate}:{c.PaletteSlotOverride}"))
+                        : null;
+                    if (metatileSignature is not null && seenMetatileSignatures.ContainsKey(metatileSignature))
+                    {
+                        duplicateMetatilesSkipped++;
+                        continue;
+                    }
+
                     var autoName = $"{source.Model.FileName}_{block.X}_{block.Y}";
                     var metatileResult = MetatileService.Create(_project, autoName, kind, gridSize, cells);
-                    if (metatileResult.Success) metatilesCreated++;
+                    if (metatileResult.Success)
+                    {
+                        metatilesCreated++;
+                        if (metatileSignature is not null) seenMetatileSignatures[metatileSignature] = metatileResult.Metatile!.Id;
+                    }
                     else blocksFailed++;
                 }
             });
@@ -469,6 +488,7 @@ public partial class MainViewModel : ObservableObject
 
             var message = $"Sliced {source.Model.FileName}: {metatilesCreated} metatile(s) created, {newlyImported.Count} tile(s) imported, {tilesReused} tile(s) reused.";
             if (metatilesReused > 0) message += $" {metatilesReused} fully-blank block(s) reused the existing Blank metatile instead of creating new ones.";
+            if (duplicateMetatilesSkipped > 0) message += $" {duplicateMetatilesSkipped} block(s) were duplicates of an earlier metatile in this slice and reused it instead of creating a new one.";
             if (blocksExcludedBySelection > 0) message += $" {blocksExcludedBySelection} block(s) excluded by selection.";
             if (blocksFailed > 0) message += $" {blocksFailed} block(s) skipped (likely palette overflow — reduce colours before slicing).";
             PixelEditor.StatusText = message;

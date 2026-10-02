@@ -57,8 +57,10 @@ public partial class SourceImagesPanelViewModel : ObservableObject
         {
             MessageBox.Show(
                 "The clipboard image had no transparency (alpha) data, so it was pasted fully opaque. " +
-                "This happens with some apps' copy, including some Photoshop versions. " +
-                "If the image needs transparency, export/save it as PNG and import that file instead.",
+                "This happens with some apps' copy, including some Photoshop versions, which may ALSO crop away any " +
+                "transparent border before putting the image on the clipboard, shrinking it to the opaque content's own size " +
+                "(e.g. a 32x32 selection with a 2px transparent margin arrives here as 28x28). " +
+                "If the image needs transparency or its original size kept, export/save it as PNG and import that file instead.",
                 "No transparency in clipboard", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }

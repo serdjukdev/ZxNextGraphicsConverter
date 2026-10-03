@@ -263,6 +263,18 @@
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Fill Selection' button" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Stamps the currently-selected palette metatile across every cell of the grid selection, as one undo step. On a GridSize=1 map's Tilemap layer this also picks up whatever the 'Paint with' panel is currently set to, same as a plain paint stroke." />
 
+                        <TextBlock Style="{StaticResource TermStyle}" Text="'Metatiles' / 'Templates' toggle" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Switches the side palette between individual metatiles and saved Templates, on a grid layer only. A Template only ever appears while its own Kind (Tilemap or 8bpp) and the open map's metatile size match, so it can never be picked for the wrong layer." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="'Save as Template...' button" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Enabled whenever there is an active grid selection. Opens a small dialog to name the block, then stores it as a new Template: graphics only, no map objects. Stored project-wide, so the same Template can be stamped onto any map that shares its Kind and metatile size. Not undoable (same as deleting a map)." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Placing a Template (stamp)" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Pick a Template in the palette: a translucent blue footprint the size of the Template follows the cursor over the canvas. Click to write the whole block at that position as one undo step, same as a normal paint stroke. Click-only, like sprite placement: dragging does not repeat-stamp it. A Template that does not fully fit at the clicked position is clipped silently at the map's edge rather than refused." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="'Delete Template' button" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Deletes the Template currently selected in the Templates palette, after a confirmation. Not undoable. Has no effect on cells already stamped from it elsewhere, since stamping copies the block's bytes rather than keeping a live reference." />
+
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Paint with' panel (Tilemap layer, GridSize=1 only)" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Mirror X / Mirror Y / Rotate checkboxes plus a palette-slot picker for whichever tile is selected in the palette below: painting/Fill Selection uses this combination instead of the tile's plain default orientation. Resets to unmirrored/native-palette every time the palette selection changes: it never silently carries over from a previously picked tile. Which tile gets painted (the metatile index) and its attribute (mirror/rotate/palette) are stored completely separately, so using this never creates a new metatile and can never run into the 255-per-Kind metatile cap. Not shown for 2x2/4x4 maps (their metatiles carry their own baked-in per-cell attributes, set in the Metatile Editor) or the 8bpp layer (no attribute concept)." />
 

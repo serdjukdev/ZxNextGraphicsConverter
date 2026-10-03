@@ -204,6 +204,47 @@ public class ProjectServiceTests : IDisposable
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsTemplates()
+    {
+        var project = new ProjectState();
+        project.Templates.Add(new MapTemplate
+        {
+            Name = "room",
+            Kind = MetatileKind.FourBpp,
+            GridSize = 1,
+            Width = 2,
+            Height = 2,
+            MetatileIndices = [3, 1, 0, 2],
+            CellAttributes = [0, 5, 9, 255]
+        });
+        project.Templates.Add(new MapTemplate
+        {
+            Name = "no_attrs",
+            Kind = MetatileKind.EightBpp,
+            GridSize = 2,
+            Width = 3,
+            Height = 1,
+            MetatileIndices = [7, 8, 9]
+        });
+
+        ProjectService.Save(project, _tempProjectFile);
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        var room = Assert.Single(loaded.Templates, t => t.Name == "room");
+        Assert.Equal(MetatileKind.FourBpp, room.Kind);
+        Assert.Equal(1, room.GridSize);
+        Assert.Equal(2, room.Width);
+        Assert.Equal(2, room.Height);
+        Assert.Equal((byte[])[3, 1, 0, 2], room.MetatileIndices);
+        Assert.Equal((byte[])[0, 5, 9, 255], room.CellAttributes);
+
+        var noAttrs = Assert.Single(loaded.Templates, t => t.Name == "no_attrs");
+        Assert.Equal(MetatileKind.EightBpp, noAttrs.Kind);
+        Assert.Equal((byte[])[7, 8, 9], noAttrs.MetatileIndices);
+        Assert.Null(noAttrs.CellAttributes);
+    }
+
+    [Fact]
     public void SaveThenLoad_GridSize1Map_RoundTripsCellAttributes()
     {
         var project = new ProjectState();

@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ZxNext.App.Rendering;
 using ZxNext.Core.Conversion;
+using ZxNext.Core.Editing;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
 using ZxNext.Core.Settings;
@@ -117,6 +118,7 @@ public partial class MapEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsPaintReady))]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     [NotifyPropertyChangedFor(nameof(CanFillSelection))]
+    [NotifyPropertyChangedFor(nameof(CanSaveSelectionAsTemplate))]
     [NotifyPropertyChangedFor(nameof(CanvasHintText))]
     [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
     private MapLayerKind activeLayer = MapLayerKind.Tilemap;
@@ -135,6 +137,30 @@ public partial class MapEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanvasHintText))]
     [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
     private MetatileListItemViewModel? selectedPaletteMetatile;
+
+    [ObservableProperty]
+    private ObservableCollection<MapTemplateListItemViewModel> templatePalette = [];
+
+    /// <summary>
+    /// Mutually exclusive with <see cref="SelectedPaletteMetatile"/> on the SAME grid layer (unlike
+    /// metatile vs sprite, which never collide since they're on different layers); picking one here clears
+    /// the other, via the two OnChanged hooks below. "What to paint/stamp with" on a grid layer.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPaintReady))]
+    [NotifyPropertyChangedFor(nameof(HasSelectedTemplate))]
+    [NotifyPropertyChangedFor(nameof(CanvasHintText))]
+    [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
+    private MapTemplateListItemViewModel? selectedPaletteTemplate;
+
+    public bool HasSelectedTemplate => SelectedPaletteTemplate is not null;
+
+    /// <summary>Toggles which of the two grid-layer palettes (Metatiles/Templates) is visible: plain UI state, not persisted, matching <see cref="IsGridVisible"/>'s own shape.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowMetatilePalette))]
+    private bool showTemplatePalette;
+
+    public bool ShowMetatilePalette => !ShowTemplatePalette;
 
     /// <summary>
     /// GridSize=1's paint-time attribute picker (Mirror X/Y, Rotate, palette slot) — non-null only when
@@ -163,12 +189,13 @@ public partial class MapEditorViewModel : ObservableObject
     private TilePaletteItemViewModel? selectedPaletteSprite;
 
     /// <summary>True once the relevant palette (metatile or sprite, depending on the active layer) has something picked — drives the instructional banner/canvas highlight, same purpose as the Metatile Editor's IsPaintModeActive. There's no separate Paint "tool" to also check — see the class doc comment.</summary>
-    public bool IsPaintReady => IsGridLayerActive ? SelectedPaletteMetatile is not null : SelectedPaletteSprite is not null;
+    public bool IsPaintReady => IsGridLayerActive ? SelectedPaletteMetatile is not null || SelectedPaletteTemplate is not null : SelectedPaletteSprite is not null;
 
     /// <summary>Active only on a grid layer (Tilemap/8bpp Tile) — cell-unit rectangle from the Select tool's marquee drag. Null selection and an empty SelectedSprites collection are mutually exclusive with each other (only one is ever populated, matching whichever layer was active when the selection was made) but both are cleared together on layer/map switch since neither survives a context they no longer apply to.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     [NotifyPropertyChangedFor(nameof(CanFillSelection))]
+    [NotifyPropertyChangedFor(nameof(CanSaveSelectionAsTemplate))]
     [NotifyPropertyChangedFor(nameof(CanvasHintText))]
     [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
     private CellRect? gridSelection;
@@ -179,6 +206,8 @@ public partial class MapEditorViewModel : ObservableObject
     public bool HasSelection => IsGridLayerActive ? GridSelection is not null : SelectedSprites.Count > 0;
 
     public bool CanFillSelection => IsGridLayerActive && GridSelection is not null && SelectedPaletteMetatile is not null;
+
+    public bool CanSaveSelectionAsTemplate => IsGridLayerActive && GridSelection is not null;
 
     /// <summary>Single source of truth for the Row-4 instructional banner text — computed here rather than via XAML DataTrigger/MultiDataTrigger, since WPF resolves conflicting trigger setters by trigger TYPE precedence (MultiDataTrigger always beats a plain DataTrigger, regardless of declaration order), which made a mixed Trigger/MultiDataTrigger style pick the wrong text on the Sprites layer.</summary>
     public string CanvasHintText
@@ -472,6 +501,7 @@ public partial class MapEditorViewModel : ObservableObject
         CancelSetTypeTool();
         CancelSetUserByteTool();
         RefreshMetatilePalette();
+        RefreshTemplatePalette();
         RefreshSpritePalette();
         RefreshPaintAttributes();
         RenderPreview();
@@ -484,10 +514,20 @@ public partial class MapEditorViewModel : ObservableObject
         CancelSetTypeTool(); // ditto for Set Type
         CancelSetUserByteTool(); // ditto for Set User Byte
         RefreshMetatilePalette();
+        RefreshTemplatePalette();
         RefreshPaintAttributes();
     }
 
-    partial void OnSelectedPaletteMetatileChanged(MetatileListItemViewModel? value) => RefreshPaintAttributes();
+    partial void OnSelectedPaletteMetatileChanged(MetatileListItemViewModel? value)
+    {
+        if (value is not null) SelectedPaletteTemplate = null;
+        RefreshPaintAttributes();
+    }
+
+    partial void OnSelectedPaletteTemplateChanged(MapTemplateListItemViewModel? value)
+    {
+        if (value is not null) SelectedPaletteMetatile = null;
+    }
 
     /// <summary>Refreshes the type popup's source list — call after Object Types are added/renamed/deleted via the management dialog, since that dialog mutates <see cref="ProjectState.ObjectTypes"/> directly without this ViewModel otherwise noticing.</summary>
     public void RefreshObjectTypePalette()
@@ -689,6 +729,23 @@ public partial class MapEditorViewModel : ObservableObject
             _project.Metatiles.Where(m => m.Kind == kind && m.GridSize == gridSize)
                 .OrderBy(m => m.SortIndex)
                 .Select(m => new MetatileListItemViewModel(m, _project, _renderCache)));
+    }
+
+    /// <summary>Same "impossible state excluded by filtering, not validated at use" shape as <see cref="RefreshMetatilePalette"/>: a template whose Kind/GridSize doesn't match the active layer/map simply never appears, so it can never be selected for the wrong layer.</summary>
+    private void RefreshTemplatePalette()
+    {
+        if (SelectedMap is null || ActiveLayer == MapLayerKind.Sprites)
+        {
+            TemplatePalette = [];
+            return;
+        }
+
+        var kind = ActiveLayer == MapLayerKind.Tilemap ? MetatileKind.FourBpp : MetatileKind.EightBpp;
+        var gridSize = SelectedMap.Map.MetatileGridSize;
+        TemplatePalette = new ObservableCollection<MapTemplateListItemViewModel>(
+            _project.Templates.Where(t => t.Kind == kind && t.GridSize == gridSize)
+                .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(t => new MapTemplateListItemViewModel(t, _project, _renderCache)));
     }
 
     /// <summary>
@@ -982,6 +1039,56 @@ public partial class MapEditorViewModel : ObservableObject
         _strokeChangedAnything = true;
     }
 
+    /// <summary>
+    /// Writes a WxH block into <paramref name="layer"/> anchored at (<paramref name="anchorCol"/>,
+    /// <paramref name="anchorRow"/>), clipping silently at the map's edges (destination cells that fall
+    /// outside are dropped, never clamped, same "drop, don't clamp" precedent as <see cref="MoveGridSelection"/>).
+    /// Shared by <see cref="PasteClipboardAt"/> (Ctrl+V) and <see cref="StampTemplateAt"/>: both are
+    /// "write this exact block of cell bytes somewhere on the map" with the same clipping rule, just sourced
+    /// from a different place. Caller is responsible for BeginStroke/EndStroke around this.
+    /// </summary>
+    private void WriteGridBlock(MapGridLayer layer, MapAsset map, int anchorCol, int anchorRow, int width, int height, byte[] indices, byte[]? attributes, bool isTileMode)
+    {
+        for (var row = 0; row < height; row++)
+        {
+            var destRow = anchorRow + row;
+            if (destRow < 0 || destRow >= map.Height) continue;
+            for (var col = 0; col < width; col++)
+            {
+                var destCol = anchorCol + col;
+                if (destCol < 0 || destCol >= map.Width) continue;
+                var destIndex = destRow * map.Width + destCol;
+                SetGridCell(layer, destIndex, indices[row * width + col]);
+                if (isTileMode) SetCellAttribute(layer, destIndex, attributes?[row * width + col] ?? 0);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stamps <see cref="SelectedPaletteTemplate"/> onto the active grid layer, anchored at the cell under
+    /// (<paramref name="pixelX"/>, <paramref name="pixelY"/>), click-only, called by the View exactly like
+    /// <see cref="PaintOrEraseAt"/> but routed here instead whenever a template (not a single metatile) is
+    /// selected. Silently clipped at the map's edges, per the agreed "clip, don't refuse" behavior.
+    /// </summary>
+    public void StampTemplateAt(int pixelX, int pixelY)
+    {
+        if (SelectedMap is null || SelectedPaletteTemplate is null || pixelX < 0 || pixelY < 0) return;
+        var template = SelectedPaletteTemplate.Template;
+        var map = SelectedMap.Map;
+        var cellPixelSize = map.MetatileGridSize * 8;
+        var anchorCol = pixelX / cellPixelSize;
+        var anchorRow = pixelY / cellPixelSize;
+        if (anchorCol >= map.Width || anchorRow >= map.Height) return;
+
+        var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
+        var isTileMode = ActiveLayer == MapLayerKind.Tilemap && map.MetatileGridSize == 1;
+
+        BeginStroke();
+        WriteGridBlock(layer, map, anchorCol, anchorRow, template.Width, template.Height, template.MetatileIndices, template.CellAttributes, isTileMode);
+        RenderPreviewRegion(new Int32Rect(anchorCol * cellPixelSize, anchorRow * cellPixelSize, template.Width * cellPixelSize, template.Height * cellPixelSize));
+        EndStroke();
+    }
+
     public void EndStroke()
     {
         if (!_strokeChangedAnything || SelectedMap is null)
@@ -1157,18 +1264,7 @@ public partial class MapEditorViewModel : ObservableObject
         var isTileMode = ActiveLayer == MapLayerKind.Tilemap && map.MetatileGridSize == 1;
         var width = rect.Width;
         var height = rect.Height;
-        var indices = new byte[width * height];
-        var attributes = isTileMode ? new byte[width * height] : null;
-
-        for (var row = 0; row < height; row++)
-        {
-            for (var col = 0; col < width; col++)
-            {
-                var srcIndex = (rect.Row0 + row) * map.Width + (rect.Col0 + col);
-                indices[row * width + col] = layer.MetatileIndices[srcIndex];
-                if (attributes is not null) attributes[row * width + col] = layer.CellAttributes[srcIndex];
-            }
-        }
+        var (indices, attributes) = GridBlockExtractor.Extract(layer, map.Width, rect.Col0, rect.Row0, width, height, includeAttributes: isTileMode);
 
         _gridClipboard = new GridClipboard { Layer = ActiveLayer, Width = width, Height = height, MetatileIndices = indices, CellAttributes = attributes };
         _spriteClipboard = null;
@@ -1239,19 +1335,7 @@ public partial class MapEditorViewModel : ObservableObject
             var isTileMode = gridClipboard.Layer == MapLayerKind.Tilemap && map.MetatileGridSize == 1;
 
             BeginStroke();
-            for (var row = 0; row < gridClipboard.Height; row++)
-            {
-                var destRow = anchorRow + row;
-                if (destRow < 0 || destRow >= map.Height) continue;
-                for (var col = 0; col < gridClipboard.Width; col++)
-                {
-                    var destCol = anchorCol + col;
-                    if (destCol < 0 || destCol >= map.Width) continue;
-                    var destIndex = destRow * map.Width + destCol;
-                    SetGridCell(layer, destIndex, gridClipboard.MetatileIndices[row * gridClipboard.Width + col]);
-                    if (isTileMode) SetCellAttribute(layer, destIndex, gridClipboard.CellAttributes?[row * gridClipboard.Width + col] ?? 0);
-                }
-            }
+            WriteGridBlock(layer, map, anchorCol, anchorRow, gridClipboard.Width, gridClipboard.Height, gridClipboard.MetatileIndices, gridClipboard.CellAttributes, isTileMode);
             RenderPreviewRegion(new Int32Rect(anchorCol * cellPixelSize, anchorRow * cellPixelSize, gridClipboard.Width * cellPixelSize, gridClipboard.Height * cellPixelSize));
             EndStroke();
 
@@ -1289,6 +1373,47 @@ public partial class MapEditorViewModel : ObservableObject
         }
         RenderPreviewRegion(new Int32Rect(rect.Col0 * cellPixelSize, rect.Row0 * cellPixelSize, rect.Width * cellPixelSize, rect.Height * cellPixelSize));
         EndStroke();
+    }
+
+    /// <summary>
+    /// Captures the current grid selection as a new project-wide <see cref="MapTemplate"/>, called by the
+    /// View after its name-entry dialog confirms. Not undoable, same precedent as Delete Map/Delete Folder
+    /// (a project-wide-list mutation outside this map's own undo stack).
+    /// </summary>
+    public void SaveSelectionAsTemplate(string name)
+    {
+        if (!CanSaveSelectionAsTemplate || SelectedMap is null || GridSelection is not { } rect) return;
+        var map = SelectedMap.Map;
+
+        var kind = ActiveLayer == MapLayerKind.Tilemap ? MetatileKind.FourBpp : MetatileKind.EightBpp;
+        var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
+        var isTileMode = ActiveLayer == MapLayerKind.Tilemap && map.MetatileGridSize == 1;
+        var (indices, attributes) = GridBlockExtractor.Extract(layer, map.Width, rect.Col0, rect.Row0, rect.Width, rect.Height, includeAttributes: isTileMode);
+
+        MapTemplateService.Create(_project, name, kind, map.MetatileGridSize, rect.Width, rect.Height, indices, attributes);
+
+        RefreshTemplatePalette();
+        HasChanges = true;
+        StatusText = $"Saved template '{name}' ({rect.Width}x{rect.Height}).";
+        IsStatusError = false;
+    }
+
+    /// <summary>No cascade (see <see cref="MapTemplateService.Delete"/>): a plain Yes/No confirmation is enough, same shape as <see cref="DeleteMap"/>.</summary>
+    [RelayCommand]
+    private void DeleteSelectedTemplate()
+    {
+        if (SelectedPaletteTemplate is null) return;
+        var template = SelectedPaletteTemplate.Template;
+
+        var confirm = MessageBox.Show($"Delete template '{template.Name}'? This cannot be undone.", "Delete template", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        MapTemplateService.Delete(_project, template);
+        SelectedPaletteTemplate = null;
+        RefreshTemplatePalette();
+        HasChanges = true;
+        StatusText = $"Deleted template '{template.Name}'.";
+        IsStatusError = false;
     }
 
     /// <summary>Clears the current selection's contents: grid cells become Empty (one undo step, same machinery as FillSelection); selected sprites are removed (one undo step, same shape as the Erase tool's stroke-batched sprite removal). Does not affect the selection region/list itself.</summary>

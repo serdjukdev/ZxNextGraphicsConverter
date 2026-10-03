@@ -191,6 +191,31 @@ public class MetatileServiceTests
     }
 
     [Fact]
+    public void Delete_MiddleMetatile_AlsoRemapsTemplateCells_SameAsMapCells()
+    {
+        var project = new ProjectState();
+        var a = MetatileService.Create(project, "a", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 1
+        var b = MetatileService.Create(project, "b", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 2, will be deleted
+        var c = MetatileService.Create(project, "c", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 3 -> should become 2
+
+        var template = new MapTemplate
+        {
+            Name = "room",
+            Kind = MetatileKind.FourBpp,
+            GridSize = 2,
+            Width = 2,
+            Height = 1,
+            MetatileIndices = [(byte)a.SortIndex, (byte)c.SortIndex] // [1, 3]
+        };
+        project.Templates.Add(template);
+
+        MetatileService.Delete(project, b);
+
+        Assert.Equal(1, template.MetatileIndices[0]); // still points at 'a', untouched
+        Assert.Equal(2, template.MetatileIndices[1]); // was 3 (pointing at 'c'), remapped to c's new SortIndex 2
+    }
+
+    [Fact]
     public void Delete_DoesNotAffectTheOtherKindsNumberingOrLayer()
     {
         var project = new ProjectState();
@@ -237,6 +262,31 @@ public class MetatileServiceTests
         Assert.DoesNotContain(project.Metatiles, m => m.Id == b.Id);
         Assert.Equal(1, map.TilemapLayer.MetatileIndices[0]); // 'a' untouched
         Assert.Equal(blankIndex, map.TilemapLayer.MetatileIndices[1]); // redirected to the reserved blank instead of left dangling
+    }
+
+    [Fact]
+    public void DeleteCascading_PlacedInTemplate_RedirectsCellsToReservedBlank_SameAsMapCells()
+    {
+        var project = new ProjectState();
+        var a = MetatileService.Create(project, "a", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 1
+        var b = MetatileService.Create(project, "b", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!; // SortIndex 2 -> deleted
+        var blankIndex = project.Metatiles.Single(m => m.Kind == MetatileKind.FourBpp && m.IsReservedBlank).SortIndex;
+
+        var template = new MapTemplate
+        {
+            Name = "room",
+            Kind = MetatileKind.FourBpp,
+            GridSize = 2,
+            Width = 2,
+            Height = 1,
+            MetatileIndices = [(byte)a.SortIndex, (byte)b.SortIndex]
+        };
+        project.Templates.Add(template);
+
+        MetatileService.DeleteCascading(project, b);
+
+        Assert.Equal(1, template.MetatileIndices[0]); // 'a' untouched
+        Assert.Equal(blankIndex, template.MetatileIndices[1]); // redirected to the reserved blank instead of left dangling
     }
 
     [Fact]

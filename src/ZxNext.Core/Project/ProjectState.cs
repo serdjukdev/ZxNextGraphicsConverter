@@ -27,6 +27,7 @@ public class ProjectState
 
     public List<Metatile> Metatiles { get; } = [];
     public List<MapAsset> Maps { get; } = [];
+    public List<MapTemplate> Templates { get; } = [];
 
     /// <summary>
     /// The one metatile GridSize this whole project is locked to, for BOTH MetatileKinds and every map.

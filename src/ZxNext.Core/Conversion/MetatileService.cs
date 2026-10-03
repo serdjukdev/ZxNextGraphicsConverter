@@ -146,6 +146,20 @@ public static class MetatileService
                 }
             }
         }
+
+        // A MapTemplate cell byte is the exact same kind of SortIndex reference as a map cell: it must be
+        // remapped identically, or a template silently starts pointing at the wrong metatile the moment
+        // any metatile of its own Kind is deleted elsewhere in the project (see MapTemplate's doc comment).
+        foreach (var template in project.Templates.Where(t => t.Kind == kind))
+        {
+            for (var i = 0; i < template.MetatileIndices.Length; i++)
+            {
+                if (remap.TryGetValue(template.MetatileIndices[i], out var newValue))
+                {
+                    template.MetatileIndices[i] = newValue;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -169,6 +183,17 @@ public static class MetatileService
                 for (var i = 0; i < layer.MetatileIndices.Length; i++)
                 {
                     if (layer.MetatileIndices[i] == targetIndex) layer.MetatileIndices[i] = blankIndex;
+                }
+            }
+
+            // Same reasoning as the Delete/Reorder-time remap below: a template referencing this metatile
+            // must be blanked exactly like a map cell would be, not left pointing at whatever metatile ends
+            // up compacted into this now-freed SortIndex slot.
+            foreach (var template in project.Templates.Where(t => t.Kind == metatile.Kind))
+            {
+                for (var i = 0; i < template.MetatileIndices.Length; i++)
+                {
+                    if (template.MetatileIndices[i] == targetIndex) template.MetatileIndices[i] = blankIndex;
                 }
             }
         }

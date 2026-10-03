@@ -244,6 +244,26 @@ public partial class MapEditorWindow : Window
         if (typesVm.HasChanges) vm.MarkChanged();
     }
 
+    private void ShowMetatilesPalette_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MapEditorViewModel vm) vm.ShowTemplatePalette = false;
+    }
+
+    private void ShowTemplatesPalette_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MapEditorViewModel vm) vm.ShowTemplatePalette = true;
+    }
+
+    private void SaveAsTemplate_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MapEditorViewModel vm || vm.GridSelection is not { } rect) return;
+
+        var dialog = new SaveTemplateWindow($"{rect.Width}x{rect.Height}") { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        vm.SaveSelectionAsTemplate(dialog.TemplateName);
+    }
+
     private void ResizeMap_OnClick(object sender, RoutedEventArgs e)
     {
         if (DataContext is not MapEditorViewModel vm || vm.SelectedMap is null) return;
@@ -302,6 +322,16 @@ public partial class MapEditorWindow : Window
         // the user goes back to painting, so drop it unconditionally rather than requiring an explicit
         // "click outside it to deselect" step.
         vm.ClearSelection();
+
+        // Stamping a template is click-only, same reasoning as Sprite placement (see the MouseMove handler's
+        // own comment on this): never enters the drag-paint flow below, so a drag across the canvas can't
+        // repeat-stamp it once per cell crossed.
+        if (vm.IsGridLayerActive && vm.SelectedPaletteTemplate is not null && !Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            vm.StampTemplateAt(pixelX, pixelY);
+            UpdateHoverHighlight(vm, pixelX, pixelY);
+            return;
+        }
 
         _isDrawing = true;
         // BeginStroke() must run BEFORE CaptureMouse(): capturing the mouse makes WPF re-synchronize
@@ -647,6 +677,20 @@ public partial class MapEditorWindow : Window
             var snapX = pixelX / MapEditorViewModel.TileSnapSize * MapEditorViewModel.TileSnapSize;
             var snapY = pixelY / MapEditorViewModel.TileSnapSize * MapEditorViewModel.TileSnapSize;
             DrawHighlightRect(snapX, snapY, MapEditorViewModel.SpritePixelSize, MapEditorViewModel.SpritePixelSize, Brushes.LimeGreen, Color.FromArgb(80, 0, 255, 0));
+            return;
+        }
+
+        // Template stamp ghost: the footprint that will be written on click, same "shown whenever ready,
+        // Ctrl bypasses to the erase preview instead" shape as the sprite-placement preview above.
+        if (vm.IsGridLayerActive && vm.SelectedPaletteTemplate is not null && !Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            var template = vm.SelectedPaletteTemplate.Template;
+            var map = vm.SelectedMap.Map;
+            var cellPixelSize = map.MetatileGridSize * 8;
+            var col = pixelX / cellPixelSize;
+            var row = pixelY / cellPixelSize;
+            if (pixelX < 0 || pixelY < 0 || col >= map.Width || row >= map.Height) return;
+            DrawHighlightRect(col * cellPixelSize, row * cellPixelSize, template.Width * cellPixelSize, template.Height * cellPixelSize, Brushes.DodgerBlue, Color.FromArgb(80, 30, 144, 255));
             return;
         }
 

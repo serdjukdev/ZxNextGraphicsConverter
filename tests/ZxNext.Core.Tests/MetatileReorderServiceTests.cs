@@ -58,6 +58,32 @@ public class MetatileReorderServiceTests
     }
 
     [Fact]
+    public void Reorder_RewritesEveryTemplateCellReferencingAMovedMetatile_ToItsNewSortIndex()
+    {
+        var a = FakeMetatile("a", MetatileKind.FourBpp, 2, 0);
+        var b = FakeMetatile("b", MetatileKind.FourBpp, 2, 1);
+        var c = FakeMetatile("c", MetatileKind.FourBpp, 2, 2);
+        var project = new ProjectState();
+        project.Metatiles.AddRange([a, b, c]);
+
+        var template = new MapTemplate
+        {
+            Name = "room",
+            Kind = MetatileKind.FourBpp,
+            GridSize = 2,
+            Width = 3,
+            Height = 1,
+            MetatileIndices = [0, 1, 2] // a, b, c
+        };
+        project.Templates.Add(template);
+
+        // Reorder to [c, a, b] -> c takes 0, a takes 1, b takes 2.
+        MetatileReorderService.Reorder(project, [c, a, b]);
+
+        Assert.Equal([1, 2, 0], template.MetatileIndices); // a(now 1), b(now 2), c(now 0): same remap a map layer would get
+    }
+
+    [Fact]
     public void Reorder_DoesNotTouchMapCellsForADifferentGridSizeOrKind_EvenWithOverlappingRawValues()
     {
         var a = FakeMetatile("a", MetatileKind.FourBpp, 2, 0);

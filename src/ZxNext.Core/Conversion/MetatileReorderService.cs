@@ -53,5 +53,19 @@ public static class MetatileReorderService
                 }
             }
         }
+
+        // See MapTemplate's doc comment: a template cell is the same kind of SortIndex reference as a
+        // map cell and must be remapped identically here, or it goes stale the moment metatiles of its
+        // own Kind are reordered elsewhere in the project.
+        foreach (var template in project.Templates.Where(t => t.Kind == kind))
+        {
+            for (var i = 0; i < template.MetatileIndices.Length; i++)
+            {
+                if (remap.TryGetValue(template.MetatileIndices[i], out var newValue))
+                {
+                    template.MetatileIndices[i] = newValue;
+                }
+            }
+        }
     }
 }

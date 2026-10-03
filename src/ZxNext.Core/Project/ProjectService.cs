@@ -127,6 +127,21 @@ public static class ProjectService
                 });
             }
 
+            foreach (var template in project.Templates)
+            {
+                dto.Templates.Add(new MapTemplateDto
+                {
+                    Id = template.Id,
+                    Name = template.Name,
+                    Kind = template.Kind,
+                    GridSize = template.GridSize,
+                    Width = template.Width,
+                    Height = template.Height,
+                    MetatileIndices = template.MetatileIndices,
+                    CellAttributes = template.CellAttributes
+                });
+            }
+
             foreach (var map in project.Maps)
             {
                 var tilemapEntryName = $"maps/{map.Id}_tilemap.bin";
@@ -285,6 +300,21 @@ public static class ProjectService
                 }).ToList(),
                 SortIndex = m.SortIndex,
                 IsReservedBlank = m.IsReservedBlank
+            });
+        }
+
+        foreach (var t in dto.Templates)
+        {
+            project.Templates.Add(new MapTemplate
+            {
+                Id = t.Id,
+                Name = t.Name,
+                Kind = t.Kind,
+                GridSize = t.GridSize,
+                Width = t.Width,
+                Height = t.Height,
+                MetatileIndices = t.MetatileIndices,
+                CellAttributes = t.CellAttributes
             });
         }
 

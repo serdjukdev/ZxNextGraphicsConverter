@@ -17,6 +17,7 @@ public class ProjectManifestDto
     public Dictionary<string, FlatPaletteDto> Layer2_640x256x4FolderPalettes { get; set; } = [];
     public List<AssetDto> Assets { get; set; } = [];
     public List<MetatileDto> Metatiles { get; set; } = [];
+    public List<MapTemplateDto> Templates { get; set; } = [];
     public List<MapDto> Maps { get; set; } = [];
     public List<ObjectTypeDto> ObjectTypes { get; set; } = [];
 
@@ -102,6 +103,19 @@ public class MetatileDto
 
     /// <summary>False (the correct default) in project files saved before this field existed — <see cref="ProjectService.Load"/>'s reserved-blank migration sweep backfills a proper one for any already-populated Kind+GridSize regardless.</summary>
     public bool IsReservedBlank { get; set; }
+}
+
+/// <summary>Small, always inline JSON, same convention as <see cref="MetatileDto"/> (a template is a few hundred cells at most, nowhere near a whole map's scale, so no sidecar file is needed; <c>byte[]</c> fields are base64-encoded by System.Text.Json automatically).</summary>
+public class MapTemplateDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public MetatileKind Kind { get; set; }
+    public int GridSize { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public byte[] MetatileIndices { get; set; } = [];
+    public byte[]? CellAttributes { get; set; }
 }
 
 public class SpritePlacementDto

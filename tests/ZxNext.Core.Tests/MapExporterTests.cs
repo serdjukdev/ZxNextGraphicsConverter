@@ -316,6 +316,8 @@ public class MapExporterTests
 
         var doorPlacement = new SpritePlacement { SpriteAssetId = spriteB.Id, X = 50, Y = 50, TypeId = portalType.Id, UserByte = 7 };
         var buttonPlacement = new SpritePlacement { SpriteAssetId = spriteA.Id, X = 0, Y = 0, LinkedPlacementId = doorPlacement.Id };
+        // Placed in [button, door] order, but door is typed and button isn't, so export reorders door
+        // first: see ExportObjects_TypedPlacementsExportBeforeUntyped for that rule on its own.
         var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [buttonPlacement, doorPlacement]);
 
         var (success, result, error) = MapExporter.ExportObjects(map, assets, objectTypes);
@@ -323,15 +325,91 @@ public class MapExporterTests
         Assert.True(success, error);
         var data = ExtractDbBytes(result!.AsmText, "level1_objects").ToArray();
 
-        // Record 0 (button): type 0xFF (none), connect 1 (door is at placement index 1), userByte 0
-        Assert.Equal(0xFF, data[5]);
-        Assert.Equal(1, data[6]);
-        Assert.Equal(0, data[7]);
+        // Record 0 (door, exported first for being typed): type 1 (portal's position in objectTypes), connect 0xFF (no link), userByte 7
+        Assert.Equal(1, data[5]);
+        Assert.Equal(0xFF, data[6]);
+        Assert.Equal(7, data[7]);
 
-        // Record 1 (door): type 1 (portal's position in objectTypes), connect 0xFF (no link), userByte 7
-        Assert.Equal(1, data[13]);
-        Assert.Equal(0xFF, data[14]);
-        Assert.Equal(7, data[15]);
+        // Record 1 (button, exported second for being untyped): type 0xFF (none), connect 0 (door is now at placement index 0), userByte 0
+        Assert.Equal(0xFF, data[13]);
+        Assert.Equal(0, data[14]);
+        Assert.Equal(0, data[15]);
+    }
+
+    [Fact]
+    public void ExportObjects_TypedPlacementsExportBeforeUntyped()
+    {
+        var sprite = FakeSprite("thing", sortIndex: 0);
+        var assets = new List<GraphicsAsset> { sprite };
+        var platformType = new ObjectType { Name = "platform" };
+        var objectTypes = new List<ObjectType> { platformType };
+
+        // Untyped placed FIRST on the map, typed placed second: export must still put the typed one first.
+        var untyped = new SpritePlacement { SpriteAssetId = sprite.Id, X = 0, Y = 0 };
+        var typed = new SpritePlacement { SpriteAssetId = sprite.Id, X = 8, Y = 8, TypeId = platformType.Id };
+        var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [untyped, typed]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, assets, objectTypes);
+
+        Assert.True(success, error);
+        var data = ExtractDbBytes(result!.AsmText, "level1_objects").ToArray();
+
+        Assert.Equal(8, BinaryPrimitives.ReadInt16LittleEndian(data.AsSpan(1, 2))); // record 0 is the typed one (X=8)
+        Assert.Equal(0, BinaryPrimitives.ReadInt16LittleEndian(data.AsSpan(9, 2))); // record 1 is the untyped one (X=0)
+    }
+
+    [Fact]
+    public void ExportObjects_GroupsThreeTypesInObjectTypesListOrder_StablyWithinEachGroup()
+    {
+        var sprite = FakeSprite("thing", sortIndex: 0);
+        var assets = new List<GraphicsAsset> { sprite };
+        var platform = new ObjectType { Name = "platform" };
+        var enemy = new ObjectType { Name = "enemy" };
+        var objectTypes = new List<ObjectType> { platform, enemy }; // platform first, enemy second
+
+        var enemy1 = new SpritePlacement { SpriteAssetId = sprite.Id, X = 1, Y = 0, TypeId = enemy.Id };
+        var platform1 = new SpritePlacement { SpriteAssetId = sprite.Id, X = 2, Y = 0, TypeId = platform.Id };
+        var platform2 = new SpritePlacement { SpriteAssetId = sprite.Id, X = 3, Y = 0, TypeId = platform.Id };
+        var untyped = new SpritePlacement { SpriteAssetId = sprite.Id, X = 4, Y = 0 };
+        // Placed in [enemy1, platform1, platform2, untyped] order.
+        var map = FakeMap("level1", 8, 1, gridSize: 1, sprites: [enemy1, platform1, platform2, untyped]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, assets, objectTypes);
+
+        Assert.True(success, error);
+        var data = ExtractDbBytes(result!.AsmText, "level1_objects").ToArray();
+
+        // Expected export order: platform1, platform2 (platform's own two placements keep their relative
+        // order), then enemy1, then untyped last.
+        Assert.Equal(2, data[1]); // record 0: platform1 (X=2)
+        Assert.Equal(3, data[9]); // record 1: platform2 (X=3)
+        Assert.Equal(1, data[17]); // record 2: enemy1 (X=1)
+        Assert.Equal(4, data[25]); // record 3: untyped (X=4)
+    }
+
+    [Fact]
+    public void ExportObjects_LinkBetweenPlacementsThatMoveUnderTheSort_StillResolvesToTheNewIndex()
+    {
+        var sprite = FakeSprite("thing", sortIndex: 0);
+        var assets = new List<GraphicsAsset> { sprite };
+        var platform = new ObjectType { Name = "platform" };
+        var objectTypes = new List<ObjectType> { platform };
+
+        var target = new SpritePlacement { SpriteAssetId = sprite.Id, X = 9, Y = 0, TypeId = platform.Id };
+        // source is untyped and placed first, so it moves to AFTER target once sorted; its link must
+        // still point at target's new (not old) index.
+        var source = new SpritePlacement { SpriteAssetId = sprite.Id, X = 1, Y = 0, LinkedPlacementId = target.Id };
+        var map = FakeMap("level1", 16, 1, gridSize: 1, sprites: [source, target]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, assets, objectTypes);
+
+        Assert.True(success, error);
+        var data = ExtractDbBytes(result!.AsmText, "level1_objects").ToArray();
+
+        // Record 0 is target (typed, X=9); record 1 is source (untyped, X=1), connect must be 0 (target's new index).
+        Assert.Equal(9, BinaryPrimitives.ReadInt16LittleEndian(data.AsSpan(1, 2)));
+        Assert.Equal(1, BinaryPrimitives.ReadInt16LittleEndian(data.AsSpan(9, 2)));
+        Assert.Equal(0, data[14]); // source's connect byte -> target's new placement index 0
     }
 
     [Fact]

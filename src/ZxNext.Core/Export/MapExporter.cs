@@ -290,15 +290,26 @@ public static class MapExporter
         var typeIndexById = new Dictionary<Guid, int>();
         for (var i = 0; i < objectTypes.Count; i++) typeIndexById[objectTypes[i].Id] = i;
 
-        // Connect is positional WITHIN THIS MAP's own SpriteLayer order — the same order records are built
-        // in below — resolved here rather than stored anywhere, exactly like spriteIndex/type above.
-        var placementIndexById = new Dictionary<Guid, int>();
-        for (var i = 0; i < map.SpriteLayer.Count; i++) placementIndexById[map.SpriteLayer[i].Id] = i;
+        // Export order groups placements by their type's position in objectTypes (so moving a type to the
+        // top of "Manage Types..." makes every object of that type initialize first on hardware, as a
+        // block, no matter where/when it was placed on the canvas), with untyped placements (or one whose
+        // type was since deleted) always sorting after every typed one. OrderBy is a documented stable
+        // sort, so placements sharing the same type, or no type, keep their original SpriteLayer relative
+        // order among themselves. This is a pure export-time view: map.SpriteLayer itself is never
+        // reordered or mutated.
+        var orderedPlacements = map.SpriteLayer
+            .OrderBy(p => p.TypeId is { } tid && typeIndexById.TryGetValue(tid, out var idx) ? idx : int.MaxValue)
+            .ToList();
 
-        var records = new List<ObjectRecord>(map.SpriteLayer.Count);
-        for (var i = 0; i < map.SpriteLayer.Count; i++)
+        // Connect is positional WITHIN the export order above, resolved here rather than stored anywhere,
+        // exactly like spriteIndex/type above.
+        var placementIndexById = new Dictionary<Guid, int>();
+        for (var i = 0; i < orderedPlacements.Count; i++) placementIndexById[orderedPlacements[i].Id] = i;
+
+        var records = new List<ObjectRecord>(orderedPlacements.Count);
+        for (var i = 0; i < orderedPlacements.Count; i++)
         {
-            var placement = map.SpriteLayer[i];
+            var placement = orderedPlacements[i];
             var asset = projectAssets.First(a => a.Id == placement.SpriteAssetId);
             var spriteIndex = (byte)(AssetExportIndexer.IsSubfolderAsset(asset)
                 ? AssetExportIndexer.SubfolderLocalIndexOf(asset, projectAssets)
@@ -319,7 +330,7 @@ public static class MapExporter
             {
                 connectByte = (byte)linkIdx;
                 linkTargetIndex = linkIdx;
-                linkTargetName = projectAssets.FirstOrDefault(a => a.Id == map.SpriteLayer[linkIdx].SpriteAssetId)?.Name;
+                linkTargetName = projectAssets.FirstOrDefault(a => a.Id == orderedPlacements[linkIdx].SpriteAssetId)?.Name;
             }
 
             records.Add(new ObjectRecord(spriteIndex, (short)placement.X, (short)placement.Y, asset.Name,

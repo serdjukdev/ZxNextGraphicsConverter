@@ -26,11 +26,23 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Object types are shared across every map (see the Help topic on map export) — used to categorize Sprite-layer objects, e.g. for a game's own trigger/behaviour logic." FontSize="10" TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,8" />
+        <TextBlock Grid.Row="0" Text="Object types are shared across every map (see the Help topic on map export) — used to categorize Sprite-layer objects, e.g. for a game's own trigger/behaviour logic. List order also sets each type's export equ number AND the init order of its objects in every map's _objects.asm (move a type up to make its objects initialize earlier on hardware)." FontSize="10" TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,8" />
 
-        <Border Grid.Row="1" BorderBrush="#999" BorderThickness="1">
-            <ListBox ItemsSource="{Binding Types}" SelectedItem="{Binding SelectedType}" DisplayMemberPath="Name" BorderThickness="0" />
-        </Border>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" BorderBrush="#999" BorderThickness="1">
+                <ListBox ItemsSource="{Binding Types}" SelectedItem="{Binding SelectedType}" DisplayMemberPath="Name" BorderThickness="0" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="6,0,0,0">
+                <Button Content="&#9650;" Style="{StaticResource IconButtonStyle}" Margin="0,0,0,4"
+                        Command="{Binding MoveTypeUpCommand}" ToolTip="Move this type earlier (initializes earlier on hardware, lower equ number)" />
+                <Button Content="&#9660;" Style="{StaticResource IconButtonStyle}"
+                        Command="{Binding MoveTypeDownCommand}" ToolTip="Move this type later (initializes later on hardware, higher equ number)" />
+            </StackPanel>
+        </Grid>
 
         <Grid Grid.Row="2" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>

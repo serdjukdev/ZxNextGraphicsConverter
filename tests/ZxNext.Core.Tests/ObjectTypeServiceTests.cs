@@ -76,4 +76,52 @@ public class ObjectTypeServiceTests
 
         Assert.Empty(project.ObjectTypes);
     }
+
+    [Fact]
+    public void MoveUp_SwapsWithThePrecedingEntry()
+    {
+        var project = new ProjectState();
+        var character = ObjectTypeService.Create(project, "character").Type!;
+        var portal = ObjectTypeService.Create(project, "portal").Type!;
+
+        ObjectTypeService.MoveUp(project, portal);
+
+        Assert.Equal([portal, character], project.ObjectTypes);
+    }
+
+    [Fact]
+    public void MoveUp_AlreadyFirst_NoOp()
+    {
+        var project = new ProjectState();
+        var character = ObjectTypeService.Create(project, "character").Type!;
+        var portal = ObjectTypeService.Create(project, "portal").Type!;
+
+        ObjectTypeService.MoveUp(project, character);
+
+        Assert.Equal([character, portal], project.ObjectTypes);
+    }
+
+    [Fact]
+    public void MoveDown_SwapsWithTheFollowingEntry()
+    {
+        var project = new ProjectState();
+        var character = ObjectTypeService.Create(project, "character").Type!;
+        var portal = ObjectTypeService.Create(project, "portal").Type!;
+
+        ObjectTypeService.MoveDown(project, character);
+
+        Assert.Equal([portal, character], project.ObjectTypes);
+    }
+
+    [Fact]
+    public void MoveDown_AlreadyLast_NoOp()
+    {
+        var project = new ProjectState();
+        var character = ObjectTypeService.Create(project, "character").Type!;
+        var portal = ObjectTypeService.Create(project, "portal").Type!;
+
+        ObjectTypeService.MoveDown(project, portal);
+
+        Assert.Equal([character, portal], project.ObjectTypes);
+    }
 }

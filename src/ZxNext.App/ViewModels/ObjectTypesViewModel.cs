@@ -114,5 +114,29 @@ public partial class ObjectTypesViewModel : ObservableObject
         IsStatusError = false;
     }
 
+    /// <summary>List order here is also the export order: object_types.asm's `equ` numbering, and the init-priority sort every map's _objects.asm now applies (see MapExporter.BuildObjectRecords). Silently no-ops at the boundary, same shape as MapEditorViewModel.MoveLayerUp/Down: no separate CanExecute wiring needed.</summary>
+    [RelayCommand]
+    private void MoveTypeUp()
+    {
+        if (SelectedType is null) return;
+        ObjectTypeService.MoveUp(_project, SelectedType);
+        HasChanges = true;
+        var moved = SelectedType;
+        Refresh();
+        SelectedType = Types.First(t => t.Id == moved.Id);
+    }
+
+    /// <summary>Same shape as <see cref="MoveTypeUp"/>, one position later instead.</summary>
+    [RelayCommand]
+    private void MoveTypeDown()
+    {
+        if (SelectedType is null) return;
+        ObjectTypeService.MoveDown(_project, SelectedType);
+        HasChanges = true;
+        var moved = SelectedType;
+        Refresh();
+        SelectedType = Types.First(t => t.Id == moved.Id);
+    }
+
     private bool HasSelection() => SelectedType is not null;
 }

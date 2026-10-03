@@ -39,6 +39,30 @@ public static class ObjectTypeService
 
     public static void Delete(ProjectState project, ObjectType type) => project.ObjectTypes.Remove(type);
 
+    /// <summary>
+    /// Moves a type one position earlier in <see cref="ProjectState.ObjectTypes"/>, no-op already at the
+    /// front. List position is this type's only order: nothing else stores a cached copy of it (unlike
+    /// <see cref="Metatile.SortIndex"/>), since both consumers (the <c>equ</c> value in object_types.asm
+    /// and a map's object-export type-priority sort, see MapExporter.BuildObjectRecords) resolve it fresh
+    /// from this list at export time, so moving a type here never needs to remap anything else.
+    /// </summary>
+    public static void MoveUp(ProjectState project, ObjectType type)
+    {
+        var index = project.ObjectTypes.IndexOf(type);
+        if (index <= 0) return;
+        project.ObjectTypes.RemoveAt(index);
+        project.ObjectTypes.Insert(index - 1, type);
+    }
+
+    /// <summary>Same shape as <see cref="MoveUp"/>, one position later instead, no-op already at the back.</summary>
+    public static void MoveDown(ProjectState project, ObjectType type)
+    {
+        var index = project.ObjectTypes.IndexOf(type);
+        if (index < 0 || index >= project.ObjectTypes.Count - 1) return;
+        project.ObjectTypes.RemoveAt(index);
+        project.ObjectTypes.Insert(index + 1, type);
+    }
+
     private static bool IsTaken(ProjectState project, string candidate, Guid? excludeTypeId) =>
         project.ObjectTypes.Any(t => t.Id != excludeTypeId && string.Equals(t.Name, candidate, StringComparison.OrdinalIgnoreCase));
 

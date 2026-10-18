@@ -77,4 +77,18 @@ public class GraphicsAsset
     /// real source of truth; this flag just records intent so re-quantize can rebuild it.
     /// </summary>
     public bool IsPriority { get; set; }
+
+    /// <summary>
+    /// Sprite4Bpp/Sprite8Bpp sub-folder assets only: an independent per-asset flag (exactly like
+    /// <see cref="IsLocked"/>/<see cref="IsPriority"/>, no exclusivity with sibling assets) that shows this
+    /// one sprite in the Map Editor's sprite palette, so it can be placed on a map without every other
+    /// frame in the same sub-folder cluttering the palette too. Any number of sprites in one sub-folder can
+    /// have this set, for example several different enemies' idle frames all living in the same memory
+    /// bank, each independently placeable, while their other animation frames stay unflagged. Purely a
+    /// UI/palette curation flag, cosmetic only: it does not affect what an existing placement exports (that
+    /// always resolves from the specific asset Guid the placement already references, via
+    /// <see cref="Export.AssetExportIndexer.SubfolderLocalIndexOf"/>), so toggling this flag never changes
+    /// already-exported map data.
+    /// </summary>
+    public bool IsMapRepresentative { get; set; }
 }

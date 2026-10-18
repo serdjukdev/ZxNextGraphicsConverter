@@ -43,6 +43,8 @@ public partial class MainWindow : Window
         ProjectTreeViewControl.SetLockOnSelectionRequested += _viewModel.SetLockOnSelectedAssets;
         ProjectTreeViewControl.SetAssetPriorityRequested += _viewModel.SetAssetPriority;
         ProjectTreeViewControl.SetPriorityOnSelectionRequested += _viewModel.SetPriorityOnSelectedAssets;
+        ProjectTreeViewControl.SetMapRepresentativeRequested += _viewModel.SetMapRepresentative;
+        ProjectTreeViewControl.SetMapRepresentativeOnSelectionRequested += _viewModel.SetMapRepresentativeOnSelectedAssets;
         PixelEditorViewControl.PaintStrokeStarted += _viewModel.BeginPaintStroke;
         PixelEditorViewControl.PixelPainted += _viewModel.PaintPixel;
         PixelEditorViewControl.PaintStrokeEnded += _viewModel.EndPaintStroke;

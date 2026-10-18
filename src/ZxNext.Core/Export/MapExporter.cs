@@ -268,7 +268,14 @@ public static class MapExporter
             {
                 return (false, null, $"Map '{map.Name}' places a sprite that no longer exists.");
             }
-            if (AssetExportIndexer.IsSubfolderAsset(asset) && !subfolderAssetsAllowed)
+            // Sprite4Bpp/Sprite8Bpp sub-folder assets are always exportable regardless of the broader
+            // SubfolderAssetsInEditor setting: SubfolderLocalIndexOf below already gives any of them a
+            // correct, unambiguous local index, and the Map Editor's palette only ever offers sprites the
+            // user explicitly flagged placeable (see GraphicsAsset.IsMapRepresentative) rather than every
+            // frame, so this is always a deliberate, curated placement rather than the old whole-category
+            // exposure that setting controls. Everything else (Tile8Bpp sub-folder tiles via that same
+            // setting, for example) keeps the original hard block.
+            if (AssetExportIndexer.IsSubfolderAsset(asset) && !subfolderAssetsAllowed && !asset.Category.IsSprite())
             {
                 return (false, null,
                     $"Map '{map.Name}' places sprite '{asset.Name}', which lives in a sub-folder. Sub-folder sprites can't be placed on a map unless \"Allow sub-folder assets in map/metatile editor\" is on in Settings.");

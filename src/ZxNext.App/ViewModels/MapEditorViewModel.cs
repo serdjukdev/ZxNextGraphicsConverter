@@ -776,9 +776,19 @@ public partial class MapEditorViewModel : ObservableObject
     private void RefreshSpritePalette()
     {
         var includeSubfolders = AppSettingsStore.Load().SubfolderAssetsInEditor ?? false;
+
+        // Curated addition, independent of the broader SubfolderAssetsInEditor setting (see the matching
+        // exemption in MapExporter.BuildObjectRecords): every individually-flagged Sprite4Bpp/Sprite8Bpp
+        // sub-folder sprite (GraphicsAsset.IsMapRepresentative) shows as its own palette entry, instead of
+        // every animation frame in that sub-folder cluttering the list. Several different enemies/objects
+        // sharing one memory bank just means several flagged frames in the same sub-folder, each its own
+        // row here. When includeSubfolders is already true every sub-folder sprite is in the main Where
+        // clause below anyway, so the flag check is redundant there but harmless (OR, not exclusive).
+        var candidates = _project.Assets.Where(a =>
+            a.Category.IsSprite() && (includeSubfolders || a.FolderPath == a.Category.ToFolderPath() || a.IsMapRepresentative));
+
         SpritePalette = new ObservableCollection<TilePaletteItemViewModel>(
-            _project.Assets.Where(a => a.Category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp
-                                       && (includeSubfolders || a.FolderPath == a.Category.ToFolderPath()))
+            candidates
                 .OrderBy(a => a.Category).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(a => new TilePaletteItemViewModel(a, _project, _renderCache)));
         RefreshSpriteCounts();

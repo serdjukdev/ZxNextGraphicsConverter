@@ -143,7 +143,8 @@ public partial class ProjectTreeViewModel : ObservableObject
             Thumbnail = NextBitmapRenderer.Render(asset, project),
             IsReservedBlank = asset.IsReservedBlank,
             IsLocked = asset.IsLocked,
-            IsPriority = asset.IsPriority
+            IsPriority = asset.IsPriority,
+            IsMapRepresentative = asset.IsMapRepresentative
         };
         if (insertAtFront) folder.Children.Insert(0, node);
         else folder.Children.Add(node);
@@ -332,7 +333,8 @@ public partial class ProjectTreeViewModel : ObservableObject
                 Thumbnail = NextBitmapRenderer.Render(newAsset, project),
                 IsReservedBlank = newAsset.IsReservedBlank,
                 IsLocked = newAsset.IsLocked,
-                IsPriority = newAsset.IsPriority
+                IsPriority = newAsset.IsPriority,
+                IsMapRepresentative = newAsset.IsMapRepresentative
             };
             folder.Children.Insert(index, node);
             if (wasSelected)

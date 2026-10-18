@@ -545,6 +545,7 @@ public partial class MainViewModel : ObservableObject
         result.Asset!.Name = originalName;
         result.Asset.SortIndex = asset.SortIndex; // re-quantize replaces the asset object; keep its original export/tile-index position
         result.Asset.IsLocked = asset.IsLocked;   // ...and its lock state — re-quantizing a locked asset must not silently unlock it
+        result.Asset.IsMapRepresentative = asset.IsMapRepresentative; // ...and whether it's its sub-folder's map icon
         // IsPriority is already set by the import above (priority: asset.IsPriority), which also allocated the priority colour twins.
         Tree.ReplaceAssetNode(asset.Id, result.Asset, _project); // keeps its position in the list instead of jumping to the bottom
 
@@ -680,6 +681,7 @@ public partial class MainViewModel : ObservableObject
                         result.Asset!.Name = asset.Name;
                         result.Asset.SortIndex = asset.SortIndex; // full category rebuild replaces every asset; keep original relative order
                         result.Asset.IsLocked = asset.IsLocked;
+                        result.Asset.IsMapRepresentative = asset.IsMapRepresentative;
                         _project.RemapMetatileTileReferences(asset.Id, result.Asset.Id);
                         replaced.Add((asset.Id, result.Asset));
                         succeeded++;
@@ -935,6 +937,7 @@ public partial class MainViewModel : ObservableObject
                         result.Asset!.Name = asset.Name;
                         result.Asset.SortIndex = asset.SortIndex; // re-quantize replaces the asset object; keep its original export/tile-index position
                         result.Asset.IsLocked = asset.IsLocked;   // ...and lock state (IsPriority already carried by the import's `priority:` arg above)
+                        result.Asset.IsMapRepresentative = asset.IsMapRepresentative;
                         replaced.Add((asset.Id, result.Asset));
                         succeeded++;
                     }
@@ -1275,6 +1278,53 @@ public partial class MainViewModel : ObservableObject
         if (Tree.FindLeafNode(assetId) is { } node) node.IsLocked = locked;
         HasUnsavedChanges = true;
         PixelEditor.StatusText = locked ? $"Locked '{asset.Name}'." : $"Unlocked '{asset.Name}'.";
+    }
+
+    /// <summary>
+    /// Toggles whether this one Sprite4Bpp/Sprite8Bpp sub-folder sprite shows in the Map Editor's sprite
+    /// palette, driven by the checkbox on its tree row (see <see cref="TreeNodeViewModel.CanBeMapRepresentative"/>).
+    /// Independent per asset, no exclusivity with sibling sprites in the same sub-folder, so several
+    /// different enemies/objects can each have their own icon frame flagged in one shared bank. No-op for
+    /// anything that isn't a Sprite4Bpp/Sprite8Bpp sub-folder leaf.
+    /// </summary>
+    public void SetMapRepresentative(Guid assetId, bool show)
+    {
+        var asset = _project.Assets.FirstOrDefault(a => a.Id == assetId);
+        if (asset is null || !asset.Category.IsSprite() || asset.FolderPath == asset.Category.ToFolderPath() || asset.IsMapRepresentative == show) return;
+
+        asset.IsMapRepresentative = show;
+        if (Tree.FindLeafNode(assetId) is { } node) node.IsMapRepresentative = show;
+        HasUnsavedChanges = true;
+        PixelEditor.StatusText = show
+            ? $"'{asset.Name}' now shows in the Map Editor's sprite palette."
+            : $"'{asset.Name}' no longer shows in the Map Editor's sprite palette.";
+    }
+
+    /// <summary>Bulk show/hide from the tree's right-click menu — whatever's currently multi-selected (Ctrl/Shift-click), or else the single last-clicked asset node. Targets outside a Sprite4Bpp/Sprite8Bpp sub-folder are skipped.</summary>
+    public void SetMapRepresentativeOnSelectedAssets(bool show)
+    {
+        var targetIds = Tree.GetMultiSelectedAssetIds();
+        if (targetIds.Count == 0 && Tree.SelectedNode is { IsFolder: false, AssetId: { } singleId })
+        {
+            targetIds = [singleId];
+        }
+        if (targetIds.Count == 0) return;
+
+        var changed = 0;
+        foreach (var id in targetIds)
+        {
+            var asset = _project.Assets.FirstOrDefault(a => a.Id == id);
+            if (asset is null || !asset.Category.IsSprite() || asset.FolderPath == asset.Category.ToFolderPath() || asset.IsMapRepresentative == show) continue;
+            asset.IsMapRepresentative = show;
+            if (Tree.FindLeafNode(id) is { } node) node.IsMapRepresentative = show;
+            changed++;
+        }
+
+        if (changed == 0) return;
+        HasUnsavedChanges = true;
+        PixelEditor.StatusText = show
+            ? $"{changed} sprite(s) now show in the Map Editor's sprite palette."
+            : $"{changed} sprite(s) no longer show in the Map Editor's sprite palette.";
     }
 
     /// <summary>
@@ -2007,7 +2057,7 @@ public partial class MainViewModel : ObservableObject
                 var usedPalettes = bank.Slots.Count;
                 var totalColors = bank.Slots.Sum(slot => slot.Slots.Count(c => c is not null));
                 PaletteStrip.ShowBank(bank, $"{category} — palette bank overview");
-                PixelEditor.StatusText = $"{category}: {usedPalettes}/{PaletteBank.MaxSlots} palette(s) used, {totalColors} colour(s) total.";
+                PixelEditor.StatusText = $"{category}: {usedPalettes}/{PaletteBank.MaxSlots} palette(s) used, {totalColors} colour(s) total.{BankUsageNote(category, node.FolderPath)}";
             }
             else if (node.FolderPath is { } folderPath)
             {
@@ -2020,13 +2070,13 @@ public partial class MainViewModel : ObservableObject
                 if (usedColors == 0)
                 {
                     PaletteStrip.Clear();
-                    PixelEditor.StatusText = $"{node.Name}: no images placed yet — palette is empty.";
+                    PixelEditor.StatusText = $"{node.Name}: no images placed yet — palette is empty.{BankUsageNote(category, folderPath)}";
                 }
                 else
                 {
                     var capacity = category.FlatPaletteCapacity();
                     PaletteStrip.ShowPalette(palette, $"{node.Name} ({category}) — folder palette, {usedColors}/{capacity} colour(s) used", isFourBpp: false, paletteSlotIndex: 0);
-                    PixelEditor.StatusText = $"{node.Name}: {usedColors}/{capacity} colour(s) used in this folder's palette.";
+                    PixelEditor.StatusText = $"{node.Name}: {usedColors}/{capacity} colour(s) used in this folder's palette.{BankUsageNote(category, folderPath)}";
                 }
             }
         }
@@ -2056,5 +2106,24 @@ public partial class MainViewModel : ObservableObject
             }
         }
         return seen.Count;
+    }
+
+    /// <summary>
+    /// Appended to a sprite folder's status text: how many of the 16KB sprite pattern pool this ONE
+    /// folder's own exported binary (root and each sub-folder are always separate standalone files, see
+    /// AssetCategoryExtensions.SubfoldersShareOneExportRow) would use, not the whole category. Empty for
+    /// every non-sprite category (SpriteBankCapacityBytes is null there).
+    /// </summary>
+    private string BankUsageNote(AssetCategory category, string? folderPath)
+    {
+        var capacity = category.SpriteBankCapacityBytes();
+        if (capacity is null || folderPath is null) return "";
+
+        var usedBytes = _project.Assets
+            .Where(a => a.Category == category && a.FolderPath == folderPath)
+            .Sum(a => a.PackedPixelData.Length);
+
+        var overLimit = usedBytes > capacity ? " Over the 16KB bank limit, won't fit as one load." : "";
+        return $" Bank usage: {usedBytes}/{capacity} byte(s).{overLimit}";
     }
 }

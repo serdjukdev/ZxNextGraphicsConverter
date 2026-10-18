@@ -80,6 +80,9 @@ public class AssetDto
 
     /// <summary>Layer2 priority flag for a Tile8Bpp asset (see <see cref="Model.GraphicsAsset.IsPriority"/>). False — the correct default — in older project files. The asset's actual pixel indices (pointing at the palette's priority colour twins) are the source of truth; this just records the intent so re-quantize can rebuild it.</summary>
     public bool IsPriority { get; set; }
+
+    /// <summary>See <see cref="Model.GraphicsAsset.IsMapRepresentative"/>. False — the correct default — in project files saved before this field existed.</summary>
+    public bool IsMapRepresentative { get; set; }
 }
 
 public class MetatileCellDto

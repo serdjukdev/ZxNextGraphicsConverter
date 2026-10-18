@@ -84,6 +84,10 @@ public static class AssetCategoryExtensions
     public static bool SupportsSubfolders(this AssetCategory category) =>
         category is not AssetCategory.Tile4Bpp;
 
+    /// <summary>True for the two sprite categories, the only ones whose sub-folder assets can be individually flagged placeable in the Map Editor (see <see cref="GraphicsAsset.IsMapRepresentative"/>). Tiles and Layer2 are never individually placed as map objects.</summary>
+    public static bool IsSprite(this AssetCategory category) =>
+        category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp;
+
     public static bool IsLayer2(this AssetCategory category) =>
         category is AssetCategory.Layer2_256x192 or AssetCategory.Layer2_320x256 or AssetCategory.Layer2_640x256x4;
 
@@ -137,6 +141,16 @@ public static class AssetCategoryExtensions
         AssetCategory.Layer2_256x192 or AssetCategory.Layer2_320x256 or AssetCategory.Layer2_640x256x4 => "l2",
         _ => throw new System.ArgumentOutOfRangeException(nameof(category))
     };
+
+    /// <summary>
+    /// Total bytes of real ZX Next sprite pattern memory that one exported sprite-category folder
+    /// (root or a user sub-folder, each its own standalone binary) must fit within to be loaded as one
+    /// unit, 16384 (16KB), the whole shared 4bpp+8bpp sprite pattern pool (confirmed in
+    /// next-hardware-graphics-facts). Null for every non-sprite category, tiles and Layer2 have no such
+    /// per-folder "bank" constraint.
+    /// </summary>
+    public static int? SpriteBankCapacityBytes(this AssetCategory category) =>
+        category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp ? 16384 : null;
 
     /// <summary>Fixed asset cell size: 16x16 for sprites, 8x8 for tiles, the full canvas for Layer2 categories.</summary>
     public static (int Width, int Height) CellSize(this AssetCategory category) => category switch

@@ -513,17 +513,22 @@ public class MapExporterTests
         Assert.Equal(0, ExtractDbBytes(result!.AsmText, "level1_objects")[0]); // hero -> 0, not 2
     }
 
-    [Fact]
-    public void ExportObjects_PlacesASubfolderSprite_Blocked()
+    /// <summary>Sprite4Bpp/Sprite8Bpp sub-folder sprites are always exportable regardless of the
+    /// SubfolderAssetsInEditor setting (see MapExporter.BuildObjectRecords' IsSprite() exemption) — the
+    /// Map Editor's palette only ever offers one such sprite per sub-folder (its "map representative"),
+    /// so any placement reaching export here is always a deliberate, curated one.</summary>
+    [Theory]
+    [InlineData(AssetCategory.Sprite8Bpp)]
+    [InlineData(AssetCategory.Sprite4Bpp)]
+    public void ExportObjects_PlacesASpriteSubfolderSprite_AllowedRegardlessOfSetting(AssetCategory category)
     {
-        var sub = FakeSprite("frame_00", sortIndex: 0, AssetCategory.Sprite8Bpp, "sprite/8bpp/images/walk");
+        var sub = FakeSprite("frame_00", sortIndex: 0, category, $"sprite/{(category == AssetCategory.Sprite4Bpp ? "4bpp" : "8bpp")}/images/walk");
         var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [new SpritePlacement { SpriteAssetId = sub.Id, X = 0, Y = 0 }]);
 
         var (success, result, error) = MapExporter.ExportObjects(map, [sub], []);
 
-        Assert.False(success);
-        Assert.Null(result);
-        Assert.Contains("sub-folder", error);
+        Assert.True(success, error);
+        Assert.Equal(0, ExtractDbBytes(result!.AsmText, "level1_objects")[0]); // sub-folder's own local index, not blocked
     }
 
     [Fact]

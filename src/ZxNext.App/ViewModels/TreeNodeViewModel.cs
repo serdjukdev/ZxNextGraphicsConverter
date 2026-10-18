@@ -69,6 +69,19 @@ public partial class TreeNodeViewModel : ObservableObject
     /// <summary>Leaf Tile8Bpp asset node — the only kind that shows the Layer2 priority arrow / "Priority" menu item.</summary>
     public bool IsTile8Bpp => !IsFolder && Category == AssetCategory.Tile8Bpp;
 
+    /// <summary>
+    /// Whether this row even offers the "show in Map Editor" checkbox at all: a non-reserved-blank leaf,
+    /// Sprite4Bpp or Sprite8Bpp, that lives in a user sub-folder (not the category root, a root sprite is
+    /// already individually placeable without this flag). See
+    /// <see cref="ZxNext.Core.Model.GraphicsAsset.IsMapRepresentative"/>.
+    /// </summary>
+    public bool CanBeMapRepresentative =>
+        !IsFolder && !IsReservedBlank && Category is { } c && c.IsSprite() && FolderPath != c.ToFolderPath();
+
+    /// <summary>Mirrors <see cref="ZxNext.Core.Model.GraphicsAsset.IsMapRepresentative"/> directly, same pattern as <see cref="IsLocked"/>/<see cref="IsPriority"/>.</summary>
+    [ObservableProperty]
+    private bool isMapRepresentative;
+
     /// <summary>Drag-and-drop reorder feedback (ProjectTreeView's code-behind) — a thin line above/below this row showing exactly where the dragged item will land. At most one node in the whole tree has either set true at any time; cleared on drag-leave/drop.</summary>
     [ObservableProperty]
     private bool showDropIndicatorAbove;

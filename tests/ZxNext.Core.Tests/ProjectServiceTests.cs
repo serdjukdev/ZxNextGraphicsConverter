@@ -676,10 +676,12 @@ public class ProjectServiceTests : IDisposable
         Assert.Contains(loaded.LoadWarnings, w => w.Contains("Tile8Bpp") && w.Contains("merged"));
     }
 
-    /// <summary>An older build let a Sprite8Bpp sub-folder sprite be dropped on a map. Such placements
-    /// export a meaningless spriteIndex, so Load must remove them (keeping root-folder placements) and note it.</summary>
+    /// <summary>Sprite4Bpp/Sprite8Bpp sub-folder sprite placements are always exportable (see the
+    /// IsSprite() exemption in MapExporter.BuildObjectRecords and this method's own doc comment) —
+    /// Load must keep both the root AND the sub-folder placement, with no warning, regardless of the
+    /// SubfolderAssetsInEditor setting.</summary>
     [Fact]
-    public void Load_MapWithASubfolderSpritePlaced_DropsThatPlacement_KeepsRootOnes_Warns()
+    public void Load_MapWithASprite8BppSubfolderSpritePlaced_KeepsBothPlacements_NoWarning()
     {
         const string json = """
         {
@@ -734,8 +736,9 @@ public class ProjectServiceTests : IDisposable
         var loaded = ProjectService.Load(_tempProjectFile);
 
         var map = Assert.Single(loaded.Maps);
-        var kept = Assert.Single(map.SpriteLayer);
-        Assert.Equal(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), kept.SpriteAssetId); // the root sprite stays
-        Assert.Contains(loaded.LoadWarnings, w => w.Contains("sub-folder sprite"));
+        Assert.Equal(2, map.SpriteLayer.Count);
+        Assert.Contains(map.SpriteLayer, p => p.SpriteAssetId == Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")); // root sprite
+        Assert.Contains(map.SpriteLayer, p => p.SpriteAssetId == Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")); // sub-folder sprite, no longer dropped
+        Assert.DoesNotContain(loaded.LoadWarnings, w => w.Contains("sub-folder sprite"));
     }
 }

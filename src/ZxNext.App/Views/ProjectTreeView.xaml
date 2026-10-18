@@ -80,6 +80,38 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!-- "Show in Map Editor" checkbox for Sprite4Bpp/Sprite8Bpp sub-folder rows: an empty grey-outlined
+             box when OFF, a filled blue box with a white tick when ON (TreeNodeViewModel.IsMapRepresentative).
+             Independent per row, unlike the lock/priority icons this has no "only one" rule at all. -->
+        <Geometry x:Key="MapRepresentativeBoxGeometry">M4.5,3 L11.5,3 A1.5,1.5 0 0 1 13,4.5 L13,11.5 A1.5,1.5 0 0 1 11.5,13 L4.5,13 A1.5,1.5 0 0 1 3,11.5 L3,4.5 A1.5,1.5 0 0 1 4.5,3 Z</Geometry>
+        <Geometry x:Key="MapRepresentativeCheckGeometry">M4.5,8.3 L7,10.8 L11.5,4.8</Geometry>
+        <Style x:Key="MapRepresentativeBoxStyle" TargetType="Path">
+            <Setter Property="Data" Value="{StaticResource MapRepresentativeBoxGeometry}" />
+            <Setter Property="Fill" Value="Transparent" />
+            <Setter Property="Stroke" Value="#C0999999" />
+            <Setter Property="StrokeThickness" Value="1.4" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMapRepresentative}" Value="True">
+                    <Setter Property="Fill" Value="#FF3388FF" />
+                    <Setter Property="Stroke" Value="#FF1A5FBF" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="MapRepresentativeCheckStyle" TargetType="Path">
+            <Setter Property="Data" Value="{StaticResource MapRepresentativeCheckGeometry}" />
+            <Setter Property="Stroke" Value="White" />
+            <Setter Property="StrokeThickness" Value="1.6" />
+            <Setter Property="StrokeStartLineCap" Value="Round" />
+            <Setter Property="StrokeEndLineCap" Value="Round" />
+            <Setter Property="StrokeLineJoin" Value="Round" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMapRepresentative}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
     <DockPanel LastChildFill="True">
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,4,4,2">
@@ -217,16 +249,19 @@
                     <Grid Background="Transparent" ContextMenuOpening="NodeText_OnContextMenuOpening">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <!-- Fixed right cluster so the lock (and, on Tile8Bpp, the priority arrow) sit at
-                                 the same X on every row and line up vertically down the list. -->
-                            <ColumnDefinition Width="54" />
+                            <!-- Fixed right cluster so the lock (and, on Tile8Bpp, the priority arrow, and on
+                                 a Sprite4Bpp/Sprite8Bpp sub-folder leaf, the map-icon checkbox) sit at the
+                                 same X on every row and line up vertically down the list. 54 fit the original
+                                 2 icons (priority slot + lock); widened to fit 3. -->
+                            <ColumnDefinition Width="80" />
                         </Grid.ColumnDefinitions>
                         <!-- One shared, always-present ContextMenu for every node type (leaf or folder) —
                              NodeText_OnContextMenuOpening toggles Items[i].Visibility/Header by index
                              depending on the node and the current multi-selection. Item order:
                              0 Rename, 1 Re-quantize, 2 Delete, 3 Lock/Unlock, 4 Add sub-folder,
                              5 Re-quantize folder, 6 Delete folder, 7 Delete unused,
-                             8 Lock all in folder, 9 Unlock all in folder, 10 Priority (Tile8Bpp only). -->
+                             8 Lock all in folder, 9 Unlock all in folder, 10 Priority (Tile8Bpp only),
+                             11 Show/Hide in Map Editor (Sprite4Bpp/Sprite8Bpp sub-folder leaf only). -->
                         <Grid.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Rename..." Click="RenameMenuItem_OnClick" />
@@ -247,6 +282,7 @@
                                           ToolTip="Remove the delete-lock from every tile/sprite in this folder" />
                                 <MenuItem Header="Priority" Click="PriorityMenuItem_OnClick"
                                           ToolTip="Layer2 priority: a priority tile draws on top of every layer on real hardware" />
+                                <MenuItem Header="Show in Map Editor" Click="MapRepresentativeMenuItem_OnClick" />
                             </ContextMenu>
                         </Grid.ContextMenu>
                         <StackPanel Grid.Column="0" Orientation="Horizontal">
@@ -270,6 +306,29 @@
                             </TextBlock>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <!-- "Show in Map Editor" checkbox — shown only on a Sprite4Bpp/Sprite8Bpp sub-folder
+                                 leaf (TreeNodeViewModel.CanBeMapRepresentative); click toggles just this one
+                                 sprite's own visibility in the Map Editor's sprite palette. Placed right next
+                                 to the padlock, per the user's own request. -->
+                            <Button Click="MapRepresentativeButton_OnClick" Margin="0,0,2,0"
+                                    ToolTip="Show this sprite as its own entry in the Map Editor's sprite palette, independently of other frames in this sub-folder. Purely a palette preview, never changes already-placed objects.">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource LockButtonStyle}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CanBeMapRepresentative}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <Viewbox Width="16" Height="16">
+                                    <Canvas Width="16" Height="16">
+                                        <Path Style="{StaticResource MapRepresentativeBoxStyle}" />
+                                        <Path Style="{StaticResource MapRepresentativeCheckStyle}" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Button>
                             <!-- Layer2 priority (draw-on-top) toggle — shown only on Tile8Bpp rows, but the slot
                                  is kept (Hidden, not Collapsed) elsewhere so the lock never shifts. -->
                             <Button Click="PriorityButton_OnClick" Margin="0,0,2,0"

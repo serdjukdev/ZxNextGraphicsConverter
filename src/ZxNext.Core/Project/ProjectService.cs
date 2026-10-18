@@ -102,7 +102,8 @@ public static class ProjectService
                     SourceCropHeight = asset.SourceCropHeight,
                     IsReservedBlank = asset.IsReservedBlank,
                     IsLocked = asset.IsLocked,
-                    IsPriority = asset.IsPriority
+                    IsPriority = asset.IsPriority,
+                    IsMapRepresentative = asset.IsMapRepresentative
                 });
             }
 
@@ -278,7 +279,8 @@ public static class ProjectService
                 SourceCropHeight = a.SourceCropHeight > 0 ? a.SourceCropHeight : a.Height,
                 IsReservedBlank = a.IsReservedBlank,
                 IsLocked = a.IsLocked,
-                IsPriority = a.IsPriority
+                IsPriority = a.IsPriority,
+                IsMapRepresentative = a.IsMapRepresentative
             });
         }
 
@@ -401,7 +403,9 @@ public static class ProjectService
     /// Sub-folder sprites are a separate "bank" the object/placement system can't address by default; an
     /// earlier build still let them be dropped onto a map. Any such placement exports a meaningless
     /// spriteIndex unless <see cref="AppSettings.SubfolderAssetsInEditor"/> is on, so remove them on load
-    /// when that setting is off (legacy-fix pass) and note it.
+    /// when that setting is off (legacy-fix pass) and note it. Sprite4Bpp/Sprite8Bpp sub-folder sprites are
+    /// exempt (see the matching exemption in <see cref="Export.MapExporter.BuildObjectRecords"/>) — always
+    /// exportable regardless of that setting, so never dropped here either.
     /// </summary>
     private static void DropUnplaceableSpritePlacements(ProjectState project)
     {
@@ -411,7 +415,7 @@ public static class ProjectService
         foreach (var map in project.Maps)
         {
             removed += map.SpriteLayer.RemoveAll(p =>
-                assetsById.TryGetValue(p.SpriteAssetId, out var a) && a.FolderPath != a.Category.ToFolderPath());
+                assetsById.TryGetValue(p.SpriteAssetId, out var a) && a.FolderPath != a.Category.ToFolderPath() && !a.Category.IsSprite());
         }
         if (removed > 0)
         {

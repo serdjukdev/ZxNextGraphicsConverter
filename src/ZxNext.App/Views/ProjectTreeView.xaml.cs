@@ -61,6 +61,12 @@ public partial class ProjectTreeView : UserControl
     /// <summary>Raised from the right-click "Priority"/"No priority" menu item — the current multi-selection, or the single clicked asset (bool = priority vs normal). Same target resolution as Lock.</summary>
     public event Action<bool>? SetPriorityOnSelectionRequested;
 
+    /// <summary>Raised from the row's checkbox button — toggles whether that one Sprite4Bpp/Sprite8Bpp sub-folder asset shows in the Map Editor's sprite palette (bool = the new state).</summary>
+    public event Action<Guid, bool>? SetMapRepresentativeRequested;
+
+    /// <summary>Raised from the right-click "Show in Map Editor"/"Hide from Map Editor" menu item — the current multi-selection, or the single clicked asset (bool = show vs hide). Same target resolution as Lock/Priority.</summary>
+    public event Action<bool>? SetMapRepresentativeOnSelectionRequested;
+
     /// <summary>
     /// The last plain- or Ctrl-clicked leaf — the anchor a following Shift-click ranges from.
     /// Cleared whenever selection collapses to a single node (plain click, or a folder click).
@@ -628,6 +634,20 @@ public partial class ProjectTreeView : UserControl
                 priorityItem.Header = isBulkTarget ? $"{verb} ({priorityTargets.Count})" : verb;
             }
         }
+
+        // "Show in Map Editor"/"Hide from Map Editor" is a Sprite4Bpp/Sprite8Bpp sub-folder leaf only.
+        // Header flips to "Hide from Map Editor" when every eligible target already shows there.
+        if (menu.Items[11] is MenuItem representativeItem)
+        {
+            var representativeTargets = isBulkTarget ? multiSelected.Where(n => n.CanBeMapRepresentative).ToList() : new List<TreeNodeViewModel> { node };
+            representativeItem.Visibility = node.CanBeMapRepresentative ? Visibility.Visible : Visibility.Collapsed;
+            if (representativeItem.Visibility == Visibility.Visible)
+            {
+                var verb = representativeTargets.Count > 0 && representativeTargets.All(n => n.IsMapRepresentative) ? "Hide from Map Editor" : "Show in Map Editor";
+                representativeItem.Header = isBulkTarget ? $"{verb} ({representativeTargets.Count})" : verb;
+                representativeItem.ToolTip = "Shows this sprite as its own entry in the Map Editor's sprite palette, so it can be placed on a map independently of other frames in the same sub-folder. Purely a palette preview, never changes already-placed objects.";
+            }
+        }
     }
 
     private void RenameMenuItem_OnClick(object sender, RoutedEventArgs e)
@@ -699,6 +719,26 @@ public partial class ProjectTreeView : UserControl
         var targets = (isBulkTarget ? multiSelected : new List<TreeNodeViewModel> { node }).Where(n => n.IsTile8Bpp).ToList();
         if (targets.Count == 0) return;
         SetPriorityOnSelectionRequested?.Invoke(!targets.All(n => n.IsPriority));
+    }
+
+    /// <summary>The row's checkbox button — toggles just this one asset's Map Editor palette visibility.</summary>
+    private void MapRepresentativeButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: TreeNodeViewModel { CanBeMapRepresentative: true, AssetId: { } assetId } node }) return;
+        SetMapRepresentativeRequested?.Invoke(assetId, !node.IsMapRepresentative);
+    }
+
+    /// <summary>"Show in Map Editor"/"Hide from Map Editor" menu item — same target set as Lock/Priority (multi-selection or single node); shows unless every eligible target already shows, in which case it hides.</summary>
+    private void MapRepresentativeMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetContextNode(sender, out var node)) return;
+        if (DataContext is not ProjectTreeViewModel vm) return;
+
+        var multiSelected = vm.GetMultiSelectedLeaves();
+        var isBulkTarget = node.IsMultiSelected && multiSelected.Count > 1;
+        var targets = (isBulkTarget ? multiSelected : new List<TreeNodeViewModel> { node }).Where(n => n.CanBeMapRepresentative).ToList();
+        if (targets.Count == 0) return;
+        SetMapRepresentativeOnSelectionRequested?.Invoke(!targets.All(n => n.IsMapRepresentative));
     }
 
     private void DeleteFolderMenuItem_OnClick(object sender, RoutedEventArgs e)

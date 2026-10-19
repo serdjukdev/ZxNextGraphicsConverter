@@ -157,4 +157,23 @@ public static class ReferenceIntegrityService
         }
         return new DeletionCheck(true, null);
     }
+
+    /// <summary>One placed object with no <see cref="SpritePlacement.TypeId"/> assigned, surfaced as an export-time heads-up (see <see cref="FindUntypedObjects"/>). Exporting it is not an error (its type byte is 0xFF, same as any deliberately untyped object) — this just catches one that may have been meant to get a type but never did.</summary>
+    public record UntypedObject(string MapName, string SpriteName, int X, int Y);
+
+    /// <summary>Every placed object, across every map, with no type assigned — in map/placement order, matching each map's own SpriteLayer order.</summary>
+    public static List<UntypedObject> FindUntypedObjects(ProjectState project)
+    {
+        var results = new List<UntypedObject>();
+        foreach (var map in project.Maps)
+        {
+            foreach (var placement in map.SpriteLayer)
+            {
+                if (placement.TypeId is not null) continue;
+                var spriteName = project.Assets.FirstOrDefault(a => a.Id == placement.SpriteAssetId)?.Name ?? "?";
+                results.Add(new UntypedObject(map.Name, spriteName, placement.X, placement.Y));
+            }
+        }
+        return results;
+    }
 }

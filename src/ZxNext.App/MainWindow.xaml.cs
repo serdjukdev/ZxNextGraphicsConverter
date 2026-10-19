@@ -435,7 +435,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var vm = new ExportViewModel(initialResults, _viewModel.RecomputeExportRow);
+        var vm = new ExportViewModel(initialResults, _viewModel.RecomputeExportRow, _viewModel.GetUntypedObjects());
         var dialog = new ExportWindow { DataContext = vm, Owner = this };
         if (dialog.ShowDialog() != true) return;
 

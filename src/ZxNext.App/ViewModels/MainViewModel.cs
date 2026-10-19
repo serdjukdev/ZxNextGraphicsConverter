@@ -1837,6 +1837,10 @@ public partial class MainViewModel : ObservableObject
     public List<FolderExportResult> PreviewExport(Func<string, ExportChunkSize> chunkSizeForRow, Func<string, PixelExportOrder>? pixelOrderForRow = null) =>
         ExportService.ExportAll(_project, chunkSizeForRow, pixelOrderForRow);
 
+    /// <summary>Every placed object, across every map, with no type assigned — shown as a heads-up banner in the Export dialog. See <see cref="ReferenceIntegrityService.FindUntypedObjects"/>.</summary>
+    public List<ReferenceIntegrityService.UntypedObject> GetUntypedObjects() =>
+        ReferenceIntegrityService.FindUntypedObjects(_project);
+
     /// <summary>
     /// Recomputes just ONE export row (by its RowKey) at a newly-picked chunk size — used for the
     /// Export dialog's live per-row preview when the user changes a ComboBox. Deliberately does NOT

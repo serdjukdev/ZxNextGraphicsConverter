@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ZxNext.Core.Export;
+using ZxNext.Core.Project;
 using ZxNext.Core.Settings;
 
 namespace ZxNext.App.ViewModels;
@@ -124,6 +125,17 @@ public partial class ExportViewModel : ObservableObject
 
     public ObservableCollection<ExportFolderRowViewModel> Folders { get; } = [];
 
+    /// <summary>
+    /// Every placed object, across every map, with no type assigned — shown as a prominent red banner
+    /// above the row grid so a forgotten "Set Type..." doesn't silently slip into an export. Non-blocking:
+    /// an untyped object exports fine (type byte 0xFF, same as any deliberately untyped object), this is
+    /// purely a heads-up to catch a mistake before it's too late to notice. One line per object, e.g.
+    /// "Level1: Enemy at (32, 64)".
+    /// </summary>
+    public ObservableCollection<string> UntypedObjectWarnings { get; } = [];
+
+    public bool HasUntypedObjectWarnings => UntypedObjectWarnings.Count > 0;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanExport))]
     private string outputDirectory = AppSettingsStore.Load().LastExportDirectory ?? "";
@@ -131,8 +143,12 @@ public partial class ExportViewModel : ObservableObject
     /// <summary>Requires at least one row still checked (<see cref="ExportFolderRowViewModel.IsIncluded"/>) in addition to the existing output-directory requirement — unchecking every row leaves nothing to write.</summary>
     public bool CanExport => !string.IsNullOrWhiteSpace(OutputDirectory) && Folders.Any(f => f.IsIncluded);
 
-    public ExportViewModel(IReadOnlyList<FolderExportResult> results, Func<string, ExportChunkSize, (int ChunkCount, int DataBytes)> recompute)
+    public ExportViewModel(IReadOnlyList<FolderExportResult> results, Func<string, ExportChunkSize, (int ChunkCount, int DataBytes)> recompute,
+        IReadOnlyList<ReferenceIntegrityService.UntypedObject>? untypedObjects = null)
     {
+        foreach (var o in untypedObjects ?? [])
+            UntypedObjectWarnings.Add($"{o.MapName}: {o.SpriteName} at ({o.X}, {o.Y})");
+
         foreach (var r in results)
         {
             var row = new ExportFolderRowViewModel(

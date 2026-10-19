@@ -71,6 +71,26 @@
         <TextBlock Text="Each row below is packed into its own 8KB-chunked .bin file(s) plus a matching .asm address map. Rows for a real tile/sprite/Layer2 folder also get their own .pal palette file (always 512 bytes). Map/metatile/object rows instead embed their data directly as `db` bytes in one plain .asm file — no chunk size to pick, no palette file (they carry no colour data of their own)."
                    TextWrapping="Wrap" Foreground="#FF555555" Margin="0,0,0,12" />
 
+        <!-- Deliberately loud (solid red, white text) rather than matching the app's usual muted palette:
+             this is the one export-time check meant to catch a forgotten "Set Type..." before it ships,
+             not a routine informational note. Non-blocking — Export stays enabled either way. -->
+        <Border Background="#FFD32F2F" CornerRadius="6" Padding="10,8" Margin="0,0,0,12"
+                Visibility="{Binding HasUntypedObjectWarnings, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+                <TextBlock Text="{Binding UntypedObjectWarnings.Count, StringFormat='⚠ {0} object(s) on the map have no type set:'}"
+                           Foreground="White" FontWeight="Bold" FontSize="13" TextWrapping="Wrap" />
+                <ScrollViewer MaxHeight="90" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
+                    <ItemsControl ItemsSource="{Binding UntypedObjectWarnings}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" Foreground="White" FontSize="11" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
+
         <!-- Clicking anywhere in a row (except the Chunk size dropdown, which needs its own clicks
              for opening/picking) toggles that row's Export? checkbox in one click — see
              Grid_OnPreviewMouseLeftButtonDown. The 4px first column is a colour bar keyed to the

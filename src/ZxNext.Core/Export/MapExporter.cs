@@ -220,7 +220,23 @@ public static class MapExporter
         sb.Append(";   byte 6   connect      -- index of the linked object in this list (0xFF = no link)\n");
         sb.Append(";   byte 7   userByte     -- per-object user byte 0-255, set in the Map Editor\n");
         sb.Append("; Each db line has its own address label: <name>_<x>_<y>\n");
+        sb.Append("; Per-type counts below cover every type from 'Manage Types...', even ones placing 0 objects on this map\n");
         sb.Append(rowKey).Append("_count: equ ").Append(records!.Count).Append('\n');
+
+        // One equ per project-wide object type, in objectTypes list order, even when this particular map
+        // places none of that type -- so game code can rely on every type's <rowKey>_<name>_count constant
+        // existing regardless of which maps actually use it. Counted by the Type byte already resolved
+        // onto each record above (== the type's index in objectTypes), not by name, so two types sharing a
+        // sanitized (or even raw) name still count independently. Label collisions are de-collided with
+        // their own set (suffixed "_count", so they can never clash with an object's "_<x>_<y>" address label).
+        var usedTypeLabels = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < objectTypes.Count; i++)
+        {
+            var typeCount = records.Count(r => r.Type == (byte)i);
+            var typeLabel = AsmLabel.SanitizeUnique(objectTypes[i].Name, usedTypeLabels);
+            sb.Append(rowKey).Append('_').Append(typeLabel).Append("_count: equ ").Append(typeCount).Append('\n');
+        }
+
         sb.Append('\n');
         sb.Append(rowKey).Append(":\n");
 

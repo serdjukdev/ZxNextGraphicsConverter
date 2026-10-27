@@ -456,6 +456,47 @@ public class MapExporterTests
     }
 
     [Fact]
+    public void ExportObjects_EmitsPerTypeCounts_ForEveryProjectType_EvenOnesWithZeroPlacementsOnThisMap()
+    {
+        var sprite = FakeSprite("thing", sortIndex: 0);
+        var assets = new List<GraphicsAsset> { sprite };
+        var platform = new ObjectType { Name = "platform" };
+        var enemy = new ObjectType { Name = "enemy" };
+        var coin = new ObjectType { Name = "coin" }; // never placed on this map, but still defined in "Manage Types..."
+        var objectTypes = new List<ObjectType> { platform, enemy, coin };
+
+        var map = FakeMap("level1", 8, 1, gridSize: 1, sprites:
+        [
+            new SpritePlacement { SpriteAssetId = sprite.Id, X = 0, Y = 0, TypeId = platform.Id },
+            new SpritePlacement { SpriteAssetId = sprite.Id, X = 1, Y = 0, TypeId = platform.Id },
+            new SpritePlacement { SpriteAssetId = sprite.Id, X = 2, Y = 0, TypeId = enemy.Id },
+            new SpritePlacement { SpriteAssetId = sprite.Id, X = 3, Y = 0 } // untyped
+        ]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, assets, objectTypes);
+
+        Assert.True(success, error);
+        Assert.Contains("level1_objects_count: equ 4", result!.AsmText);
+        Assert.Contains("level1_objects_platform_count: equ 2", result.AsmText);
+        Assert.Contains("level1_objects_enemy_count: equ 1", result.AsmText);
+        Assert.Contains("level1_objects_coin_count: equ 0", result.AsmText); // defined project-wide, placed nowhere on this map
+    }
+
+    [Fact]
+    public void ExportObjects_NoProjectTypes_EmitsNoPerTypeCountLines()
+    {
+        var sprite = FakeSprite("thing", sortIndex: 0);
+        var assets = new List<GraphicsAsset> { sprite };
+        var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [new SpritePlacement { SpriteAssetId = sprite.Id, X = 0, Y = 0 }]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, assets, []);
+
+        Assert.True(success, error);
+        var countLines = result!.AsmText.Split('\n').Count(line => line.Contains("_count: equ"));
+        Assert.Equal(1, countLines); // only the table-wide <rowKey>_count line, no per-type lines when the project defines no types
+    }
+
+    [Fact]
     public void ExportObjects_UsesSortIndexOrder_NotAlphabeticalName_ForSpriteIndex()
     {
         var spriteZ = FakeSprite("z_sprite", sortIndex: 0); // alphabetically last, created first

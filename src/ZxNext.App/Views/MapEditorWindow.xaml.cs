@@ -34,8 +34,11 @@ public partial class MapEditorWindow : Window
     /// <summary>Which object the Set Type popup is currently open for — set right before opening <see cref="SetTypePopup"/>, read by <see cref="SetTypePopupItem_OnClick"/> once the user picks a type from it.</summary>
     private SpritePlacement? _setTypePopupTarget;
 
-    /// <summary>Which object <see cref="ObjectActionPopup"/> (the right-click Set User Byte/Link/Set Type menu) is currently open for — set right before opening it, read by whichever of its three Click handlers fires.</summary>
+    /// <summary>Which object <see cref="ObjectActionPopup"/> (the right-click Set User Byte/Link/Set Type menu) is currently open for — set right before opening it, read by whichever of its three Click handlers fires. Null in the single-object flow is "not opened yet"; combine with <see cref="_objectActionPopupIsBatch"/> to tell that apart from the batch flow, which also leaves this null (there's no single target, the whole selection is the target).</summary>
     private SpritePlacement? _objectActionPopupTarget;
+
+    /// <summary>True when <see cref="ObjectActionPopup"/> was opened for the current sprite SELECTION (<see cref="MapEditorViewModel.SelectedSprites"/> non-empty) rather than one right-clicked object — its three Click handlers branch on this to call the ...ToSelection batch apply instead of the one-object apply. Set right before <c>ObjectActionPopup.IsOpen = true</c>, alongside hiding the Link button (linking is pairwise, batch-linking a whole selection to itself has no sensible meaning).</summary>
+    private bool _objectActionPopupIsBatch;
 
     /// <summary>Which map <see cref="SaveMapViewState"/>/<see cref="RestoreMapViewState"/> currently track — the map a SelectedMap change is switching AWAY FROM (its viewport is still live in MapScrollViewer/MapZoomTransform at that point, before anything re-renders for the new map), and the map to persist a final snapshot for on window close.</summary>
     private Guid? _viewStateMapId;
@@ -353,12 +356,26 @@ public partial class MapEditorWindow : Window
         UpdateHoverHighlight(vm, pixelX, pixelY);
     }
 
-    /// <summary>Click handler for one entry in <see cref="SetTypePopup"/> (bound to <see cref="MapEditorViewModel.ObjectTypePalette"/>, including the "(none)" sentinel to clear a type). Applies the picked type to <see cref="_setTypePopupTarget"/> and closes the popup; the Set Type tool itself stays armed for the next click.</summary>
+    /// <summary>
+    /// Click handler for one entry in <see cref="SetTypePopup"/> (bound to <see cref="MapEditorViewModel.ObjectTypePalette"/>,
+    /// including the "(none)" sentinel to clear a type). <see cref="_setTypePopupTarget"/> null means the
+    /// popup was opened in batch mode (<see cref="ObjectActionPopup_SetType_OnClick"/>'s selection branch,
+    /// via <see cref="MapEditorViewModel.BuildSetTypePopupItemsForSelection"/>) — the pick then applies to
+    /// every placement in <see cref="MapEditorViewModel.SelectedSprites"/> at once, overwriting whatever
+    /// type each one already had, instead of just one object. Closes the popup either way; the Set Type
+    /// TOOL (armed via its toolbar button, unrelated to this batch path) stays armed for the next click.
+    /// </summary>
     private void SetTypePopupItem_OnClick(object sender, RoutedEventArgs e)
     {
         SetTypePopup.IsOpen = false;
-        if (DataContext is not MapEditorViewModel vm || _setTypePopupTarget is null) return;
+        if (DataContext is not MapEditorViewModel vm) return;
         if (((Button)sender).Tag is not ObjectType type) return;
+
+        if (_setTypePopupTarget is null)
+        {
+            vm.ApplyObjectTypeToSelection(type);
+            return;
+        }
 
         vm.ApplyObjectType(_setTypePopupTarget, type);
         _setTypePopupTarget = null;
@@ -786,8 +803,8 @@ public partial class MapEditorWindow : Window
     /// Right-click-on-an-object popup (Set User Byte / Link / Set Type) for the Sprites layer — a
     /// one-shot alternative to arming a tool via its toolbar button and clicking. Only offered when no
     /// tool is already armed (an armed tool already owns left-click handling for this purpose; right-click
-    /// deliberately stays out of its way rather than opening on top of it) and the click actually lands on
-    /// an object. Opened from Up, not Down — see <see cref="ObjectActionPopup"/>'s own XAML comment for why.
+    /// deliberately stays out of its way rather than opening on top of it). Opened from Up, not Down — see
+    /// <see cref="ObjectActionPopup"/>'s own XAML comment for why.
     /// </summary>
     private void MapCanvasHost_OnMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -802,10 +819,25 @@ public partial class MapEditorWindow : Window
         {
             if (vm.IsLinkToolActive || vm.IsSetTypeToolActive || vm.IsSetUserByteToolActive) return;
 
+            // A marquee selection active beats hit-testing a single object: ANY right-click while the
+            // Sprites layer has a non-empty SelectedSprites opens the popup in batch mode, so "select a
+            // rectangle, right-click inside it, pick a type" applies to the whole group at once — not just
+            // whichever one object happens to be directly under the cursor.
+            if (vm.SelectedSprites.Count > 0)
+            {
+                _objectActionPopupTarget = null;
+                _objectActionPopupIsBatch = true;
+                ObjectActionPopupLinkButton.Visibility = Visibility.Collapsed;
+                ObjectActionPopup.IsOpen = true;
+                return;
+            }
+
             var position = e.GetPosition(MapImage);
             _objectActionPopupTarget = vm.FindSpriteAt((int)position.X, (int)position.Y);
             if (_objectActionPopupTarget is null) return;
 
+            _objectActionPopupIsBatch = false;
+            ObjectActionPopupLinkButton.Visibility = Visibility.Visible;
             ObjectActionPopup.IsOpen = true;
             return;
         }
@@ -867,7 +899,15 @@ public partial class MapEditorWindow : Window
     private void ObjectActionPopup_SetUserByte_OnClick(object sender, RoutedEventArgs e)
     {
         ObjectActionPopup.IsOpen = false;
-        if (DataContext is not MapEditorViewModel vm || _objectActionPopupTarget is null) return;
+        if (DataContext is not MapEditorViewModel vm) return;
+
+        if (_objectActionPopupIsBatch)
+        {
+            OpenSetUserByteDialogForSelection(vm);
+            return;
+        }
+
+        if (_objectActionPopupTarget is null) return;
         OpenSetUserByteDialogFor(vm, _objectActionPopupTarget);
         _objectActionPopupTarget = null;
     }
@@ -875,7 +915,9 @@ public partial class MapEditorWindow : Window
     private void ObjectActionPopup_Link_OnClick(object sender, RoutedEventArgs e)
     {
         ObjectActionPopup.IsOpen = false;
-        if (DataContext is not MapEditorViewModel vm || _objectActionPopupTarget is null) return;
+        // Hidden in batch mode (see MapCanvasHost_OnMouseRightButtonUp) since linking is pairwise — this
+        // guard is just defense in depth in case the click still gets through somehow.
+        if (DataContext is not MapEditorViewModel vm || _objectActionPopupIsBatch || _objectActionPopupTarget is null) return;
 
         // Pre-selects the right-clicked object as the Link source, same as a first left-click after
         // arming the Link button would — HandleLinkClick already deactivates the tool again once the
@@ -890,7 +932,17 @@ public partial class MapEditorWindow : Window
     private void ObjectActionPopup_SetType_OnClick(object sender, RoutedEventArgs e)
     {
         ObjectActionPopup.IsOpen = false;
-        if (DataContext is not MapEditorViewModel vm || _objectActionPopupTarget is null) return;
+        if (DataContext is not MapEditorViewModel vm) return;
+
+        if (_objectActionPopupIsBatch)
+        {
+            _setTypePopupTarget = null;
+            vm.BuildSetTypePopupItemsForSelection();
+            SetTypePopup.IsOpen = true;
+            return;
+        }
+
+        if (_objectActionPopupTarget is null) return;
         OpenSetTypePopupFor(vm, _objectActionPopupTarget);
         _objectActionPopupTarget = null;
     }
@@ -900,6 +952,14 @@ public partial class MapEditorWindow : Window
     {
         var dialog = new UserByteWindow(target.UserByte) { Owner = this };
         if (dialog.ShowDialog() == true) vm.ApplyUserByte(target, dialog.Value);
+    }
+
+    /// <summary>Batch counterpart to <see cref="OpenSetUserByteDialogFor"/> for the right-click-on-a-selection flow — pre-fills the dialog from the first selected object's current value (just a starting point when the selection is mixed) and, on confirm, applies the chosen byte to every selected placement via <see cref="MapEditorViewModel.ApplyUserByteToSelection"/>.</summary>
+    private void OpenSetUserByteDialogForSelection(MapEditorViewModel vm)
+    {
+        if (vm.SelectedSprites.Count == 0) return;
+        var dialog = new UserByteWindow(vm.SelectedSprites[0].UserByte) { Owner = this };
+        if (dialog.ShowDialog() == true) vm.ApplyUserByteToSelection(dialog.Value);
     }
 
     /// <summary>Shared by the Set Type tool's normal armed-click flow and the right-click one-shot popup — same "doesn't touch IsSetTypeToolActive" reasoning as <see cref="OpenSetUserByteDialogFor"/>.</summary>

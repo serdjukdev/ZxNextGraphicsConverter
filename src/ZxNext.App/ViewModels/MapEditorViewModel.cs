@@ -260,6 +260,13 @@ public partial class MapEditorViewModel : ObservableObject
             ObjectTypePalette.Select(t => new SetTypePopupItem(t, t.Id == currentId)));
     }
 
+    /// <summary>Batch counterpart to <see cref="BuildSetTypePopupItems"/>, for the right-click popup opened while <see cref="SelectedSprites"/> is non-empty — highlights an entry only when EVERY selected placement already shares that exact type; a mixed selection highlights nothing, since no single entry is "current" for the whole group.</summary>
+    public void BuildSetTypePopupItemsForSelection()
+    {
+        SetTypePopupItems = new ObservableCollection<SetTypePopupItem>(
+            ObjectTypePalette.Select(t => new SetTypePopupItem(t, SelectedSprites.All(s => (s.TypeId ?? Guid.Empty) == t.Id))));
+    }
+
     /// <summary>Exposed only so the View can open the Object Types management dialog without duplicating ProjectState plumbing — the dialog mutates <see cref="ProjectState.ObjectTypes"/> directly, same as every other list-management dialog in this app.</summary>
     public ProjectState Project => _project;
 
@@ -621,6 +628,23 @@ public partial class MapEditorViewModel : ObservableObject
         RenderPreview();
     }
 
+    /// <summary>Batch counterpart to <see cref="ApplyUserByte"/>: applies one raw byte to every placement in <see cref="SelectedSprites"/>, as a single undo step. Called by the View's right-click popup when a selection is active, instead of the one-object flow. No-op if the selection is empty or every selected placement already carries this value.</summary>
+    public void ApplyUserByteToSelection(byte value)
+    {
+        if (SelectedSprites.Count == 0) return;
+        var targets = SelectedSprites.Where(s => s.UserByte != value).ToList();
+        if (targets.Count == 0) return;
+
+        var previous = targets.Select(s => (Sprite: s, UserByte: s.UserByte)).ToList();
+        foreach (var sprite in targets) sprite.UserByte = value;
+        PushUndo(
+            undo: () => { foreach (var (sprite, userByte) in previous) sprite.UserByte = userByte; RenderPreview(); },
+            redo: () => { foreach (var (sprite, _) in previous) sprite.UserByte = value; RenderPreview(); });
+
+        HasChanges = true;
+        RenderPreview();
+    }
+
     /// <summary>Applies a type to exactly one placement, the Set Type tool's click target. Called by the View once the user picks an entry from the type-picker popup.</summary>
     public void ApplyObjectType(SpritePlacement sprite, ObjectType type)
     {
@@ -632,6 +656,24 @@ public partial class MapEditorViewModel : ObservableObject
         PushUndo(
             undo: () => { sprite.TypeId = previous; RenderPreview(); },
             redo: () => { sprite.TypeId = newTypeId; RenderPreview(); });
+
+        HasChanges = true;
+        RenderPreview();
+    }
+
+    /// <summary>Batch counterpart to <see cref="ApplyObjectType"/>: applies one type to every placement in <see cref="SelectedSprites"/>, as a single undo step, overwriting whatever type (if any) each one already had — the right-click-on-a-selection flow the View opens via <see cref="BuildSetTypePopupItemsForSelection"/>. No-op if the selection is empty or every selected placement already has this type.</summary>
+    public void ApplyObjectTypeToSelection(ObjectType type)
+    {
+        if (SelectedSprites.Count == 0) return;
+        var newTypeId = type.Id == Guid.Empty ? (Guid?)null : type.Id;
+        var targets = SelectedSprites.Where(s => s.TypeId != newTypeId).ToList();
+        if (targets.Count == 0) return;
+
+        var previous = targets.Select(s => (Sprite: s, TypeId: s.TypeId)).ToList();
+        foreach (var sprite in targets) sprite.TypeId = newTypeId;
+        PushUndo(
+            undo: () => { foreach (var (sprite, typeId) in previous) sprite.TypeId = typeId; RenderPreview(); },
+            redo: () => { foreach (var (sprite, _) in previous) sprite.TypeId = newTypeId; RenderPreview(); });
 
         HasChanges = true;
         RenderPreview();

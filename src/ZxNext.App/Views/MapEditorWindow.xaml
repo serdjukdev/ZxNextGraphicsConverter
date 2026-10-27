@@ -287,7 +287,7 @@
                     </Button.Style>
                 </Button>
                 <Button Content="Set Type" Command="{Binding ToggleSetTypeToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}"
-                        Margin="0,0,0,6" ToolTip="Click objects one after another to pick a type for each from a popup.">
+                        Margin="0,0,0,6" ToolTip="Click objects one after another to pick a type for each from a popup. To set one type on many objects at once, Alt-drag a selection first, then right-click inside it instead.">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource FlatButtonStyle}">
                             <Style.Triggers>
@@ -300,7 +300,7 @@
                     </Button.Style>
                 </Button>
                 <Button Content="Set User Byte" Command="{Binding ToggleSetUserByteToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}"
-                        Margin="0,0,6,6" ToolTip="Click objects one after another to edit each one's raw user byte.">
+                        Margin="0,0,6,6" ToolTip="Click objects one after another to edit each one's raw user byte. To set one value on many objects at once, Alt-drag a selection first, then right-click inside it instead.">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource FlatButtonStyle}">
                             <Style.Triggers>
@@ -413,7 +413,7 @@
                 <StackPanel>
                     <Button Content="Set User Byte" Click="ObjectActionPopup_SetUserByte_OnClick"
                             HorizontalContentAlignment="Left" Padding="8,3" Margin="0,1" MinWidth="110" />
-                    <Button Content="Link" Click="ObjectActionPopup_Link_OnClick"
+                    <Button x:Name="ObjectActionPopupLinkButton" Content="Link" Click="ObjectActionPopup_Link_OnClick"
                             HorizontalContentAlignment="Left" Padding="8,3" Margin="0,1" MinWidth="110" />
                     <Button Content="Set Type" Click="ObjectActionPopup_SetType_OnClick"
                             HorizontalContentAlignment="Left" Padding="8,3" Margin="0,1" MinWidth="110" />

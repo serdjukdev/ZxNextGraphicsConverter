@@ -483,6 +483,38 @@ public class MapExporterTests
     }
 
     [Fact]
+    public void ExportObjects_EmitsABlockLabelBeforeEachTypesFirstObject_ButNotForAZeroCountTypeOrUntyped()
+    {
+        var sprite = FakeSprite("thing", sortIndex: 0);
+        var assets = new List<GraphicsAsset> { sprite };
+        var platform = new ObjectType { Name = "platform" };
+        var enemy = new ObjectType { Name = "enemy" };
+        var coin = new ObjectType { Name = "coin" }; // never placed on this map
+        var objectTypes = new List<ObjectType> { platform, enemy, coin };
+
+        var map = FakeMap("level1", 8, 1, gridSize: 1, sprites:
+        [
+            new SpritePlacement { SpriteAssetId = sprite.Id, X = 0, Y = 0, TypeId = platform.Id },
+            new SpritePlacement { SpriteAssetId = sprite.Id, X = 1, Y = 0, TypeId = platform.Id },
+            new SpritePlacement { SpriteAssetId = sprite.Id, X = 2, Y = 0, TypeId = enemy.Id },
+            new SpritePlacement { SpriteAssetId = sprite.Id, X = 3, Y = 0 } // untyped
+        ]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, assets, objectTypes);
+
+        Assert.True(success, error);
+        var asm = result!.AsmText;
+        Assert.Contains("level1_objects_platform:\n", asm);
+        Assert.Contains("level1_objects_enemy:\n", asm);
+        Assert.DoesNotContain("level1_objects_coin:\n", asm); // zero objects of this type on this map, no block label
+        // the platform block label lands right before the FIRST platform object's db line, not the second
+        var platformLabelIndex = asm.IndexOf("level1_objects_platform:\n", StringComparison.Ordinal);
+        var firstDbLineIndex = asm.IndexOf(": db ", StringComparison.Ordinal);
+        Assert.True(platformLabelIndex < firstDbLineIndex);
+        Assert.DoesNotContain("level1_objects_platform:\nlevel1_objects_platform:\n", asm); // not repeated for the 2nd platform object
+    }
+
+    [Fact]
     public void ExportObjects_NoProjectTypes_EmitsNoPerTypeCountLines()
     {
         var sprite = FakeSprite("thing", sortIndex: 0);

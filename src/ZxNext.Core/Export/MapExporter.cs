@@ -221,6 +221,8 @@ public static class MapExporter
         sb.Append(";   byte 7   userByte     -- per-object user byte 0-255, set in the Map Editor\n");
         sb.Append("; Each db line has its own address label: <name>_<x>_<y>\n");
         sb.Append("; Per-type counts below cover every type from 'Manage Types...', even ones placing 0 objects on this map\n");
+        sb.Append("; A <rowKey>_<type> address label marks the start of each type's contiguous block below (objects are\n");
+        sb.Append("; grouped by type -- see BuildObjectRecords); a type placing 0 objects on this map gets no block label.\n");
         sb.Append(rowKey).Append("_count: equ ").Append(records!.Count).Append('\n');
 
         // One equ per project-wide object type, in objectTypes list order, even when this particular map
@@ -229,11 +231,15 @@ public static class MapExporter
         // onto each record above (== the type's index in objectTypes), not by name, so two types sharing a
         // sanitized (or even raw) name still count independently. Label collisions are de-collided with
         // their own set (suffixed "_count", so they can never clash with an object's "_<x>_<y>" address label).
+        // Each type's sanitized label is kept (typeLabelNames) so the per-type block label below can reuse
+        // the exact same name rather than re-deriving/re-deduping it a second time.
         var usedTypeLabels = new HashSet<string>(StringComparer.Ordinal);
+        var typeLabelNames = new string[objectTypes.Count];
         for (var i = 0; i < objectTypes.Count; i++)
         {
             var typeCount = records.Count(r => r.Type == (byte)i);
             var typeLabel = AsmLabel.SanitizeUnique(objectTypes[i].Name, usedTypeLabels);
+            typeLabelNames[i] = typeLabel;
             sb.Append(rowKey).Append('_').Append(typeLabel).Append("_count: equ ").Append(typeCount).Append('\n');
         }
 
@@ -243,14 +249,28 @@ public static class MapExporter
         // A real address label directly on each object's db line so game code can reference an object by
         // name with no arithmetic. Label = sprite asset name + X + Y; a `_2`/`_3` suffix is added only when
         // even the coordinates collide. All names go through the shared AsmLabel sanitizer (same as the
-        // s4_/s8_/t8_ labels). The used-set is seeded with "count" so `<name>_<x>_<y>` can never land on
-        // the `<rowKey>_count` label above.
+        // s4_/s8_/t8_ labels). The used-set is seeded with "count" (the <rowKey>_count label above) and
+        // every type's block label name (typeLabelNames) so an object's `<name>_<x>_<y>` label can never
+        // collide with a `<rowKey>_<type>` block label emitted below.
         var usedLabels = new HashSet<string>(StringComparer.Ordinal) { "count" };
+        foreach (var typeLabelName in typeLabelNames) usedLabels.Add(typeLabelName);
+
+        // Objects are pre-sorted by type (see BuildObjectRecords), so each type's records form one
+        // contiguous run here. A block label is emitted right before the first record of each run,
+        // keyed off a change in Type from the previous record -- untyped records (Type == NoneByte)
+        // never get one, since they're not a real entry in objectTypes.
+        byte? lastType = null;
 
         Span<byte> le = stackalloc byte[2];
         for (var i = 0; i < records.Count; i++)
         {
             var r = records[i];
+            if (r.Type != NoneByte && r.Type != lastType)
+            {
+                sb.Append(rowKey).Append('_').Append(typeLabelNames[r.Type]).Append(":\n");
+            }
+            lastType = r.Type;
+
             BinaryPrimitives.WriteInt16LittleEndian(le, r.X);
             var xLo = le[0];
             var xHi = le[1];

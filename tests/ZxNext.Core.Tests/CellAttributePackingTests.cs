@@ -37,8 +37,15 @@ public class CellAttributePackingTests
     [Fact]
     public void PackHardwareAttributeByte_MatchesNextregBitLayout()
     {
-        // bits7:4 = palette slot, bit3 = MirrorX, bit2 = MirrorY, bit1 = Rotate.
-        var b = CellAttributePacking.PackHardwareAttributeByte(resolvedPaletteSlot: 9, mirrorX: true, mirrorY: false, rotate: true);
+        // bits7:4 = palette slot, bit3 = MirrorX, bit2 = MirrorY, bit1 = Rotate, bit0 = ULA-over-tilemap.
+        var b = CellAttributePacking.PackHardwareAttributeByte(resolvedPaletteSlot: 9, mirrorX: true, mirrorY: false, rotate: true, ulaOverTilemap: false);
         Assert.Equal(0b1001_1010, b);
+    }
+
+    [Fact]
+    public void PackHardwareAttributeByte_UlaOverTilemapSetsBit0_LeavesEverythingElseUnchanged()
+    {
+        var b = CellAttributePacking.PackHardwareAttributeByte(resolvedPaletteSlot: 9, mirrorX: true, mirrorY: false, rotate: true, ulaOverTilemap: true);
+        Assert.Equal(0b1001_1011, b);
     }
 }

@@ -146,6 +146,7 @@ public static class MapExporter
         var assetsById = project.Assets.ToDictionary(a => a.Id);
         var bytesPerCell = kind == MetatileKind.FourBpp ? 2 : 1;
         var gridBytes = new byte[layer.MetatileIndices.Length * bytesPerCell];
+        var ulaOverTilemap = AppSettingsStore.Load().UlaOverTilemapAttributeBit ?? false;
 
         for (var i = 0; i < layer.MetatileIndices.Length; i++)
         {
@@ -174,7 +175,7 @@ public static class MapExporter
                 {
                     throw new InvalidOperationException($"Map '{map.Name}' ({layerSuffix} layer) cell {i}: palette slot override {paletteSlot} is out of the valid 0-15 range.");
                 }
-                gridBytes[i * bytesPerCell + 1] = CellAttributePacking.PackHardwareAttributeByte(paletteSlot, mirrorX, mirrorY, rotate);
+                gridBytes[i * bytesPerCell + 1] = CellAttributePacking.PackHardwareAttributeByte(paletteSlot, mirrorX, mirrorY, rotate, ulaOverTilemap);
             }
         }
 
@@ -400,11 +401,12 @@ public static class MapExporter
     private static string GenerateTileModeGridAsm(string rowKey, int width, int height, MetatileKind kind, byte[] gridBytes)
     {
         var bytesPerCell = kind == MetatileKind.FourBpp ? 2 : 1;
+        var ulaOverTilemap = AppSettingsStore.Load().UlaOverTilemapAttributeBit ?? false;
 
         var sb = new StringBuilder();
         sb.Append("; ").Append(rowKey).Append(" -- map grid data (GridSize=1: no metatile table, cells are tiles directly)\n");
         sb.Append("; ").Append(width).Append('x').Append(height).Append(" cells, ").Append(bytesPerCell).Append(" byte(s)/cell (")
-            .Append(kind == MetatileKind.FourBpp ? "tile index, then attribute byte: bits7:4 palette, bit3 MirrorX, bit2 MirrorY, bit1 Rotate" : "tile index only, no attribute")
+            .Append(kind == MetatileKind.FourBpp ? AttributeByteComment(ulaOverTilemap) : "tile index only, no attribute")
             .Append("); index 0 = the reserved blank/transparent tile\n");
         sb.Append(rowKey).Append("_width: equ ").Append(width).Append('\n');
         sb.Append(rowKey).Append("_height: equ ").Append(height).Append('\n');
@@ -419,11 +421,12 @@ public static class MapExporter
     {
         var bytesPerCell = kind == MetatileKind.FourBpp ? 2 : 1;
         var recordSize = gridSize * gridSize * bytesPerCell;
+        var ulaOverTilemap = AppSettingsStore.Load().UlaOverTilemapAttributeBit ?? false;
 
         var sb = new StringBuilder();
         sb.Append("; ").Append(rowKey).Append(" -- metatile definitions used by this map's ").Append(kind == MetatileKind.FourBpp ? "Tilemap" : "8bpp Tile").Append(" layer\n");
         sb.Append("; ").Append(gridSize).Append('x').Append(gridSize).Append(" tiles/metatile, ").Append(bytesPerCell).Append(" byte(s)/tile (")
-            .Append(kind == MetatileKind.FourBpp ? "tile index, then attribute byte: bits7:4 palette, bit3 MirrorX, bit2 MirrorY, bit1 Rotate" : "tile index only, no attribute")
+            .Append(kind == MetatileKind.FourBpp ? AttributeByteComment(ulaOverTilemap) : "tile index only, no attribute")
             .Append(")\n");
         sb.Append("; the grid file's index byte is LOCAL to this table (0..N-1 here), not this metatile's project-wide order\n");
         sb.Append("; each metatile's record also carries its own address label: <name> (a `_2`/`_3` suffix only if two metatiles sanitize to the same name)\n");
@@ -454,6 +457,10 @@ public static class MapExporter
 
         return sb.ToString();
     }
+
+    /// <summary>Shared comment text for a FourBpp attribute byte's bit layout, reflecting the current <see cref="AppSettings.UlaOverTilemapAttributeBit"/> setting so the emitted .asm comment never drifts from what <see cref="CellAttributePacking.PackHardwareAttributeByte"/> actually wrote.</summary>
+    private static string AttributeByteComment(bool ulaOverTilemap) =>
+        $"tile index, then attribute byte: bits7:4 palette, bit3 MirrorX, bit2 MirrorY, bit1 Rotate, bit0 ULA-over-tilemap: {(ulaOverTilemap ? "1 (set, per Settings)" : "0 (clear)")}";
 
     private static string SanitizeFileName(string name) =>
         name.Replace('/', '_').Replace('\\', '_').Replace(':', '_');

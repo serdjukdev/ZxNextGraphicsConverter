@@ -39,6 +39,7 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private bool exportSubfolders;
     [ObservableProperty] private bool subfolderAssetsInEditor;
+    [ObservableProperty] private bool ulaOverTilemapAttributeBit;
 
     [ObservableProperty] private string mapEditorTileGridColorHex;
     [ObservableProperty] private double mapEditorTileGridOpacity;
@@ -65,6 +66,7 @@ public partial class SettingsViewModel : ObservableObject
 
         exportSubfolders = s.ExportSubfolders ?? false;
         subfolderAssetsInEditor = s.SubfolderAssetsInEditor ?? false;
+        ulaOverTilemapAttributeBit = s.UlaOverTilemapAttributeBit ?? false;
 
         mapEditorTileGridColorHex = s.MapEditorTileGridColorHex ?? DefaultTileGridColorHex;
         mapEditorTileGridOpacity = s.MapEditorTileGridOpacity ?? 0.12;
@@ -102,6 +104,7 @@ public partial class SettingsViewModel : ObservableObject
 
         s.ExportSubfolders = ExportSubfolders ? true : null;
         s.SubfolderAssetsInEditor = SubfolderAssetsInEditor ? true : null;
+        s.UlaOverTilemapAttributeBit = UlaOverTilemapAttributeBit ? true : null;
 
         s.MapEditorTileGridColorHex = NullIfDefault(MapEditorTileGridColorHex, DefaultTileGridColorHex);
         s.MapEditorTileGridOpacity = MapEditorTileGridOpacity;

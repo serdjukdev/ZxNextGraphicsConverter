@@ -1,4 +1,5 @@
 using ZxNext.Core.Model;
+using ZxNext.Core.Settings;
 
 namespace ZxNext.Core.Export;
 
@@ -7,15 +8,16 @@ public record MetatileSerializeResult(bool Success, byte[]? Data, string? Error)
 /// <summary>
 /// Packs one <see cref="Metatile"/>'s cells into the exported byte layout: FourBpp is 2 bytes/cell
 /// (tileIndex, attribute byte — same bit layout as nextreg 0x6C's per-tile attribute: bits7:4 palette
-/// offset, bit3 MirrorX, bit2 MirrorY, bit1 Rotate, bit0 always 0/reserved for ULA-over-tilemap
-/// priority, out of scope), EightBpp is 1 byte/cell (tileIndex only — the software 8bpp layer has no
-/// hardware attribute concept). tileIndex is resolved via <see cref="AssetExportIndexer"/>, NEVER by
-/// asset name/list order.
+/// offset, bit3 MirrorX, bit2 MirrorY, bit1 Rotate, bit0 ULA-over-tilemap priority, forced to the same
+/// value for every cell per <see cref="AppSettings.UlaOverTilemapAttributeBit"/>), EightBpp is 1
+/// byte/cell (tileIndex only — the software 8bpp layer has no hardware attribute concept). tileIndex is
+/// resolved via <see cref="AssetExportIndexer"/>, NEVER by asset name/list order.
 /// </summary>
 public static class MetatileSerializer
 {
     public static MetatileSerializeResult Serialize(Metatile metatile, IReadOnlyList<GraphicsAsset> projectAssets)
     {
+        var ulaOverTilemap = AppSettingsStore.Load().UlaOverTilemapAttributeBit ?? false;
         var tileCategory = metatile.Kind == MetatileKind.FourBpp ? AssetCategory.Tile4Bpp : AssetCategory.Tile8Bpp;
 
         if (AssetExportIndexer.PlacementExceedsExportableCap(tileCategory, projectAssets))
@@ -55,7 +57,7 @@ public static class MetatileSerializer
                         $"Metatile '{metatile.Name}' cell {i}: palette slot override {paletteSlot} is out of the valid 0-15 range.");
                 }
 
-                var attribute = CellAttributePacking.PackHardwareAttributeByte(paletteSlot, cell.MirrorX, cell.MirrorY, cell.Rotate);
+                var attribute = CellAttributePacking.PackHardwareAttributeByte(paletteSlot, cell.MirrorX, cell.MirrorY, cell.Rotate, ulaOverTilemap);
                 data[i * 2] = tileIndex;
                 data[i * 2 + 1] = attribute;
             }

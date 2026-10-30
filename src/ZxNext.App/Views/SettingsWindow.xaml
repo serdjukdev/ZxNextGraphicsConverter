@@ -57,6 +57,8 @@
                         <TextBlock Text="Creates a sub-folder per category (e.g. Sprite8Bpp/) and per user sub-folder inside it. Off by default for compatibility with existing projects." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,2,0,0" />
                         <CheckBox Content="Allow sub-folder assets in map/metatile editor" IsChecked="{Binding SubfolderAssetsInEditor}" Margin="0,6,0,0" />
                         <TextBlock Text="Sprite4Bpp/Sprite8Bpp sub-folder sprites appear in the map editor palette; Tile8Bpp sub-folder tiles appear in the metatile editor. Indices are local to the sub-folder binary. Turning this off removes any existing sub-folder placements." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,2,0,0" />
+                        <CheckBox Content="Set ULA-over-tilemap bit (bit 0) on every exported Tilemap attribute byte" IsChecked="{Binding UlaOverTilemapAttributeBit}" Margin="0,6,0,0" />
+                        <TextBlock Text="Every 4bpp Tilemap tile's exported attribute byte (bits 7-4 palette, bit 3 Mirror X, bit 2 Mirror Y, bit 1 Rotate) has an unused bit 0, which real hardware (nextreg 0x6C) uses as a per-tile ULA-over-tilemap priority flag. Off (default) writes 0 to every tile's bit 0, as before; on writes 1 to every tile's bit 0 instead. Project-wide, not per-tile." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,2,0,0" />
 
                         <TextBlock Text="Default dither mode for new imports" FontWeight="Bold" FontSize="12" Margin="0,16,0,0" />
                         <ComboBox ItemsSource="{Binding AvailableDitherModes}" SelectedItem="{Binding DefaultDitherMode}" Width="160" HorizontalAlignment="Left" Margin="0,6,0,0" />

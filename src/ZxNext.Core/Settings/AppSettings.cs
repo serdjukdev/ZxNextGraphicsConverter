@@ -51,6 +51,16 @@ public class AppSettings
     /// <summary>When true, <see cref="ZxNext.Core.Export.ExportService.WriteToDisk"/> mirrors the project tree's sub-folder structure under the chosen output directory (each category in its own named sub-folder, each sub-folder in its own sub-directory). Null/false = flat output (original behaviour).</summary>
     public bool? ExportSubfolders { get; set; }
 
+    /// <summary>
+    /// When true, every exported 4bpp Tilemap attribute byte (GridSize=1 direct cells and every
+    /// GridSize&gt;1 metatile cell — see <see cref="ZxNext.Core.Model.CellAttributePacking.PackHardwareAttributeByte"/>)
+    /// has bit 0 (ULA-over-tilemap priority, nextreg 0x6C's layout) forced to 1 instead of 0. One
+    /// project-wide export switch, not a per-tile/per-cell choice — matches real hardware's own
+    /// per-tile attribute bit, but this app always writes the same value to every cell's copy of it.
+    /// Null/false = bit 0 stays 0 (original behaviour).
+    /// </summary>
+    public bool? UlaOverTilemapAttributeBit { get; set; }
+
     /// <summary>When true, assets in user sub-folders appear in the map/metatile editors: Sprite4Bpp and Sprite8Bpp sub-folder sprites in the map editor sprite palette, Tile8Bpp sub-folder tiles in the metatile editor tile palette. Their export index is local to the sub-folder binary. Null/false = sub-folder assets excluded from the editors (original behaviour).</summary>
     public bool? SubfolderAssetsInEditor { get; set; }
 

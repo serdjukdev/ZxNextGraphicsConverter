@@ -22,13 +22,17 @@ public static class CellAttributePacking
 
     /// <summary>
     /// The EXPORTED/hardware attribute byte (nextreg 0x6C's per-tile attribute layout: bits7:4=palette
-    /// slot, bit3=MirrorX, bit2=MirrorY, bit1=Rotate, bit0=reserved) — a completely different bit layout
-    /// from <see cref="Pack"/>/<see cref="Unpack"/> above, and <paramref name="resolvedPaletteSlot"/> is
-    /// already resolved (override ?? the tile's own native slot, always 0-15, never "no override") since
-    /// hardware has no such sentinel. Shared by <see cref="Export.MetatileSerializer"/> (2x2/4x4 metatile
-    /// cells) and <see cref="Export.MapExporter"/>'s GridSize=1 direct-cell export, so the bit layout can
-    /// never drift between the two paths.
+    /// slot, bit3=MirrorX, bit2=MirrorY, bit1=Rotate, bit0=ULA-over-tilemap priority) — a completely
+    /// different bit layout from <see cref="Pack"/>/<see cref="Unpack"/> above, and
+    /// <paramref name="resolvedPaletteSlot"/> is already resolved (override ?? the tile's own native
+    /// slot, always 0-15, never "no override") since hardware has no such sentinel.
+    /// <paramref name="ulaOverTilemap"/> is one project-wide export setting (see
+    /// <see cref="Settings.AppSettings.UlaOverTilemapAttributeBit"/>), not a per-cell value — every cell
+    /// in one export either all get bit0 set or all get it clear. Shared by
+    /// <see cref="Export.MetatileSerializer"/> (2x2/4x4 metatile cells) and
+    /// <see cref="Export.MapExporter"/>'s GridSize=1 direct-cell export, so the bit layout can never
+    /// drift between the two paths.
     /// </summary>
-    public static byte PackHardwareAttributeByte(int resolvedPaletteSlot, bool mirrorX, bool mirrorY, bool rotate) =>
-        (byte)((resolvedPaletteSlot << 4) | (mirrorX ? 0b1000 : 0) | (mirrorY ? 0b0100 : 0) | (rotate ? 0b0010 : 0));
+    public static byte PackHardwareAttributeByte(int resolvedPaletteSlot, bool mirrorX, bool mirrorY, bool rotate, bool ulaOverTilemap) =>
+        (byte)((resolvedPaletteSlot << 4) | (mirrorX ? 0b1000 : 0) | (mirrorY ? 0b0100 : 0) | (rotate ? 0b0010 : 0) | (ulaOverTilemap ? 0b0001 : 0));
 }

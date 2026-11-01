@@ -99,7 +99,7 @@ public static class MapExporter
 
         var gridRowKey = ExportFileNaming.GridRowKey(map.Name, layerSuffix);
         var gridResult = new FolderExportResult(gridRowKey, $"map/{map.Name}", [], [],
-            GenerateGridAsm(gridRowKey, map, layerSuffix, remappedGrid), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false,
+            GenerateGridAsm(gridRowKey, map, remappedGrid), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false,
             ExportSubdirHint: tileCategoryName);
 
         var metatilesByGlobalSortIndex = project.Metatiles.Where(m => m.Kind == kind).ToDictionary(m => m.SortIndex);
@@ -181,7 +181,7 @@ public static class MapExporter
 
         var gridRowKey = ExportFileNaming.GridRowKey(map.Name, layerSuffix);
         var gridResult = new FolderExportResult(gridRowKey, $"map/{map.Name}", [], [],
-            GenerateTileModeGridAsm(gridRowKey, map, layerSuffix, kind, gridBytes), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false,
+            GenerateTileModeGridAsm(gridRowKey, map, kind, gridBytes), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false,
             ExportSubdirHint: tileCategory.ToString());
 
         return new GridLayerExportResult(gridResult, null);
@@ -384,14 +384,14 @@ public static class MapExporter
         return (true, records, null);
     }
 
-    private static string GenerateGridAsm(string rowKey, MapAsset map, string layerSuffix, byte[] remappedGrid)
+    private static string GenerateGridAsm(string rowKey, MapAsset map, byte[] remappedGrid)
     {
         var sb = new StringBuilder();
         sb.Append("; ").Append(rowKey).Append(" -- map grid data\n");
         sb.Append("; ").Append(map.Width).Append('x').Append(map.Height).Append(" cells, 1 byte/cell: LOCAL metatile index (see the matching _metatiles.asm file, index 0 = the reserved blank/transparent metatile)\n");
         sb.Append(rowKey).Append("_width: equ ").Append(map.Width).Append('\n');
         sb.Append(rowKey).Append("_height: equ ").Append(map.Height).Append('\n');
-        AppendMapConstants(sb, map, layerSuffix, bytesPerCell: 1);
+        sb.Append("; the whole map's geometry (both layers, every unit, all four edges) lives in the matching _info.asm file\n");
         sb.Append('\n');
         sb.Append(rowKey).Append(":\n");
         AsmByteDataWriter.AppendDataBytes(sb, remappedGrid);
@@ -399,7 +399,7 @@ public static class MapExporter
     }
 
     /// <summary>GridSize=1's grid format — see <see cref="ExportGridLayerTileMode"/>: no metatile indirection, each cell IS its tile index (+ attribute byte for FourBpp) directly.</summary>
-    private static string GenerateTileModeGridAsm(string rowKey, MapAsset map, string layerSuffix, MetatileKind kind, byte[] gridBytes)
+    private static string GenerateTileModeGridAsm(string rowKey, MapAsset map, MetatileKind kind, byte[] gridBytes)
     {
         var bytesPerCell = kind == MetatileKind.FourBpp ? 2 : 1;
         var ulaOverTilemap = AppSettingsStore.Load().UlaOverTilemapAttributeBit ?? false;
@@ -411,7 +411,7 @@ public static class MapExporter
             .Append("); index 0 = the reserved blank/transparent tile\n");
         sb.Append(rowKey).Append("_width: equ ").Append(map.Width).Append('\n');
         sb.Append(rowKey).Append("_height: equ ").Append(map.Height).Append('\n');
-        AppendMapConstants(sb, map, layerSuffix, bytesPerCell);
+        sb.Append("; the whole map's geometry (both layers, every unit, all four edges) lives in the matching _info.asm file\n");
         sb.Append('\n');
         sb.Append(rowKey).Append(":\n");
         AsmByteDataWriter.AppendDataBytes(sb, gridBytes);
@@ -419,84 +419,191 @@ public static class MapExporter
     }
 
     /// <summary>
-    /// The label prefix of a grid layer's map-geometry constant block: "map_tm_" for the Tilemap
-    /// (4bpp) layer, "map_l2_" for the 8bpp tile layer. Deliberately NOT derived from the map's name
-    /// (unlike every other label in these files, which starts with the row key): the point of this
-    /// block is that game code can write map_tm_width_px with no per-map rename, so the names are the
-    /// same in every map's grid file. Consequence, stated in the emitted comment too: only ONE map's
-    /// grid files can go into a single assembly, and the two prefixes exist so that a map's own two
-    /// layers never collide with each other.
+    /// The map's whole geometry as its own row, <c>&lt;map&gt;_info.asm</c>: one sjasmplus
+    /// <c>MODULE &lt;sanitized map name&gt;</c> holding short-named <c>equ</c> constants (assemble-time,
+    /// zero bytes) plus <c>hdr:</c>, the same numbers again as real <c>db</c>/<c>dw</c> data for engine
+    /// code that takes a pointer to a map instead of being assembled against one. The module is what
+    /// makes the short names safe: <c>w_px</c> inside is <c>level1.w_px</c> outside, so every map's info
+    /// file can be assembled together. This replaced the map_tm_/map_l2_ constant blocks that briefly
+    /// lived in the grid files themselves (same numbers, but global names, so one map per assembly).
+    ///
+    /// Units: mt = metatile cells (what Width/Height and the grid bytes are in), t = 8x8 hardware tiles,
+    /// px = pixels (the unit an object's X/Y in _objects.asm uses). Edges are INCLUSIVE last-valid
+    /// coordinates, so a bounds test is a plain compare with no -1 at the call site. Per-layer figures
+    /// carry a tm_/l2_ prefix because they genuinely differ: a GridSize=1 map's Tilemap layer is 2
+    /// bytes/cell (tile index + attribute), every other grid layer is 1.
     /// </summary>
-    private static string MapConstantPrefix(string layerSuffix) => layerSuffix == "tilemap" ? "map_tm_" : "map_l2_";
-
-    /// <summary>
-    /// The map-geometry equ block shared by both grid formats (metatile mode and GridSize=1 tile mode).
-    /// Every dimension is given in all three units: mt (metatile cells, the unit Width/Height and the
-    /// grid bytes themselves are in), tiles (8x8 hardware tiles) and px. Edge constants are INCLUSIVE
-    /// last-valid-coordinate values, so a bounds test is a plain compare with no -1 at the call site.
-    /// <paramref name="bytesPerCell"/> is the CALLING layer's own figure (1 everywhere except a
-    /// GridSize=1 map's Tilemap layer, which is 2), so the byte-size constants describe the file this
-    /// block is actually written into.
-    /// </summary>
-    private static void AppendMapConstants(StringBuilder sb, MapAsset map, string layerSuffix, int bytesPerCell)
+    public static FolderExportResult ExportInfo(MapAsset map)
     {
-        var p = MapConstantPrefix(layerSuffix);
+        var rowKey = ExportFileNaming.InfoRowKey(map.Name);
+        return new FolderExportResult(rowKey, $"map/{map.Name}", [], [],
+            GenerateInfoAsm(rowKey, map), $"{SanitizeFileName(rowKey)}.asm", null, IsChunked: false,
+            ExportSubdirHint: "");
+    }
+
+    /// <summary>Widest value <see cref="GenerateInfoAsm"/>'s <c>hdr:</c> block can hold in a <c>dw</c> field. Only an extreme map (a single row or column of thousands of cells) can exceed it; rather than emit a silently truncated word, the whole runtime header is dropped with a comment saying which field overflowed. The `equ` constants above it are unaffected, since the assembler evaluates those in full width.</summary>
+    private const int MaxHeaderWord = 65535;
+
+    private static string GenerateInfoAsm(string rowKey, MapAsset map)
+    {
+        var moduleName = AsmLabel.Sanitize(map.Name);
         var cellTiles = map.MetatileGridSize;
         var cellPx = map.CellPixelSize;
         var widthTiles = map.Width * cellTiles;
         var heightTiles = map.Height * cellTiles;
         var widthPx = map.PixelWidth;
         var heightPx = map.PixelHeight;
+        var cells = map.Width * map.Height;
+        // A GridSize=1 map's Tilemap layer is the only 2-bytes/cell grid there is (see ExportGridLayerTileMode).
+        var tilemapBytesPerCell = map.MetatileGridSize == 1 ? 2 : 1;
+        const int eightBppBytesPerCell = 1;
+
+        var sb = new StringBuilder();
+        sb.Append("; ").Append(rowKey).Append(" -- the complete geometry of map '").Append(map.Name).Append("'\n");
+        sb.Append("; Units: mt = metatile cell (").Append(cellTiles).Append('x').Append(cellTiles).Append(" tiles = ")
+            .Append(cellPx).Append('x').Append(cellPx).Append(" px), t = 8x8 hardware tile, px = pixel (the unit objects.asm's X/Y use).\n");
+        sb.Append("; Edges are INCLUSIVE: left/top are 0, right/bottom are the LAST valid coordinate, so a bounds test needs no -1.\n");
+        sb.Append("; tm_ = the Tilemap (4bpp) grid layer, l2_ = the 8bpp tile grid layer: only their byte sizes differ, never their geometry.\n");
+        sb.Append("; Everything below sits in MODULE ").Append(moduleName).Append(", so from outside write ")
+            .Append(moduleName).Append(".w_px, ").Append(moduleName).Append(".right_mt, ").Append(moduleName).Append(".hdr, ...\n");
+        sb.Append("; The module is what keeps these names short: every map's own _info.asm can be assembled together with no clash.\n");
+        sb.Append('\n');
+        sb.Append("    MODULE ").Append(moduleName).Append('\n');
+        sb.Append('\n');
 
         void Equ(string name, int value, string? comment = null)
         {
-            sb.Append(p).Append(name).Append(':').Append(' ', Math.Max(1, 22 - name.Length)).Append("equ ");
+            sb.Append(name).Append(':').Append(' ', Math.Max(1, 13 - name.Length)).Append("equ ");
             var text = value.ToString();
             sb.Append(text);
-            if (comment is not null) sb.Append(' ', Math.Max(1, 7 - text.Length)).Append("; ").Append(comment);
+            if (comment is not null) sb.Append(' ', Math.Max(1, 9 - text.Length)).Append("; ").Append(comment);
             sb.Append('\n');
         }
 
-        sb.Append('\n');
-        sb.Append("; ---- ").Append(p).Append("* : geometry of map '").Append(map.Name).Append("', ")
-            .Append(layerSuffix == "tilemap" ? "Tilemap (4bpp) layer" : "8bpp tile layer").Append("\n");
-        sb.Append("; Units: mt = metatile cell (").Append(cellTiles).Append('x').Append(cellTiles).Append(" tiles = ")
-            .Append(cellPx).Append('x').Append(cellPx).Append(" px), tiles = 8x8 hardware tiles, px = pixels.\n");
-        sb.Append("; Edges are INCLUSIVE coordinates: left/top = 0, right/bottom = the last valid coordinate.\n");
-        sb.Append("; These names carry no map name, so assemble only ONE map's grid files at a time;\n");
-        sb.Append("; the Tilemap layer uses map_tm_, the 8bpp layer map_l2_, so one map's two layers never clash.\n");
-
-        Equ("cell_tiles", cellTiles, "metatile side, in tiles");
+        sb.Append("; ---- cell size\n");
+        Equ("cell_t", cellTiles, "metatile side, in tiles");
         Equ("cell_px", cellPx, "metatile side, in px");
-        Equ("cell_tiles_shift", Log2(cellTiles), "tiles = mt << this");
-        Equ("cell_px_shift", Log2(cellPx), "px = mt << this");
+        Equ("cell_tsh", Log2(cellTiles), "tiles = mt << cell_tsh");
+        Equ("cell_psh", Log2(cellPx), "px    = mt << cell_psh");
         Equ("tile_px", 8, "tile side, in px");
 
-        Equ("width_mt", map.Width);
-        Equ("width_tiles", widthTiles);
-        Equ("width_px", widthPx);
-        Equ("height_mt", map.Height);
-        Equ("height_tiles", heightTiles);
-        Equ("height_px", heightPx);
+        sb.Append("\n; ---- size\n");
+        Equ("w_mt", map.Width);
+        Equ("w_t", widthTiles);
+        Equ("w_px", widthPx);
+        Equ("h_mt", map.Height);
+        Equ("h_t", heightTiles);
+        Equ("h_px", heightPx);
 
+        sb.Append("\n; ---- edges, inclusive\n");
         Equ("left_mt", 0);
-        Equ("left_tiles", 0);
+        Equ("left_t", 0);
         Equ("left_px", 0);
         Equ("top_mt", 0);
-        Equ("top_tiles", 0);
+        Equ("top_t", 0);
         Equ("top_px", 0);
         Equ("right_mt", map.Width - 1);
-        Equ("right_tiles", widthTiles - 1);
+        Equ("right_t", widthTiles - 1);
         Equ("right_px", widthPx - 1);
         Equ("bottom_mt", map.Height - 1);
-        Equ("bottom_tiles", heightTiles - 1);
+        Equ("bottom_t", heightTiles - 1);
         Equ("bottom_px", heightPx - 1);
 
-        Equ("cells", map.Width * map.Height, "width_mt * height_mt");
-        Equ("tiles", widthTiles * heightTiles, "width_tiles * height_tiles");
-        Equ("bytes_per_cell", bytesPerCell, "in this grid file");
-        Equ("row_bytes", map.Width * bytesPerCell, "add this to step one row down");
-        Equ("size", map.Width * map.Height * bytesPerCell, "total grid bytes");
+        sb.Append("\n; ---- totals and grid bytes\n");
+        Equ("cells", cells, "w_mt * h_mt");
+        Equ("tiles", widthTiles * heightTiles, "w_t * h_t (equ only: can exceed 16 bits)");
+        Equ("tm_bpc", tilemapBytesPerCell, "Tilemap grid: bytes per cell");
+        Equ("tm_row", map.Width * tilemapBytesPerCell, "add to step one row down");
+        Equ("tm_size", cells * tilemapBytesPerCell, "whole Tilemap grid, bytes");
+        Equ("l2_bpc", eightBppBytesPerCell, "8bpp grid: bytes per cell");
+        Equ("l2_row", map.Width * eightBppBytesPerCell, "add to step one row down");
+        Equ("l2_size", cells * eightBppBytesPerCell, "whole 8bpp grid, bytes");
+
+        AppendInfoHeader(sb, map, widthTiles, heightTiles, widthPx, heightPx, cells, tilemapBytesPerCell, eightBppBytesPerCell);
+
+        sb.Append("\n    ENDMODULE\n");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The <c>hdr:</c> runtime block: the same numbers as real data, so one generic routine can be handed
+    /// <c>ld hl, level1.hdr</c> (or any map's) instead of being assembled against one specific map. Every
+    /// 16-bit field comes first, then the byte-sized ones, so a field's offset never lands a word on an
+    /// odd boundary by accident and the layout stays easy to read off the comments. <c>hdr_len</c> closes
+    /// it. Dropped entirely (with a comment in its place) if a field would overflow a word: see
+    /// <see cref="MaxHeaderWord"/>.
+    /// </summary>
+    private static void AppendInfoHeader(StringBuilder sb, MapAsset map, int widthTiles, int heightTiles,
+        int widthPx, int heightPx, int cells, int tilemapBytesPerCell, int eightBppBytesPerCell)
+    {
+        (string Name, int Value, string Comment)[] words =
+        [
+            ("w_mt", map.Width, "width, metatile cells"),
+            ("w_t", widthTiles, "width, tiles"),
+            ("w_px", widthPx, "width, px"),
+            ("h_mt", map.Height, "height, metatile cells"),
+            ("h_t", heightTiles, "height, tiles"),
+            ("h_px", heightPx, "height, px"),
+            ("right_mt", map.Width - 1, "right edge, inclusive"),
+            ("right_t", widthTiles - 1, ""),
+            ("right_px", widthPx - 1, ""),
+            ("bottom_mt", map.Height - 1, "bottom edge, inclusive"),
+            ("bottom_t", heightTiles - 1, ""),
+            ("bottom_px", heightPx - 1, ""),
+            ("cells", cells, "w_mt * h_mt"),
+            ("tm_row", map.Width * tilemapBytesPerCell, "Tilemap grid row stride, bytes"),
+            ("tm_size", cells * tilemapBytesPerCell, "whole Tilemap grid, bytes"),
+            ("l2_row", map.Width * eightBppBytesPerCell, "8bpp grid row stride, bytes"),
+            ("l2_size", cells * eightBppBytesPerCell, "whole 8bpp grid, bytes")
+        ];
+
+        if (words.FirstOrDefault(w => w.Value > MaxHeaderWord) is { Name: not null } tooBig)
+        {
+            sb.Append("\n; hdr: omitted -- ").Append(tooBig.Name).Append(" = ").Append(tooBig.Value)
+                .Append(" does not fit a 16-bit word on a map this size, and a runtime header with one\n");
+            sb.Append("; truncated field would be worse than none. Every equ constant above is exact regardless.\n");
+            return;
+        }
+
+        (string Name, int Value, string Comment)[] bytes =
+        [
+            ("cell_t", map.MetatileGridSize, "metatile side, tiles"),
+            ("cell_px", map.CellPixelSize, "metatile side, px"),
+            ("cell_tsh", Log2(map.MetatileGridSize), "tiles = mt << this"),
+            ("cell_psh", Log2(map.CellPixelSize), "px    = mt << this"),
+            ("tm_bpc", tilemapBytesPerCell, "Tilemap grid bytes/cell"),
+            ("l2_bpc", eightBppBytesPerCell, "8bpp grid bytes/cell")
+        ];
+
+        sb.Append("\n; ---- the same numbers as data, for code handed a pointer to a map (ld hl, <map>.hdr)\n");
+        sb.Append("; Each field also has its own label, so fixed-map code can read one directly: ld bc,(<map>.hdr_w_px)\n");
+        sb.Append("hdr:\n");
+
+        var offset = 0;
+        foreach (var (name, value, comment) in words)
+        {
+            AppendHeaderField(sb, name, "dw", value, offset, comment);
+            offset += 2;
+        }
+        foreach (var (name, value, comment) in bytes)
+        {
+            AppendHeaderField(sb, name, "db", value, offset, comment);
+            offset += 1;
+        }
+
+        sb.Append('\n');
+        sb.Append("hdr_len:      equ ").Append(offset).Append("    ; bytes in the whole hdr block\n");
+    }
+
+    private static void AppendHeaderField(StringBuilder sb, string name, string directive, int value, int offset, string comment)
+    {
+        var label = "hdr_" + name;
+        sb.Append(label).Append(':').Append(' ', Math.Max(1, 16 - label.Length)).Append(directive).Append(' ');
+        var text = value.ToString();
+        sb.Append(text).Append(' ', Math.Max(1, 8 - text.Length));
+        sb.Append("; +").Append(offset);
+        if (comment.Length > 0) sb.Append(' ', Math.Max(1, 6 - offset.ToString().Length)).Append(comment);
+        sb.Append('\n');
     }
 
     /// <summary>Exact log2 of a power-of-two metatile/cell size (GridSize is always 1, 2 or 4, so cellPx is 8, 16 or 32); defensive loop rather than BitOperations so a hand-edited non-power-of-two never throws, it just rounds down.</summary>

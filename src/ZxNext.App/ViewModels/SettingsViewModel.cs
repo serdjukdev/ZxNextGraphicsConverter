@@ -29,6 +29,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string eightBppGridSuffix;
     [ObservableProperty] private string eightBppMetatilesSuffix;
     [ObservableProperty] private string objectsSuffix;
+    [ObservableProperty] private string infoSuffix;
 
     [ObservableProperty] private DitherMode defaultDitherMode;
     [ObservableProperty] private ExportChunkSize defaultExportChunkSize;
@@ -56,6 +57,7 @@ public partial class SettingsViewModel : ObservableObject
         eightBppGridSuffix = s.EightBppGridSuffixOverride ?? DefaultGridSuffix;
         eightBppMetatilesSuffix = s.EightBppMetatilesSuffixOverride ?? DefaultMetatilesSuffix;
         objectsSuffix = s.ObjectsSuffixOverride ?? DefaultObjectsSuffix;
+        infoSuffix = s.InfoSuffixOverride ?? DefaultInfoSuffix;
 
         defaultDitherMode = s.DefaultDitherMode ?? DitherMode.None;
         defaultExportChunkSize = s.DefaultExportChunkSize ?? ExportChunkSize.EightKb;
@@ -80,6 +82,7 @@ public partial class SettingsViewModel : ObservableObject
     private const string DefaultGridSuffix = "_grid";
     private const string DefaultMetatilesSuffix = "_metatiles";
     private const string DefaultObjectsSuffix = "_objects";
+    private const string DefaultInfoSuffix = "_info";
     private const string DefaultTileGridColorHex = "#FFFFFF";
     private const string DefaultCellGridColorHex = "#FFFF00";
 
@@ -94,6 +97,7 @@ public partial class SettingsViewModel : ObservableObject
         s.EightBppGridSuffixOverride = NullIfDefault(EightBppGridSuffix, DefaultGridSuffix);
         s.EightBppMetatilesSuffixOverride = NullIfDefault(EightBppMetatilesSuffix, DefaultMetatilesSuffix);
         s.ObjectsSuffixOverride = NullIfDefault(ObjectsSuffix, DefaultObjectsSuffix);
+        s.InfoSuffixOverride = NullIfDefault(InfoSuffix, DefaultInfoSuffix);
 
         s.DefaultDitherMode = DefaultDitherMode;
         s.DefaultExportChunkSize = DefaultExportChunkSize;

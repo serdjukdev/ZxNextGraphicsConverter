@@ -40,4 +40,8 @@ public static class ExportFileNaming
 
     public static string ObjectsRowKey(string mapName) =>
         $"{mapName}{AppSettingsStore.Load().ObjectsSuffixOverride ?? "_objects"}";
+
+    /// <summary>The map-geometry row (see <see cref="ZxNext.Core.Export.MapExporter.ExportInfo"/>): one per map, not per layer.</summary>
+    public static string InfoRowKey(string mapName) =>
+        $"{mapName}{AppSettingsStore.Load().InfoSuffixOverride ?? "_info"}";
 }

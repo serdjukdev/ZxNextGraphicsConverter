@@ -31,6 +31,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Graphics data (_gfx)" VerticalAlignment="Center" FontSize="11" />
@@ -50,6 +51,9 @@
 
                             <TextBlock Grid.Row="5" Grid.Column="0" Text="Objects (_objects)" VerticalAlignment="Center" FontSize="11" />
                             <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding ObjectsSuffix, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,2" />
+
+                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Map info (_info)" VerticalAlignment="Center" FontSize="11" />
+                            <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding InfoSuffix, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,2" />
                         </Grid>
 
                         <TextBlock Text="Export" FontWeight="Bold" FontSize="12" Margin="0,16,0,0" />

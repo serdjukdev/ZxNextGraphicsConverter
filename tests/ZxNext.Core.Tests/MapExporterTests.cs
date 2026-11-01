@@ -639,7 +639,112 @@ public class MapExporterTests
     }
 
     [Fact]
-    public void ExportGridLayers_EmitMapGeometryConstants_InMetatilesTilesAndPixels()
+    public void ExportInfo_EmitsMapGeometryInsideAModule_InMetatilesTilesAndPixels()
+    {
+        var map = FakeMap("level 1", 40, 25, gridSize: 2);
+        var asm = MapExporter.ExportInfo(map).AsmText;
+
+        Assert.Equal("level 1_info", MapExporter.ExportInfo(map).RowKey);
+        // The map name is sanitized for the module (a space is not a legal label character).
+        Assert.Contains("    MODULE level_1\n", asm);
+        Assert.Contains("    ENDMODULE\n", asm);
+
+        Assert.Equal(2, EquValue(asm, "cell_t"));
+        Assert.Equal(16, EquValue(asm, "cell_px"));
+        Assert.Equal(1, EquValue(asm, "cell_tsh"));
+        Assert.Equal(4, EquValue(asm, "cell_psh"));
+        Assert.Equal(8, EquValue(asm, "tile_px"));
+
+        Assert.Equal(40, EquValue(asm, "w_mt"));
+        Assert.Equal(80, EquValue(asm, "w_t"));
+        Assert.Equal(640, EquValue(asm, "w_px"));
+        Assert.Equal(25, EquValue(asm, "h_mt"));
+        Assert.Equal(50, EquValue(asm, "h_t"));
+        Assert.Equal(400, EquValue(asm, "h_px"));
+
+        Assert.Equal(0, EquValue(asm, "left_mt"));
+        Assert.Equal(0, EquValue(asm, "left_t"));
+        Assert.Equal(0, EquValue(asm, "left_px"));
+        Assert.Equal(0, EquValue(asm, "top_mt"));
+        Assert.Equal(0, EquValue(asm, "top_t"));
+        Assert.Equal(0, EquValue(asm, "top_px"));
+        Assert.Equal(39, EquValue(asm, "right_mt"));
+        Assert.Equal(79, EquValue(asm, "right_t"));
+        Assert.Equal(639, EquValue(asm, "right_px"));
+        Assert.Equal(24, EquValue(asm, "bottom_mt"));
+        Assert.Equal(49, EquValue(asm, "bottom_t"));
+        Assert.Equal(399, EquValue(asm, "bottom_px"));
+
+        Assert.Equal(1000, EquValue(asm, "cells"));
+        Assert.Equal(4000, EquValue(asm, "tiles"));
+        Assert.Equal(1, EquValue(asm, "tm_bpc"));
+        Assert.Equal(40, EquValue(asm, "tm_row"));
+        Assert.Equal(1000, EquValue(asm, "tm_size"));
+        Assert.Equal(1, EquValue(asm, "l2_bpc"));
+        Assert.Equal(40, EquValue(asm, "l2_row"));
+        Assert.Equal(1000, EquValue(asm, "l2_size"));
+    }
+
+    [Fact]
+    public void ExportInfo_HeaderBlockRepeatsTheSameNumbersAsData_WordsThenBytes()
+    {
+        var asm = MapExporter.ExportInfo(FakeMap("level1", 40, 25, gridSize: 2)).AsmText;
+
+        // 17 dw fields (34 bytes) then 6 db fields = 40 bytes, each field labelled and offset-commented.
+        Assert.Equal(40, EquValue(asm, "hdr_len"));
+        Assert.Contains("hdr:\n", asm);
+        Assert.Equal((640, "dw", 4), HeaderField(asm, "hdr_w_px"));
+        Assert.Equal((400, "dw", 10), HeaderField(asm, "hdr_h_px"));
+        Assert.Equal((39, "dw", 12), HeaderField(asm, "hdr_right_mt"));
+        Assert.Equal((399, "dw", 22), HeaderField(asm, "hdr_bottom_px"));
+        Assert.Equal((1000, "dw", 24), HeaderField(asm, "hdr_cells"));
+        Assert.Equal((40, "dw", 26), HeaderField(asm, "hdr_tm_row"));
+        Assert.Equal((1000, "dw", 32), HeaderField(asm, "hdr_l2_size"));
+        Assert.Equal((2, "db", 34), HeaderField(asm, "hdr_cell_t"));
+        Assert.Equal((4, "db", 37), HeaderField(asm, "hdr_cell_psh"));
+        Assert.Equal((1, "db", 39), HeaderField(asm, "hdr_l2_bpc"));
+    }
+
+    [Fact]
+    public void ExportInfo_GridSize1_TilemapLayerIsTwoBytesPerCell_EightBppStaysOne()
+    {
+        var asm = MapExporter.ExportInfo(FakeMap("level1", 32, 24, gridSize: 1)).AsmText;
+
+        // GridSize=1: one cell IS one 8x8 tile, so the mt and tile units coincide.
+        Assert.Equal(1, EquValue(asm, "cell_t"));
+        Assert.Equal(8, EquValue(asm, "cell_px"));
+        Assert.Equal(0, EquValue(asm, "cell_tsh"));
+        Assert.Equal(3, EquValue(asm, "cell_psh"));
+        Assert.Equal(32, EquValue(asm, "w_t"));
+        Assert.Equal(256, EquValue(asm, "w_px"));
+        Assert.Equal(255, EquValue(asm, "right_px"));
+        Assert.Equal(191, EquValue(asm, "bottom_px"));
+
+        // The Tilemap layer stores tile index + attribute byte here, the 8bpp layer still 1 byte/cell.
+        Assert.Equal(2, EquValue(asm, "tm_bpc"));
+        Assert.Equal(64, EquValue(asm, "tm_row"));
+        Assert.Equal(1536, EquValue(asm, "tm_size"));
+        Assert.Equal(1, EquValue(asm, "l2_bpc"));
+        Assert.Equal(32, EquValue(asm, "l2_row"));
+        Assert.Equal(768, EquValue(asm, "l2_size"));
+        Assert.Equal((1536, "dw", 28), HeaderField(asm, "hdr_tm_size"));
+    }
+
+    [Fact]
+    public void ExportInfo_DropsTheRuntimeHeaderWhenAFieldWouldNotFitAWord_EqusStayExact()
+    {
+        // 2048 cells wide at 4x4 metatiles (32 px a cell) = 65536 px, one px past what a dw can hold.
+        var asm = MapExporter.ExportInfo(FakeMap("wide", 2048, 1, gridSize: 4)).AsmText;
+
+        Assert.Equal(65536, EquValue(asm, "w_px"));
+        Assert.Equal(65535, EquValue(asm, "right_px"));
+        Assert.Contains("; hdr: omitted -- w_px = 65536 does not fit a 16-bit word", asm);
+        Assert.DoesNotContain("\nhdr:", asm);
+        Assert.DoesNotContain("hdr_len:", asm);
+    }
+
+    [Fact]
+    public void ExportGridLayers_NoLongerCarryTheGeometryBlock_OnlyTheirOwnWidthHeight()
     {
         var tile4 = FakeTile("t4", 0, AssetCategory.Tile4Bpp);
         var tile8 = FakeTile("t8", 0, AssetCategory.Tile8Bpp);
@@ -651,84 +756,27 @@ public class MapExporterTests
         var map = FakeMap("level1", 40, 25, gridSize: 2);
         project.Maps.Add(map);
 
-        var tilemapAsm = MapExporter.ExportTilemapLayer(map, project).Grid.AsmText;
-        var eightBppAsm = MapExporter.ExportTileLayer8Bpp(map, project).Grid.AsmText;
-
-        // The two layers of one map describe the same geometry under their own prefixes, and neither
-        // file carries the other's prefix, so both can be assembled together without a duplicate label.
-        foreach (var (asm, p) in new[] { (tilemapAsm, "map_tm_"), (eightBppAsm, "map_l2_") })
+        foreach (var asm in new[] { MapExporter.ExportTilemapLayer(map, project).Grid.AsmText, MapExporter.ExportTileLayer8Bpp(map, project).Grid.AsmText })
         {
-            Assert.Equal(2, EquValue(asm, p + "cell_tiles"));
-            Assert.Equal(16, EquValue(asm, p + "cell_px"));
-            Assert.Equal(1, EquValue(asm, p + "cell_tiles_shift"));
-            Assert.Equal(4, EquValue(asm, p + "cell_px_shift"));
-            Assert.Equal(8, EquValue(asm, p + "tile_px"));
-
-            Assert.Equal(40, EquValue(asm, p + "width_mt"));
-            Assert.Equal(80, EquValue(asm, p + "width_tiles"));
-            Assert.Equal(640, EquValue(asm, p + "width_px"));
-            Assert.Equal(25, EquValue(asm, p + "height_mt"));
-            Assert.Equal(50, EquValue(asm, p + "height_tiles"));
-            Assert.Equal(400, EquValue(asm, p + "height_px"));
-
-            Assert.Equal(0, EquValue(asm, p + "left_mt"));
-            Assert.Equal(0, EquValue(asm, p + "left_tiles"));
-            Assert.Equal(0, EquValue(asm, p + "left_px"));
-            Assert.Equal(0, EquValue(asm, p + "top_mt"));
-            Assert.Equal(0, EquValue(asm, p + "top_tiles"));
-            Assert.Equal(0, EquValue(asm, p + "top_px"));
-            Assert.Equal(39, EquValue(asm, p + "right_mt"));
-            Assert.Equal(79, EquValue(asm, p + "right_tiles"));
-            Assert.Equal(639, EquValue(asm, p + "right_px"));
-            Assert.Equal(24, EquValue(asm, p + "bottom_mt"));
-            Assert.Equal(49, EquValue(asm, p + "bottom_tiles"));
-            Assert.Equal(399, EquValue(asm, p + "bottom_px"));
-
-            Assert.Equal(1000, EquValue(asm, p + "cells"));
-            Assert.Equal(4000, EquValue(asm, p + "tiles"));
-            Assert.Equal(1, EquValue(asm, p + "bytes_per_cell"));
-            Assert.Equal(40, EquValue(asm, p + "row_bytes"));
-            Assert.Equal(1000, EquValue(asm, p + "size"));
+            // The geometry moved to <map>_info.asm (MODULE-scoped); a grid file keeps only its own
+            // Width/Height constants and a comment pointing at that file.
+            Assert.DoesNotContain("map_tm_", asm);
+            Assert.DoesNotContain("map_l2_", asm);
+            Assert.DoesNotContain("MODULE", asm);
+            Assert.Contains("_info.asm file", asm);
         }
 
-        // (Both prefixes are NAMED in each file's explanatory comment -- what must not cross over is a
-        // label DEFINITION, which is what would actually collide at assembly time.)
-        Assert.DoesNotContain("map_l2_width_px:", tilemapAsm);
-        Assert.DoesNotContain("map_tm_width_px:", eightBppAsm);
+        Assert.Contains("level1_tilemap_grid_width: equ 40", MapExporter.ExportTilemapLayer(map, project).Grid.AsmText);
+        Assert.Contains("level1_8bpp_grid_height: equ 25", MapExporter.ExportTileLayer8Bpp(map, project).Grid.AsmText);
     }
 
-    [Fact]
-    public void ExportGridLayers_GridSize1_MapConstantsUseEachLayersOwnBytesPerCell()
+    /// <summary>Reads one `hdr_x: db|dw N   ; +offset` field of the info file's runtime header back out as (value, directive, offset).</summary>
+    private static (int Value, string Directive, int Offset) HeaderField(string asmText, string label)
     {
-        var tile4 = FakeTile("t4", 0, AssetCategory.Tile4Bpp);
-        var tile8 = FakeTile("t8", 0, AssetCategory.Tile8Bpp);
-        var project = new ProjectState();
-        project.Assets.Add(tile4);
-        project.Assets.Add(tile8);
-        project.Metatiles.Add(FakeMetatile("m4", MetatileKind.FourBpp, 1, 0, tile4.Id));
-        project.Metatiles.Add(FakeMetatile("m8", MetatileKind.EightBpp, 1, 0, tile8.Id));
-        var map = FakeMap("level1", 32, 24, gridSize: 1);
-        project.Maps.Add(map);
-
-        var tilemapAsm = MapExporter.ExportTilemapLayer(map, project).Grid.AsmText;
-        var eightBppAsm = MapExporter.ExportTileLayer8Bpp(map, project).Grid.AsmText;
-
-        // GridSize=1: one cell IS one 8x8 tile, so the mt and tile units coincide.
-        Assert.Equal(1, EquValue(tilemapAsm, "map_tm_cell_tiles"));
-        Assert.Equal(8, EquValue(tilemapAsm, "map_tm_cell_px"));
-        Assert.Equal(0, EquValue(tilemapAsm, "map_tm_cell_tiles_shift"));
-        Assert.Equal(3, EquValue(tilemapAsm, "map_tm_cell_px_shift"));
-        Assert.Equal(32, EquValue(tilemapAsm, "map_tm_width_tiles"));
-        Assert.Equal(256, EquValue(tilemapAsm, "map_tm_width_px"));
-        Assert.Equal(255, EquValue(tilemapAsm, "map_tm_right_px"));
-        Assert.Equal(191, EquValue(tilemapAsm, "map_tm_bottom_px"));
-
-        // The Tilemap layer stores tile index + attribute byte here, the 8bpp layer still 1 byte/cell.
-        Assert.Equal(2, EquValue(tilemapAsm, "map_tm_bytes_per_cell"));
-        Assert.Equal(64, EquValue(tilemapAsm, "map_tm_row_bytes"));
-        Assert.Equal(1536, EquValue(tilemapAsm, "map_tm_size"));
-        Assert.Equal(1, EquValue(eightBppAsm, "map_l2_bytes_per_cell"));
-        Assert.Equal(32, EquValue(eightBppAsm, "map_l2_row_bytes"));
-        Assert.Equal(768, EquValue(eightBppAsm, "map_l2_size"));
+        var match = System.Text.RegularExpressions.Regex.Match(
+            asmText, $@"^{System.Text.RegularExpressions.Regex.Escape(label)}:\s+(db|dw)\s+(\d+)\s+; \+(\d+)",
+            System.Text.RegularExpressions.RegexOptions.Multiline);
+        Assert.True(match.Success, $"Header field '{label}' not found in:\n{asmText}");
+        return (int.Parse(match.Groups[2].Value), match.Groups[1].Value, int.Parse(match.Groups[3].Value));
     }
 }

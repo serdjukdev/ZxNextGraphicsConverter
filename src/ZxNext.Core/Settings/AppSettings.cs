@@ -30,6 +30,7 @@ public class AppSettings
     public string? EightBppGridSuffixOverride { get; set; }
     public string? EightBppMetatilesSuffixOverride { get; set; }
     public string? ObjectsSuffixOverride { get; set; }
+    public string? InfoSuffixOverride { get; set; }
 
     // ----- Settings screen: other app-wide defaults -----
     public DitherMode? DefaultDitherMode { get; set; }

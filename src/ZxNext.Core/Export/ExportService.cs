@@ -95,6 +95,10 @@ public static class ExportService
             var (sizeOk, sizeError) = MapExporter.ValidateSize(map);
             if (!sizeOk) throw new InvalidOperationException(sizeError);
 
+            // The map's geometry row comes first: it is the one file that describes the map itself
+            // rather than one of its layers (see MapExporter.ExportInfo).
+            results.Add(MapExporter.ExportInfo(map));
+
             var tilemap = MapExporter.ExportTilemapLayer(map, project);
             results.Add(tilemap.Grid);
             if (tilemap.Metatiles is not null) results.Add(tilemap.Metatiles);

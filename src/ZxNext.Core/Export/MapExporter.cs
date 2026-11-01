@@ -99,7 +99,7 @@ public static class MapExporter
 
         var gridRowKey = ExportFileNaming.GridRowKey(map.Name, layerSuffix);
         var gridResult = new FolderExportResult(gridRowKey, $"map/{map.Name}", [], [],
-            GenerateGridAsm(gridRowKey, map.Width, map.Height, remappedGrid), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false,
+            GenerateGridAsm(gridRowKey, map, layerSuffix, remappedGrid), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false,
             ExportSubdirHint: tileCategoryName);
 
         var metatilesByGlobalSortIndex = project.Metatiles.Where(m => m.Kind == kind).ToDictionary(m => m.SortIndex);
@@ -181,7 +181,7 @@ public static class MapExporter
 
         var gridRowKey = ExportFileNaming.GridRowKey(map.Name, layerSuffix);
         var gridResult = new FolderExportResult(gridRowKey, $"map/{map.Name}", [], [],
-            GenerateTileModeGridAsm(gridRowKey, map.Width, map.Height, kind, gridBytes), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false,
+            GenerateTileModeGridAsm(gridRowKey, map, layerSuffix, kind, gridBytes), $"{SanitizeFileName(gridRowKey)}.asm", null, IsChunked: false,
             ExportSubdirHint: tileCategory.ToString());
 
         return new GridLayerExportResult(gridResult, null);
@@ -384,13 +384,14 @@ public static class MapExporter
         return (true, records, null);
     }
 
-    private static string GenerateGridAsm(string rowKey, int width, int height, byte[] remappedGrid)
+    private static string GenerateGridAsm(string rowKey, MapAsset map, string layerSuffix, byte[] remappedGrid)
     {
         var sb = new StringBuilder();
         sb.Append("; ").Append(rowKey).Append(" -- map grid data\n");
-        sb.Append("; ").Append(width).Append('x').Append(height).Append(" cells, 1 byte/cell: LOCAL metatile index (see the matching _metatiles.asm file, index 0 = the reserved blank/transparent metatile)\n");
-        sb.Append(rowKey).Append("_width: equ ").Append(width).Append('\n');
-        sb.Append(rowKey).Append("_height: equ ").Append(height).Append('\n');
+        sb.Append("; ").Append(map.Width).Append('x').Append(map.Height).Append(" cells, 1 byte/cell: LOCAL metatile index (see the matching _metatiles.asm file, index 0 = the reserved blank/transparent metatile)\n");
+        sb.Append(rowKey).Append("_width: equ ").Append(map.Width).Append('\n');
+        sb.Append(rowKey).Append("_height: equ ").Append(map.Height).Append('\n');
+        AppendMapConstants(sb, map, layerSuffix, bytesPerCell: 1);
         sb.Append('\n');
         sb.Append(rowKey).Append(":\n");
         AsmByteDataWriter.AppendDataBytes(sb, remappedGrid);
@@ -398,22 +399,116 @@ public static class MapExporter
     }
 
     /// <summary>GridSize=1's grid format — see <see cref="ExportGridLayerTileMode"/>: no metatile indirection, each cell IS its tile index (+ attribute byte for FourBpp) directly.</summary>
-    private static string GenerateTileModeGridAsm(string rowKey, int width, int height, MetatileKind kind, byte[] gridBytes)
+    private static string GenerateTileModeGridAsm(string rowKey, MapAsset map, string layerSuffix, MetatileKind kind, byte[] gridBytes)
     {
         var bytesPerCell = kind == MetatileKind.FourBpp ? 2 : 1;
         var ulaOverTilemap = AppSettingsStore.Load().UlaOverTilemapAttributeBit ?? false;
 
         var sb = new StringBuilder();
         sb.Append("; ").Append(rowKey).Append(" -- map grid data (GridSize=1: no metatile table, cells are tiles directly)\n");
-        sb.Append("; ").Append(width).Append('x').Append(height).Append(" cells, ").Append(bytesPerCell).Append(" byte(s)/cell (")
+        sb.Append("; ").Append(map.Width).Append('x').Append(map.Height).Append(" cells, ").Append(bytesPerCell).Append(" byte(s)/cell (")
             .Append(kind == MetatileKind.FourBpp ? AttributeByteComment(ulaOverTilemap) : "tile index only, no attribute")
             .Append("); index 0 = the reserved blank/transparent tile\n");
-        sb.Append(rowKey).Append("_width: equ ").Append(width).Append('\n');
-        sb.Append(rowKey).Append("_height: equ ").Append(height).Append('\n');
+        sb.Append(rowKey).Append("_width: equ ").Append(map.Width).Append('\n');
+        sb.Append(rowKey).Append("_height: equ ").Append(map.Height).Append('\n');
+        AppendMapConstants(sb, map, layerSuffix, bytesPerCell);
         sb.Append('\n');
         sb.Append(rowKey).Append(":\n");
         AsmByteDataWriter.AppendDataBytes(sb, gridBytes);
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The label prefix of a grid layer's map-geometry constant block: "map_tm_" for the Tilemap
+    /// (4bpp) layer, "map_l2_" for the 8bpp tile layer. Deliberately NOT derived from the map's name
+    /// (unlike every other label in these files, which starts with the row key): the point of this
+    /// block is that game code can write map_tm_width_px with no per-map rename, so the names are the
+    /// same in every map's grid file. Consequence, stated in the emitted comment too: only ONE map's
+    /// grid files can go into a single assembly, and the two prefixes exist so that a map's own two
+    /// layers never collide with each other.
+    /// </summary>
+    private static string MapConstantPrefix(string layerSuffix) => layerSuffix == "tilemap" ? "map_tm_" : "map_l2_";
+
+    /// <summary>
+    /// The map-geometry equ block shared by both grid formats (metatile mode and GridSize=1 tile mode).
+    /// Every dimension is given in all three units: mt (metatile cells, the unit Width/Height and the
+    /// grid bytes themselves are in), tiles (8x8 hardware tiles) and px. Edge constants are INCLUSIVE
+    /// last-valid-coordinate values, so a bounds test is a plain compare with no -1 at the call site.
+    /// <paramref name="bytesPerCell"/> is the CALLING layer's own figure (1 everywhere except a
+    /// GridSize=1 map's Tilemap layer, which is 2), so the byte-size constants describe the file this
+    /// block is actually written into.
+    /// </summary>
+    private static void AppendMapConstants(StringBuilder sb, MapAsset map, string layerSuffix, int bytesPerCell)
+    {
+        var p = MapConstantPrefix(layerSuffix);
+        var cellTiles = map.MetatileGridSize;
+        var cellPx = map.CellPixelSize;
+        var widthTiles = map.Width * cellTiles;
+        var heightTiles = map.Height * cellTiles;
+        var widthPx = map.PixelWidth;
+        var heightPx = map.PixelHeight;
+
+        void Equ(string name, int value, string? comment = null)
+        {
+            sb.Append(p).Append(name).Append(':').Append(' ', Math.Max(1, 22 - name.Length)).Append("equ ");
+            var text = value.ToString();
+            sb.Append(text);
+            if (comment is not null) sb.Append(' ', Math.Max(1, 7 - text.Length)).Append("; ").Append(comment);
+            sb.Append('\n');
+        }
+
+        sb.Append('\n');
+        sb.Append("; ---- ").Append(p).Append("* : geometry of map '").Append(map.Name).Append("', ")
+            .Append(layerSuffix == "tilemap" ? "Tilemap (4bpp) layer" : "8bpp tile layer").Append("\n");
+        sb.Append("; Units: mt = metatile cell (").Append(cellTiles).Append('x').Append(cellTiles).Append(" tiles = ")
+            .Append(cellPx).Append('x').Append(cellPx).Append(" px), tiles = 8x8 hardware tiles, px = pixels.\n");
+        sb.Append("; Edges are INCLUSIVE coordinates: left/top = 0, right/bottom = the last valid coordinate.\n");
+        sb.Append("; These names carry no map name, so assemble only ONE map's grid files at a time;\n");
+        sb.Append("; the Tilemap layer uses map_tm_, the 8bpp layer map_l2_, so one map's two layers never clash.\n");
+
+        Equ("cell_tiles", cellTiles, "metatile side, in tiles");
+        Equ("cell_px", cellPx, "metatile side, in px");
+        Equ("cell_tiles_shift", Log2(cellTiles), "tiles = mt << this");
+        Equ("cell_px_shift", Log2(cellPx), "px = mt << this");
+        Equ("tile_px", 8, "tile side, in px");
+
+        Equ("width_mt", map.Width);
+        Equ("width_tiles", widthTiles);
+        Equ("width_px", widthPx);
+        Equ("height_mt", map.Height);
+        Equ("height_tiles", heightTiles);
+        Equ("height_px", heightPx);
+
+        Equ("left_mt", 0);
+        Equ("left_tiles", 0);
+        Equ("left_px", 0);
+        Equ("top_mt", 0);
+        Equ("top_tiles", 0);
+        Equ("top_px", 0);
+        Equ("right_mt", map.Width - 1);
+        Equ("right_tiles", widthTiles - 1);
+        Equ("right_px", widthPx - 1);
+        Equ("bottom_mt", map.Height - 1);
+        Equ("bottom_tiles", heightTiles - 1);
+        Equ("bottom_px", heightPx - 1);
+
+        Equ("cells", map.Width * map.Height, "width_mt * height_mt");
+        Equ("tiles", widthTiles * heightTiles, "width_tiles * height_tiles");
+        Equ("bytes_per_cell", bytesPerCell, "in this grid file");
+        Equ("row_bytes", map.Width * bytesPerCell, "add this to step one row down");
+        Equ("size", map.Width * map.Height * bytesPerCell, "total grid bytes");
+    }
+
+    /// <summary>Exact log2 of a power-of-two metatile/cell size (GridSize is always 1, 2 or 4, so cellPx is 8, 16 or 32); defensive loop rather than BitOperations so a hand-edited non-power-of-two never throws, it just rounds down.</summary>
+    private static int Log2(int value)
+    {
+        var shift = 0;
+        while (value > 1)
+        {
+            value >>= 1;
+            shift++;
+        }
+        return shift;
     }
 
     /// <summary>Throws (like BinaryChunker's own hard-invariant checks) if a metatile can't be serialized — see <see cref="MetatileSerializer"/> — since that should never happen once the App layer surfaces the same validation earlier (e.g. the &gt;256-assets-per-category cap), matching this codebase's existing style for "should never happen, but if it does, fail loudly" export invariants.</summary>

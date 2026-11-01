@@ -38,6 +38,29 @@ public class MapAsset
     /// </summary>
     public List<MapLayerKind> LayerOrder { get; set; } = [MapLayerKind.Sprites, MapLayerKind.TileLayer8Bpp, MapLayerKind.Tilemap];
 
+    /// <summary>One grid cell's size in pixels: a metatile is MetatileGridSize x MetatileGridSize tiles of 8x8 pixels each.</summary>
+    public int CellPixelSize => MetatileGridSize * 8;
+
+    /// <summary>The map canvas's width in pixels, the coordinate space SpritePlacement.X lives in.</summary>
+    public int PixelWidth => Width * CellPixelSize;
+
+    /// <summary>The map canvas's height in pixels, the coordinate space SpritePlacement.Y lives in.</summary>
+    public int PixelHeight => Height * CellPixelSize;
+
+    /// <summary>
+    /// True when a sprite placed at pixel origin (<paramref name="x"/>, <paramref name="y"/>) is on the
+    /// map at all. Only the ORIGIN must be inside: a 16x16 sprite may hang off the bottom/right edge,
+    /// exactly as the user can place one by hand there, because the Sprite layer has no hard grid bound.
+    /// A placement failing this test is an invisible ghost object: the Map Editor canvas is exactly
+    /// <see cref="PixelWidth"/> x <see cref="PixelHeight"/>, so it can neither draw nor hit-test the
+    /// placement, yet MapExporter would still write it into objects.asm. Every operation that creates or
+    /// relocates a placement (place, paste, move/copy a sprite selection) must therefore drop whatever
+    /// fails it, matching this project's "drop, don't clamp" precedent for grid cells moved off the map.
+    /// <see cref="MapResizeCalculator.Plan"/> enforces the same rule itself, against the NEW size it is
+    /// about to apply rather than the current one.
+    /// </summary>
+    public bool ContainsSpriteOrigin(int x, int y) => x >= 0 && y >= 0 && x < PixelWidth && y < PixelHeight;
+
     public MapAsset(int width, int height)
     {
         Width = width;

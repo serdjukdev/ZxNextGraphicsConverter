@@ -265,6 +265,40 @@ public class ProjectServiceTests : IDisposable
     }
 
     [Fact]
+    public void Load_SpritePlacementOutsideMapBounds_IsRemovedWithAWarning_AndItsLinkCleared()
+    {
+        // 2x2 cells of GridSize=2 (16px) = a 32x32 px map. A build before the Resize fix could leave a
+        // placement past the right/bottom edge: invisible on the canvas, still exported. See
+        // MapAsset.ContainsSpriteOrigin.
+        var ghostId = Guid.NewGuid();
+        var project = new ProjectState();
+        var map = new MapAsset(2, 2)
+        {
+            Name = "level1",
+            MetatileGridSize = 2,
+            TilemapLayer = new MapGridLayer { MetatileIndices = new byte[4] },
+            TileLayer8Bpp = new MapGridLayer { MetatileIndices = new byte[4] },
+            SpriteLayer =
+            [
+                new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 0, Y = 0, LinkedPlacementId = ghostId },
+                new SpritePlacement { Id = ghostId, SpriteAssetId = Guid.NewGuid(), X = 40, Y = 0 },  // off the right edge
+                new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 0, Y = 32 },                // off the bottom edge
+                new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 31, Y = 31 }                // origin inside, footprint hangs off: kept
+            ]
+        };
+        project.Maps.Add(map);
+
+        ProjectService.Save(project, _tempProjectFile);
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        var loadedMap = Assert.Single(loaded.Maps);
+        Assert.Equal(2, loadedMap.SpriteLayer.Count);
+        Assert.All(loadedMap.SpriteLayer, p => Assert.True(loadedMap.ContainsSpriteOrigin(p.X, p.Y)));
+        Assert.Null(loadedMap.SpriteLayer.Single(p => p.X == 0 && p.Y == 0).LinkedPlacementId); // link to the removed ghost cleared
+        Assert.Contains(loaded.LoadWarnings, w => w.Contains("outside their map's bounds"));
+    }
+
+    [Fact]
     public void SaveThenLoad_GridSize2Map_NeverWritesOrExpectsACellAttributesSidecar()
     {
         var project = new ProjectState();

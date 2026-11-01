@@ -57,13 +57,18 @@ public static class MapResizeCalculator
         {
             var newX = sprite.X + pixelOffsetX;
             var newY = sprite.Y + pixelOffsetY;
-            if (newX < 0 || newY < 0)
+            // A sprite whose ORIGIN falls outside the new bounds is dropped, on every edge, not just the
+            // top/left ones: a shrinking resize cuts that area away, so keeping such a sprite would leave
+            // an invisible ghost object, one the Map Editor canvas can no longer draw or hit-test (the
+            // canvas is exactly newWidth x newHeight cells) yet MapExporter still writes into objects.asm.
+            // A sprite that merely HANGS OFF the bottom/right edge by a few pixels (origin still inside)
+            // is kept: that is a legal, deliberately placeable position on an unresized map too, since the
+            // Sprite layer has no hard grid/16KB-budget bound (see the original design decisions).
+            if (newX < 0 || newY < 0 || newX >= newWidth * cellPixelSize || newY >= newHeight * cellPixelSize)
             {
                 droppedSprites++;
                 continue;
             }
-            // Deliberately NOT dropped for hanging off the bottom/right edge — the Sprite layer has no
-            // hard grid/16KB-budget bound (see the original design decisions), only "no negative" is enforced.
             keptSprites.Add(new SpritePlacement
             {
                 Id = sprite.Id,

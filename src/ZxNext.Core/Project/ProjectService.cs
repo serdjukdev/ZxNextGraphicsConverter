@@ -393,6 +393,7 @@ public static class ProjectService
 
         MergeLegacyPerSubfolderPalettes(project);
         DropUnplaceableSpritePlacements(project);
+        DropOffMapSpritePlacements(project);
 
         EnsureReservedBlankAssets(project);
 
@@ -422,6 +423,41 @@ public static class ProjectService
             project.LoadWarnings.Add(
                 $"{removed} sprite placement(s) referenced a sub-folder sprite and were removed from their map(s). " +
                 "Sub-folder sprites can't be placed on a map unless \"Allow sub-folder assets in map/metatile editor\" is on in Settings.");
+        }
+    }
+
+    /// <summary>
+    /// Legacy-fix pass for off-map objects: a build before the Resize fix only dropped a placement that a
+    /// shrinking resize pushed to a NEGATIVE coordinate, so one cut away by the new right/bottom edge
+    /// survived at a position outside the map. Such a placement is an invisible ghost (see
+    /// <see cref="MapAsset.ContainsSpriteOrigin"/>): the Map Editor canvas can neither draw nor hit-test
+    /// it, so it can't be selected or deleted by hand either, yet MapExporter still wrote it into
+    /// objects.asm. Removes them (links pointing at one cleared, same no-dangling-link rule as deleting an
+    /// object) and notes it, so an already-damaged project is repaired on open rather than only at its
+    /// next resize. A no-op for any project whose placements are all on-map.
+    /// </summary>
+    private static void DropOffMapSpritePlacements(ProjectState project)
+    {
+        var removed = 0;
+        foreach (var map in project.Maps)
+        {
+            var offMapIds = map.SpriteLayer
+                .Where(p => !map.ContainsSpriteOrigin(p.X, p.Y))
+                .Select(p => p.Id)
+                .ToHashSet();
+            if (offMapIds.Count == 0) continue;
+
+            removed += map.SpriteLayer.RemoveAll(p => offMapIds.Contains(p.Id));
+            foreach (var placement in map.SpriteLayer)
+            {
+                if (placement.LinkedPlacementId is { } linkId && offMapIds.Contains(linkId)) placement.LinkedPlacementId = null;
+            }
+        }
+        if (removed > 0)
+        {
+            project.LoadWarnings.Add(
+                $"{removed} object placement(s) sat outside their map's bounds (left behind by a resize in an older build) and were removed. " +
+                "They were invisible in the Map Editor but were still being exported into objects.asm.");
         }
     }
 

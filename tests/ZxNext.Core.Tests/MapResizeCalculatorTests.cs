@@ -121,6 +121,71 @@ public class MapResizeCalculatorTests
     }
 
     [Fact]
+    public void Plan_Sprite_PastNewRightOrBottomEdge_IsDropped_EdgeHangingOneIsKept()
+    {
+        // 4x4 map, GridSize=1, so 32x32 px; shrunk to the top-left 2x2 = 16x16 px.
+        var map = MakeMap(4, 4, metatileGridSize: 1, sprites:
+        [
+            new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 24, Y = 0 },  // past the new right edge -> dropped
+            new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 0, Y = 24 },  // past the new bottom edge -> dropped
+            new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 16, Y = 16 }, // exactly on the first cut-away cell -> dropped
+            new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 15, Y = 15 }  // origin still inside, footprint hangs off -> kept
+        ]);
+
+        var plan = MapResizeCalculator.Plan(map, newWidth: 2, newHeight: 2, offsetX: 0, offsetY: 0, Blank, Blank);
+
+        Assert.Equal(3, plan.DroppedSpriteCount);
+        var kept = Assert.Single(plan.KeptSprites);
+        Assert.Equal(15, kept.X);
+        Assert.Equal(15, kept.Y);
+    }
+
+    [Fact]
+    public void Plan_Sprite_DroppedOffNewRightEdge_ClearsLinkPointingAtIt()
+    {
+        var doorId = Guid.NewGuid();
+        var button = new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 0, Y = 0, LinkedPlacementId = doorId };
+        var door = new SpritePlacement { Id = doorId, SpriteAssetId = Guid.NewGuid(), X = 24, Y = 0 }; // past the new right edge -> dropped
+        var map = MakeMap(4, 4, metatileGridSize: 1, sprites: [button, door]);
+
+        var plan = MapResizeCalculator.Plan(map, newWidth: 2, newHeight: 2, offsetX: 0, offsetY: 0, Blank, Blank);
+
+        Assert.Equal(1, plan.DroppedSpriteCount);
+        Assert.Null(Assert.Single(plan.KeptSprites).LinkedPlacementId);
+    }
+
+    [Fact]
+    public void Plan_GrowingMap_KeepsEverySprite()
+    {
+        var map = MakeMap(2, 2, metatileGridSize: 2, sprites:
+        [
+            new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 0, Y = 0 },
+            new SpritePlacement { SpriteAssetId = Guid.NewGuid(), X = 31, Y = 31 }
+        ]);
+
+        var plan = MapResizeCalculator.Plan(map, newWidth: 4, newHeight: 4, offsetX: 1, offsetY: 1, Blank, Blank);
+
+        Assert.Equal(0, plan.DroppedSpriteCount);
+        Assert.Equal(2, plan.KeptSprites.Count);
+        Assert.Equal([16, 47], plan.KeptSprites.Select(s => s.X).ToArray());
+    }
+
+    [Fact]
+    public void ContainsSpriteOrigin_IsMapPixelBounds()
+    {
+        var map = MakeMap(3, 2, metatileGridSize: 2); // 3x2 cells of 16px = 48x32 px
+
+        Assert.Equal(48, map.PixelWidth);
+        Assert.Equal(32, map.PixelHeight);
+        Assert.True(map.ContainsSpriteOrigin(0, 0));
+        Assert.True(map.ContainsSpriteOrigin(47, 31));
+        Assert.False(map.ContainsSpriteOrigin(48, 0));
+        Assert.False(map.ContainsSpriteOrigin(0, 32));
+        Assert.False(map.ContainsSpriteOrigin(-1, 0));
+        Assert.False(map.ContainsSpriteOrigin(0, -1));
+    }
+
+    [Fact]
     public void Plan_KeepsSpriteTypeAndLink_ClearsLinkIfTargetDropped()
     {
         var doorId = Guid.NewGuid();

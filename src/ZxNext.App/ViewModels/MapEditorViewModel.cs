@@ -1343,14 +1343,27 @@ public partial class MapEditorViewModel : ObservableObject
             var map = SelectedMap.Map;
             var anchorX = (pixelX / TileSnapSize) * TileSnapSize;
             var anchorY = (pixelY / TileSnapSize) * TileSnapSize;
-            var pasted = spriteClipboard.Select(e => new SpritePlacement
+            // An entry landing off the map is skipped, not clamped (see MapAsset.ContainsSpriteOrigin):
+            // pasting a multi-sprite group near an edge would otherwise create placements the canvas can
+            // never show, which the exporter would still write into objects.asm.
+            var pasted = spriteClipboard
+                .Select(e => new SpritePlacement
+                {
+                    SpriteAssetId = e.SpriteAssetId,
+                    X = anchorX + e.OffsetX,
+                    Y = anchorY + e.OffsetY,
+                    TypeId = e.TypeId,
+                    UserByte = e.UserByte
+                })
+                .Where(p => map.ContainsSpriteOrigin(p.X, p.Y))
+                .ToList();
+            var skippedPastes = spriteClipboard.Count - pasted.Count;
+            if (pasted.Count == 0)
             {
-                SpriteAssetId = e.SpriteAssetId,
-                X = anchorX + e.OffsetX,
-                Y = anchorY + e.OffsetY,
-                TypeId = e.TypeId,
-                UserByte = e.UserByte
-            }).ToList();
+                StatusText = $"Nothing pasted: all {skippedPastes} sprite(s) would land off the map.";
+                IsStatusError = false;
+                return;
+            }
 
             map.SpriteLayer.AddRange(pasted);
             PushUndo(
@@ -1370,7 +1383,9 @@ public partial class MapEditorViewModel : ObservableObject
             RenderPreview();
             RefreshSelectedMapThumbnail();
             RefreshSpriteCounts();
-            StatusText = $"Pasted {pasted.Count} sprite(s).";
+            StatusText = skippedPastes == 0
+                ? $"Pasted {pasted.Count} sprite(s)."
+                : $"Pasted {pasted.Count} sprite(s); skipped {skippedPastes} that would land off the map.";
             IsStatusError = false;
             return;
         }
@@ -1605,7 +1620,19 @@ public partial class MapEditorViewModel : ObservableObject
         SetGridSelection(destRect.Col0, destRect.Row0, destRect.Col1, destRect.Row1);
     }
 
-    /// <summary>Moves (or, if <paramref name="isCopy"/>, copies) every selected sprite by a pixel delta. Copy creates new SpritePlacement instances (selection follows the new copies, originals stay put); Move mutates the existing placements' X/Y in place, with one combined undo step restoring every moved sprite's original position.</summary>
+    /// <summary>
+    /// Moves (or, if <paramref name="isCopy"/>, copies) every selected sprite by a pixel delta. Copy
+    /// creates new SpritePlacement instances (selection follows the new copies, originals stay put);
+    /// Move mutates the existing placements' X/Y in place, with one combined undo step restoring every
+    /// moved sprite's original position.
+    /// A sprite whose origin would land off the map (see <see cref="MapAsset.ContainsSpriteOrigin"/>) is
+    /// dropped, not clamped: on Move the placement is removed outright (with the same dangling-link
+    /// cleanup as <see cref="DeleteSelection"/>), on Copy that one copy is simply never created. Same
+    /// "drop, don't clamp" rule as a grid cell pushed off the map by <see cref="MoveGridSelection"/> and
+    /// as a sprite cut away by a shrinking Resize, and it is what keeps an off-map ghost object (invisible
+    /// on the canvas, yet still exported into objects.asm) from ever being created. The status line says
+    /// how many were dropped, since the placement would otherwise vanish with no feedback at all.
+    /// </summary>
     public void MoveSpriteSelection(int deltaX, int deltaY, bool isCopy)
     {
         if (SelectedMap is null || SelectedSprites.Count == 0) return;
@@ -1615,7 +1642,15 @@ public partial class MapEditorViewModel : ObservableObject
         if (isCopy)
         {
             // LinkedPlacementId is deliberately NOT carried over — a copy starts unlinked (see design discussion 2026-08-23).
-            var copies = SelectedSprites.Select(s => new SpritePlacement { SpriteAssetId = s.SpriteAssetId, X = s.X + deltaX, Y = s.Y + deltaY, TypeId = s.TypeId, UserByte = s.UserByte }).ToList();
+            var copyable = SelectedSprites.Where(s => map.ContainsSpriteOrigin(s.X + deltaX, s.Y + deltaY)).ToList();
+            var skippedCopies = SelectedSprites.Count - copyable.Count;
+            if (copyable.Count == 0)
+            {
+                StatusText = $"Nothing copied: all {skippedCopies} sprite(s) would land off the map.";
+                IsStatusError = false;
+                return;
+            }
+            var copies = copyable.Select(s => new SpritePlacement { SpriteAssetId = s.SpriteAssetId, X = s.X + deltaX, Y = s.Y + deltaY, TypeId = s.TypeId, UserByte = s.UserByte }).ToList();
             map.SpriteLayer.AddRange(copies);
             RefreshSpriteCounts();
             PushUndo(
@@ -1630,29 +1665,62 @@ public partial class MapEditorViewModel : ObservableObject
                 });
             SelectedSprites.Clear();
             foreach (var copy in copies) SelectedSprites.Add(copy);
+            if (skippedCopies > 0)
+            {
+                StatusText = $"Copied {copies.Count} sprite(s); skipped {skippedCopies} that would land off the map.";
+                IsStatusError = false;
+            }
         }
         else
         {
-            var originalPositions = SelectedSprites.Select(s => (Sprite: s, s.X, s.Y)).ToList();
+            var moving = new List<SpritePlacement>();
+            var droppedOffMap = new List<SpritePlacement>();
             foreach (var sprite in SelectedSprites)
+            {
+                (map.ContainsSpriteOrigin(sprite.X + deltaX, sprite.Y + deltaY) ? moving : droppedOffMap).Add(sprite);
+            }
+
+            var originalPositions = moving.Select(s => (Sprite: s, s.X, s.Y)).ToList();
+            foreach (var sprite in moving)
             {
                 sprite.X += deltaX;
                 sprite.Y += deltaY;
             }
-            var finalPositions = SelectedSprites.Select(s => (Sprite: s, s.X, s.Y)).ToList();
+            var finalPositions = moving.Select(s => (Sprite: s, s.X, s.Y)).ToList();
+
+            foreach (var sprite in droppedOffMap) map.SpriteLayer.Remove(sprite);
+            var droppedIds = droppedOffMap.Select(s => s.Id).ToHashSet();
+            var clearedLinks = map.SpriteLayer
+                .Where(s => s.LinkedPlacementId is { } linkId && droppedIds.Contains(linkId))
+                .Select(s => (Sprite: s, s.LinkedPlacementId))
+                .ToList();
+            foreach (var (sprite, _) in clearedLinks) sprite.LinkedPlacementId = null;
+
             PushUndo(
                 undo: () =>
                 {
                     foreach (var (sprite, originalX, originalY) in originalPositions) { sprite.X = originalX; sprite.Y = originalY; }
+                    map.SpriteLayer.AddRange(droppedOffMap);
+                    foreach (var (sprite, linkId) in clearedLinks) sprite.LinkedPlacementId = linkId;
                     RenderPreview();
                     RefreshSelectedMapThumbnail();
                 },
                 redo: () =>
                 {
                     foreach (var (sprite, finalX, finalY) in finalPositions) { sprite.X = finalX; sprite.Y = finalY; }
+                    foreach (var sprite in droppedOffMap) map.SpriteLayer.Remove(sprite);
+                    foreach (var (sprite, _) in clearedLinks) sprite.LinkedPlacementId = null;
                     RenderPreview();
                     RefreshSelectedMapThumbnail();
                 });
+
+            if (droppedOffMap.Count > 0)
+            {
+                foreach (var sprite in droppedOffMap) SelectedSprites.Remove(sprite);
+                RefreshSpriteCounts();
+                StatusText = $"Moved {moving.Count} sprite(s); removed {droppedOffMap.Count} that landed off the map.";
+                IsStatusError = false;
+            }
         }
 
         HasChanges = true;

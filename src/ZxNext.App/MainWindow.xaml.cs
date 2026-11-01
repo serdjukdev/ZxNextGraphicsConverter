@@ -547,6 +547,9 @@ public partial class MainWindow : Window
         // MetatileEditorViewModel.DeleteUnderlyingTile) — this window has no tree of its own to drop the
         // node from, so it's removed here once the dialog closes.
         _viewModel.SyncDeletedAssetNodes(vm.DeletedTileAssetIds);
+        // ...and the same window's GridSize=1 "rename a metatile, rename its tile too" path (see
+        // MetatileEditorViewModel.RenameMetatile) leaves the tree showing the old tile name until this.
+        _viewModel.SyncRenamedAssetNodes(vm.RenamedTileAssetIds);
     }
 
     private void MapEditor_OnClick(object sender, RoutedEventArgs e)

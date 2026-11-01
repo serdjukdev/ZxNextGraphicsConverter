@@ -1,4 +1,4 @@
-using ZxNext.Core.Model;
+﻿using ZxNext.Core.Model;
 using ZxNext.Core.Project;
 
 namespace ZxNext.Core.Conversion;
@@ -201,12 +201,55 @@ public static class MetatileService
         Delete(project, metatile);
     }
 
+    /// <summary>
+    /// Renames an existing metatile in place. Nothing but its Name (and therefore its ASM export label)
+    /// changes: Id/Kind/GridSize/SortIndex/Cells are untouched, so every map cell and map template already
+    /// placing it keeps pointing at exactly the same thing. Unlike <see cref="Create"/>/<see cref="Update"/>,
+    /// which quietly auto-suffix a clashing name (see <see cref="EnsureUniqueName"/>), a clash here is
+    /// reported as an error instead: this is a deliberate, explicit rename, so silently storing "grass_2"
+    /// when "grass" was typed would be a surprise, exactly as it would be for the Project Tree's own
+    /// tile/sprite rename. The reserved blank metatile is not renamable (its name is generated, and it is
+    /// the one metatile the app itself guarantees the existence of everywhere).
+    /// </summary>
+    public static MetatileCreateResult Rename(ProjectState project, Metatile metatile, string name)
+    {
+        name = name.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return new MetatileCreateResult(false, null, "Enter a name.");
+        }
+
+        if (metatile.IsReservedBlank)
+        {
+            return new MetatileCreateResult(false, null, $"Cannot rename '{metatile.Name}': it's the reserved blank metatile every map's grid cells default to.");
+        }
+
+        if (IsNameTaken(project, name, metatile.Id))
+        {
+            return new MetatileCreateResult(false, null, $"Another metatile already uses the name '{name}' — names become ASM export labels, so they must be unique.");
+        }
+
+        metatile.Name = name;
+        return new MetatileCreateResult(true, metatile, null);
+    }
+
+    /// <summary>Whether any OTHER metatile already uses <paramref name="name"/> — the shared check behind <see cref="Rename"/> and <see cref="EnsureUniqueName"/>, also called directly by the rename dialog for its live "name already taken" validation.</summary>
+    public static bool IsNameTaken(ProjectState project, string name, Guid? excludeMetatileId = null)
+    {
+        var trimmed = name.Trim();
+        return project.Metatiles.Any(m => m.Id != excludeMetatileId && string.Equals(m.Name, trimmed, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>A metatile's name doubles as its ASM export label (like GraphicsAsset.Name — see AssetImporter.EnsureUniqueName, same auto-suffix approach), so it must be unique among metatiles. Scoped to metatiles only, not cross-checked against GraphicsAsset/map names — those live in visually separate tree areas, and a real collision would fail loudly at ASM assembly time rather than silently corrupting anything.</summary>
     private static string EnsureUniqueName(ProjectState project, string desiredName, Guid? excludeMetatileId = null)
     {
-        bool IsTaken(string candidate) => project.Metatiles.Any(m =>
-            m.Id != excludeMetatileId && string.Equals(m.Name, candidate, StringComparison.OrdinalIgnoreCase));
+        bool IsTaken(string candidate) => IsNameTaken(project, candidate, excludeMetatileId);
 
+        // Trimmed up front so the stored name matches what <see cref="IsNameTaken"/> (and therefore
+        // Rename's own refusal, and the rename dialog's live check) compares against — otherwise a draft
+        // name typed with a stray trailing space would store as a distinct name that the rename dialog
+        // then reports as already taken.
+        desiredName = desiredName.Trim();
         if (!IsTaken(desiredName)) return desiredName;
 
         var suffix = 2;

@@ -101,6 +101,42 @@ public partial class MetatileEditorWindow : Window
         vm.DeleteMetatiles(selected);
     }
 
+    /// <summary>
+    /// Right-click "Rename..." on a gallery item. Reads the metatile straight off the clicked item's own
+    /// DataContext (a ContextMenu lives outside the ListBox's visual tree, so the usual visual-tree walk
+    /// would find nothing) — deliberately independent of the ListBox selection, which has a different job
+    /// here (selecting a metatile loads it into the draft for editing).
+    /// </summary>
+    private void RenameMetatileMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { DataContext: MetatileListItemViewModel item }) RenameMetatile(item);
+    }
+
+    /// <summary>F2 on the gallery renames whatever single item is selected — the keyboard twin of the right-click menu item above. Ignored for a multi-selection (renaming several metatiles to one name is impossible, names are unique ASM labels).</summary>
+    private void MetatileList_OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Shortcuts.RenameKey) return;
+        if (MetatileList.SelectedItems.Count != 1 || MetatileList.SelectedItem is not MetatileListItemViewModel item) return;
+
+        e.Handled = true;
+        RenameMetatile(item);
+    }
+
+    /// <summary>Shared by the right-click menu item and F2 — reuses the same rename dialog the Project Tree's own tile/sprite rename uses, with the uniqueness check the ViewModel owns (metatile names, plus the underlying tile's on a 1x1 project).</summary>
+    private void RenameMetatile(MetatileListItemViewModel item)
+    {
+        if (DataContext is not MetatileEditorViewModel vm) return;
+        if (item.IsReservedBlank) return; // the context menu item is already disabled for it; F2 needs its own guard
+
+        var dialog = new RenameAssetWindow(item.Name, candidate => vm.IsRenameNameTaken(item.Metatile, candidate),
+            "Another metatile (or, on a 1x1 project, another tile) already uses this name.")
+        {
+            Owner = this,
+            Title = "Rename metatile"
+        };
+        if (dialog.ShowDialog() == true) vm.RenameMetatile(item.Metatile, dialog.NewName);
+    }
+
     /// <summary>Fires continuously while a mouse button is held over the list — only actually starts a drag once armed and past the OS's drag distance threshold, same pattern as ProjectTreeView's own drag source.</summary>
     private void MetatileList_OnPreviewMouseMove(object sender, MouseEventArgs e)
     {

@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -47,6 +47,9 @@ public partial class MetatileEditorViewModel : ObservableObject
 
     /// <summary>Set true by a successful Create or Delete — read once by the caller (MainWindow) after the dialog closes, to decide whether to mark the project as having unsaved changes.</summary>
     public bool HasChanges { get; private set; }
+
+    /// <summary>Tile assets renamed via <see cref="RenameMetatile"/> (the GridSize=1 "renaming a metatile also renames its one tile" path) — same reason as <see cref="DeletedTileAssetIds"/> below: this window has no Project Tree of its own, so MainWindow re-reads these names into the tree once the dialog closes.</summary>
+    public List<Guid> RenamedTileAssetIds { get; } = [];
 
     /// <summary>Tile assets removed via <see cref="DeleteUnderlyingTile"/> (the GridSize=1 "deleting a metatile really means deleting its one tile" path) — this window has no Project Tree of its own to keep in sync, so MainWindow reads this once the dialog closes and removes the matching tree nodes itself, the same way it already does for a tile deleted directly from the tree.</summary>
     public List<Guid> DeletedTileAssetIds { get; } = [];
@@ -363,6 +366,77 @@ public partial class MetatileEditorViewModel : ObservableObject
         ResetDraft();
         StatusText = $"Created '{result.Metatile!.Name}'.";
         IsStatusError = false;
+    }
+
+    /// <summary>
+    /// The gallery's right-click "Rename..." (and F2) path — renaming is already possible by selecting a
+    /// metatile, editing the Name box and saving, but that is far from obvious and needs every draft cell
+    /// filled first; this is the direct route, and it never disturbs whatever is in the draft.
+    ///
+    /// On a GridSize=1 project a metatile is a 1:1 wrapper around a single tile (same reasoning as
+    /// <see cref="DeleteOneMetatile"/>'s "delete the underlying tile instead" routing) and
+    /// <see cref="AssetImporter"/> creates it carrying that tile's own name, so a rename here renames the
+    /// tile too — otherwise the Project Tree would keep showing the old name for what the user sees as the
+    /// same thing. <see cref="RenamedTileAssetIds"/> carries that back to MainWindow, which owns the tree.
+    /// The reserved blank metatile/tile is never renamed (see <see cref="MetatileService.Rename"/>), and a
+    /// name already taken on EITHER side is refused before anything is written, so the two can't half-apply.
+    /// </summary>
+    public void RenameMetatile(Metatile metatile, string newName)
+    {
+        newName = newName.Trim();
+        var tileAsset = UnderlyingTileForRename(metatile);
+        if (tileAsset is not null && IsAssetNameTaken(tileAsset.Id, newName))
+        {
+            StatusText = $"Another tile/sprite already uses the name '{newName}' — names become ASM export labels, so they must be unique.";
+            IsStatusError = true;
+            return;
+        }
+
+        var result = MetatileService.Rename(_project, metatile, newName);
+        if (!result.Success)
+        {
+            StatusText = result.Error;
+            IsStatusError = true;
+            return;
+        }
+
+        if (tileAsset is not null)
+        {
+            tileAsset.Name = metatile.Name;
+            RenamedTileAssetIds.Add(tileAsset.Id);
+        }
+
+        // Deliberately NOT a RefreshMetatileList() — that rebuilds every item, which drops the ListBox
+        // selection and would silently abandon an in-progress draft edit of this very metatile. Nudging
+        // the one affected item's Name notification keeps everything else exactly as it was.
+        if (Metatiles.FirstOrDefault(m => m.Metatile.Id == metatile.Id) is { } item) item.NotifyNameChanged();
+        // If this metatile is the one currently loaded for editing, the draft's Name box still holds the
+        // OLD name — leaving it would rename it straight back on the next "Save Changes".
+        if (SelectedMetatile?.Metatile.Id == metatile.Id) DraftName = metatile.Name;
+
+        HasChanges = true;
+        StatusText = tileAsset is null
+            ? $"Renamed to '{metatile.Name}'."
+            : $"Renamed metatile and its tile to '{metatile.Name}'.";
+        IsStatusError = false;
+    }
+
+    /// <summary>Live validation for the rename dialog (<see cref="ZxNext.App.Views.RenameAssetWindow"/>) — a candidate is taken if any OTHER metatile uses it, or, when the underlying tile would be renamed alongside it (see <see cref="RenameMetatile"/>), if any other tile/sprite does.</summary>
+    public bool IsRenameNameTaken(Metatile metatile, string candidate)
+    {
+        if (MetatileService.IsNameTaken(_project, candidate, metatile.Id)) return true;
+        return UnderlyingTileForRename(metatile) is { } tileAsset && IsAssetNameTaken(tileAsset.Id, candidate);
+    }
+
+    private bool IsAssetNameTaken(Guid assetId, string candidate) =>
+        _project.Assets.Any(a => a.Id != assetId && string.Equals(a.Name, candidate.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The single tile a GridSize=1 metatile wraps, when renaming the metatile should rename that tile too — null for every multi-cell metatile (whose cells are shared tiles with names of their own), for the reserved blank, and for the obscure case of a 1x1 metatile pointing at the reserved blank tile (whose name is generated and must stay as it is).</summary>
+    private GraphicsAsset? UnderlyingTileForRename(Metatile metatile)
+    {
+        if (metatile.GridSize != 1 || metatile.IsReservedBlank) return null;
+        if (metatile.Cells.FirstOrDefault() is not { } cell) return null;
+        return _project.Assets.FirstOrDefault(a => a.Id == cell.TileAssetId) is { IsReservedBlank: false } tileAsset ? tileAsset : null;
     }
 
     /// <summary>Deselects whatever's loaded for editing and clears the draft, so the next Create starts a brand-new metatile instead of saving over the one that was selected.</summary>

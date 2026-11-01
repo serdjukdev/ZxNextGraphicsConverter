@@ -177,6 +177,24 @@ public partial class MainViewModel : ObservableObject
         foreach (var id in deletedAssetIds) Tree.RemoveAssetNode(id, _project);
     }
 
+    /// <summary>
+    /// Re-reads the names of assets renamed from OUTSIDE the main tree — currently only the Metatile Editor's
+    /// GridSize=1 "renaming a metatile also renames its one tile" path (see
+    /// MetatileEditorViewModel.RenamedTileAssetIds), which has no Project Tree of its own. Same shape as
+    /// <see cref="SyncDeletedAssetNodes"/>: the rename itself already happened on the asset, this only
+    /// catches up the tree row (and the image viewer's header, if that asset is the one on screen). An id
+    /// whose asset is gone by now (renamed, then deleted in the same editor session) is simply skipped.
+    /// </summary>
+    public void SyncRenamedAssetNodes(IReadOnlyList<Guid> renamedAssetIds)
+    {
+        foreach (var id in renamedAssetIds)
+        {
+            if (_project.Assets.FirstOrDefault(a => a.Id == id) is not { } asset) continue;
+            if (Tree.FindLeafNode(id) is { } node) node.Name = asset.Name;
+            if (_selectedAsset?.Id == id) ImageViewer.SelectedAssetName = asset.Name;
+        }
+    }
+
     /// <summary>Called by the tree view when a source image dropped onto a category folder (or 8bpp sub-folder) already matches the target cell size exactly.</summary>
     public ImportOutcome ImportIntoCategory(SourceImageViewModel source, AssetCategory category, string folderPath, int? maxColors = null)
     {

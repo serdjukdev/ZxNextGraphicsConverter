@@ -1,4 +1,4 @@
-using System.Windows.Media.Imaging;
+﻿using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ZxNext.App.Rendering;
 using ZxNext.Core.Model;
@@ -9,7 +9,8 @@ namespace ZxNext.App.ViewModels;
 /// <summary>
 /// One visual entry in a metatile gallery — the Metatile Editor's "existing metatiles" list, or the Map
 /// Editor's own metatile palette — a rendered thumbnail plus the underlying metatile. Everything except
-/// the drag-reorder indicator flags is immutable once built (the list is rebuilt wholesale whenever the
+/// the drag-reorder indicator flags and <see cref="Name"/> (see <see cref="NotifyNameChanged"/>) is
+/// immutable once built (the list is rebuilt wholesale whenever the
 /// Kind/library changes — see MetatileEditorViewModel.RefreshMetatileList/MapEditorViewModel.RefreshMetatilePalette
 /// — except for a drag-reorder Move, which repositions existing instances instead). <paramref name="cache"/>
 /// is optional and, when passed, memoizes each cell's tile decode across rebuilds within the same modal
@@ -24,6 +25,9 @@ public partial class MetatileListItemViewModel(Metatile metatile, ProjectState p
     public string Name => Metatile.Name;
     public string SizeLabel => $"{Metatile.GridSize}x{Metatile.GridSize}";
     public WriteableBitmap Preview { get; } = TileGridBitmapRenderer.RenderMetatile(metatile, project, cache);
+
+    /// <summary>Raises a change notification for <see cref="Name"/> after an in-place rename (MetatileEditorViewModel.RenameMetatile) — the one piece of state that can now change without the whole list being rebuilt, which is deliberate: a rebuild would drop the gallery's selection and abandon any in-progress draft edit.</summary>
+    public void NotifyNameChanged() => OnPropertyChanged(nameof(Name));
 
     /// <summary>True when any cell references a Tile8Bpp tile flagged <see cref="ZxNext.Core.Model.GraphicsAsset.IsPriority"/> — drives a small green corner marker on the thumbnail, matching the Project Tree's priority arrow and the "draws on top" Map Editor preview.</summary>
     public bool ContainsPriorityTile { get; } = metatile.Cells.Any(c => project.Assets.FirstOrDefault(a => a.Id == c.TileAssetId) is { IsPriority: true });

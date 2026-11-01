@@ -379,6 +379,103 @@ public class MetatileServiceTests
     }
 
     [Fact]
+    public void Rename_ChangesOnlyTheName_KeepingIdSortIndexAndCells()
+    {
+        var project = new ProjectState();
+        var cells = MakeCells(2);
+        var metatile = MetatileService.Create(project, "original", MetatileKind.FourBpp, 2, cells).Metatile!;
+        var originalId = metatile.Id;
+        var originalSortIndex = metatile.SortIndex;
+
+        var result = MetatileService.Rename(project, metatile, "  renamed  ");
+
+        Assert.True(result.Success, result.Error);
+        Assert.Same(metatile, result.Metatile);
+        Assert.Equal("renamed", metatile.Name); // trimmed
+        Assert.Equal(originalId, metatile.Id);
+        Assert.Equal(originalSortIndex, metatile.SortIndex);
+        Assert.Same(cells, metatile.Cells);
+    }
+
+    [Fact]
+    public void Rename_ToANameAnotherMetatileUses_Rejected_WithoutAutoDisambiguating()
+    {
+        var project = new ProjectState();
+        MetatileService.Create(project, "taken", MetatileKind.FourBpp, 2, MakeCells(2));
+        var metatile = MetatileService.Create(project, "original", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!;
+
+        var result = MetatileService.Rename(project, metatile, "TAKEN"); // case-insensitive, like every other name check
+
+        Assert.False(result.Success);
+        Assert.Equal("original", metatile.Name); // untouched — unlike Update, Rename never silently suffixes
+    }
+
+    [Fact]
+    public void Rename_ToANameAnotherMetatileOfTheOtherKindUses_AlsoRejected()
+    {
+        var project = new ProjectState();
+        MetatileService.Create(project, "shared_label", MetatileKind.EightBpp, 2, MakeCells(2));
+        var metatile = MetatileService.Create(project, "original", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!;
+
+        var result = MetatileService.Rename(project, metatile, "shared_label");
+
+        Assert.False(result.Success); // names are ASM labels: one namespace across both Kinds
+        Assert.Equal("original", metatile.Name);
+    }
+
+    [Fact]
+    public void Rename_ToItsOwnCurrentName_Allowed()
+    {
+        var project = new ProjectState();
+        var metatile = MetatileService.Create(project, "grass", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!;
+
+        var result = MetatileService.Rename(project, metatile, "grass");
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("grass", metatile.Name);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Rename_ToABlankName_Rejected(string name)
+    {
+        var project = new ProjectState();
+        var metatile = MetatileService.Create(project, "grass", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!;
+
+        var result = MetatileService.Rename(project, metatile, name);
+
+        Assert.False(result.Success);
+        Assert.Equal("grass", metatile.Name);
+    }
+
+    [Fact]
+    public void Rename_ReservedBlank_Rejected()
+    {
+        var project = new ProjectState();
+        MetatileService.Create(project, "grass", MetatileKind.FourBpp, 2, MakeCells(2));
+        var blank = project.Metatiles.Single(m => m.IsReservedBlank);
+        var blankName = blank.Name;
+
+        var result = MetatileService.Rename(project, blank, "my_blank");
+
+        Assert.False(result.Success);
+        Assert.Equal(blankName, blank.Name);
+    }
+
+    [Fact]
+    public void IsNameTaken_IgnoresTheExcludedMetatileAndIsCaseInsensitive()
+    {
+        var project = new ProjectState();
+        var metatile = MetatileService.Create(project, "grass", MetatileKind.FourBpp, 2, MakeCells(2)).Metatile!;
+
+        Assert.True(MetatileService.IsNameTaken(project, "GRASS"));
+        Assert.True(MetatileService.IsNameTaken(project, " grass "));
+        Assert.False(MetatileService.IsNameTaken(project, "grass", metatile.Id));
+        Assert.False(MetatileService.IsNameTaken(project, "rock"));
+    }
+
+    [Fact]
     public void Create_FirstMetatile_LocksTheProjectsMetatileGridSize()
     {
         var project = new ProjectState();

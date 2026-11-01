@@ -91,7 +91,7 @@
             <TextBlock Grid.Row="4" FontSize="11" FontWeight="Bold" Margin="0,4,0,0"
                        Text="{Binding SelectedPaletteTile.Name, StringFormat='Painting with: {0}', TargetNullValue='Painting with: (click a tile above)'}" />
 
-            <TextBlock Grid.Row="6" Text="Existing metatiles — Ctrl+click / Shift+click to select several for bulk delete" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,2" />
+            <TextBlock Grid.Row="6" Text="Existing metatiles — Ctrl+click / Shift+click to select several for bulk delete. Right-click (or F2) to rename one." FontSize="11" TextWrapping="Wrap" Margin="0,0,0,2" />
             <Border Grid.Row="7" BorderBrush="#999" BorderThickness="1">
                 <ListBox x:Name="MetatileList" ItemsSource="{Binding Metatiles}" SelectedItem="{Binding SelectedMetatile}"
                          SelectionMode="Extended"
@@ -99,7 +99,8 @@
                          ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}"
                          PreviewMouseLeftButtonDown="MetatileList_OnPreviewMouseLeftButtonDown"
                          PreviewMouseMove="MetatileList_OnPreviewMouseMove"
-                         AllowDrop="True" DragOver="MetatileList_OnDragOver" Drop="MetatileList_OnDrop" DragLeave="MetatileList_OnDragLeave">
+                         AllowDrop="True" DragOver="MetatileList_OnDragOver" Drop="MetatileList_OnDrop" DragLeave="MetatileList_OnDragLeave"
+                         PreviewKeyDown="MetatileList_OnPreviewKeyDown">
                     <ListBox.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel />
@@ -108,6 +109,28 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Grid>
+                                <!-- Per-item right-click menu. Rename deliberately does NOT need the item
+                                     selected first (selecting one loads it into the draft on the right),
+                                     so it lives on the item itself rather than as another button under the
+                                     list. Disabled on the reserved blank, whose name is generated and which
+                                     every map's empty cells point at. -->
+                                <Grid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Rename... (F2)" Click="RenameMetatileMenuItem_OnClick"
+                                                  ToolTip="Rename this metatile (its name is its ASM export label). On a 1x1 project this renames its underlying tile too.">
+                                            <MenuItem.Style>
+                                                <Style TargetType="MenuItem">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsReservedBlank}" Value="True">
+                                                            <Setter Property="IsEnabled" Value="False" />
+                                                            <Setter Property="ToolTip" Value="The reserved blank metatile can&apos;t be renamed." />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </MenuItem.Style>
+                                        </MenuItem>
+                                    </ContextMenu>
+                                </Grid.ContextMenu>
                                 <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding Name}">
                                     <Grid Width="56" Height="56">
                                         <Image Source="{Binding Preview}" Stretch="Uniform"
@@ -150,7 +173,7 @@
                         <Setter Property="Text" Value="New metatile" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding IsEditingExisting}" Value="True">
-                                <Setter Property="Text" Value="{Binding SelectedMetatile.Metatile.Name, StringFormat='Editing \'{0}\''}" />
+                                <Setter Property="Text" Value="{Binding SelectedMetatile.Name, StringFormat='Editing \'{0}\''}" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>

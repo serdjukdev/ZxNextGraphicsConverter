@@ -135,6 +135,14 @@ public static class ExportService
         var subfolderName = folderPath == category.ToFolderPath() ? null : folderPath[(category.ToFolderPath().Length + 1)..];
         var asmText = AsmMapGenerator.Generate(placements, chunks.Count, category, subfolderName);
 
+        // A Tile4Bpp sub-folder that has an animation target set gets its tm_anim_* constants appended to
+        // its own section here (see TileAnimationExporter): the bank's binary already IS the frame data,
+        // so the constants belong with the labels that address it, not in a file of their own.
+        if (Conversion.TileAnimationService.For(project, folderPath) is { } animation)
+        {
+            asmText += '\n' + TileAnimationExporter.Generate(project, animation, chunks.Count);
+        }
+
         var paletteBytes = category.UsesPaletteBank()
             ? PaletteFileWriter.WriteBank(project.BankFor(category))
             : PaletteFileWriter.Write(project.GetOrCreateFolderPalette(category, folderPath));

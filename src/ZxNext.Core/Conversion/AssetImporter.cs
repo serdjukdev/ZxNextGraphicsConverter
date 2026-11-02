@@ -100,7 +100,8 @@ public static class AssetImporter
         }
 
         var result = category.UsesPaletteBank()
-            ? ImportFourBpp(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, excludeAssetIdFromNameCheck)
+            ? ImportFourBpp(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, excludeAssetIdFromNameCheck,
+                TileAnimationService.ForcedPaletteSlotFor(project, category, folderPath, excludeAssetIdFromNameCheck))
             : ImportFlatPalette(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, excludeAssetIdFromNameCheck, sourceCropWidth ?? width, sourceCropHeight ?? height, priority && category == AssetCategory.Tile8Bpp);
 
         // In a GridSize=1 ("no metatile") project, every real Tile4Bpp/Tile8Bpp tile needs its own 1x1
@@ -145,9 +146,18 @@ public static class AssetImporter
     private static int NextSortIndex(ProjectState project) =>
         project.Assets.Count == 0 ? 0 : project.Assets.Max(a => a.SortIndex) + 1;
 
+    /// <summary>
+    /// <paramref name="forcedPaletteSlot"/> (non-null only for a tile animation frame bank, see
+    /// <see cref="TileAnimationService.ForcedPaletteSlotFor"/>) pins the result to one slot instead of
+    /// letting the bucketing algorithm pick: a frame must render against the slot of the tile it
+    /// overwrites, since substituting pattern bytes never rewrites the map cell attribute that carries
+    /// the slot. Failing to fit is reported as a palette overflow so the app's existing "reduce colours
+    /// and retry" flow applies, which is exactly the right remedy here.
+    /// </summary>
     private static ImportResult ImportFourBpp(
         ProjectState project, SourceImage source, AssetCategory category, string folderPath, DitherMode ditherMode,
-        NextColor[] matched, bool[] isTransparent, int width, int height, int? maxColors, int sourceOffsetX, int sourceOffsetY, Guid? excludeAssetIdFromNameCheck)
+        NextColor[] matched, bool[] isTransparent, int width, int height, int? maxColors, int sourceOffsetX, int sourceOffsetY, Guid? excludeAssetIdFromNameCheck,
+        int? forcedPaletteSlot = null)
     {
         if (maxColors is { } cap)
         {
@@ -157,12 +167,18 @@ public static class AssetImporter
         var bank = project.BankFor(category);
         var distinctColors = matched.Where((_, i) => !isTransparent[i]).Distinct().ToList();
 
-        var allocation = PaletteAllocator.Allocate(bank, distinctColors);
+        var allocation = forcedPaletteSlot is { } forced
+            ? PaletteAllocator.AllocateInSlot(bank, distinctColors, forced)
+            : PaletteAllocator.Allocate(bank, distinctColors);
         if (!allocation.Success)
         {
             return new ImportResult(false, null,
-                "Palette overflow: this category already fills all 16 4bpp palettes and this tile's colours don't fit any of them. " +
-                "Reduce this tile's colours (or re-quantize the category) and try again.",
+                forcedPaletteSlot is { } slot
+                    ? $"This animation frame tile must use palette slot {slot}, the slot of the tile it overwrites at runtime, and its colours don't fit there " +
+                      "(that slot's free entries are too few). Substituting a tile's pixels never changes a map cell's palette, so the frame cannot use a different slot. " +
+                      "Reduce this tile's colours and try again."
+                    : "Palette overflow: this category already fills all 16 4bpp palettes and this tile's colours don't fit any of them. " +
+                      "Reduce this tile's colours (or re-quantize the category) and try again.",
                 ImportFailureReason.PaletteOverflow);
         }
 

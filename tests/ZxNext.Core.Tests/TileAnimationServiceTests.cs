@@ -244,6 +244,54 @@ public class TileAnimationServiceTests
         Assert.Throws<ArgumentException>(() => TileAnimationService.SetTargetFromTile(project, AnimFolder, sprite));
     }
 
+    /// <summary>
+    /// The slot a frame tile must be imported into comes from its POSITION in the frame, and the position
+    /// comes from the folder's own tile order, which is the frame order. So a batch slice cycles through
+    /// the target slots, and a re-quantize keeps the position its tile already occupies.
+    /// </summary>
+    [Fact]
+    public void ForcedPaletteSlotFor_CyclesThroughTheTargetSlots_ByPositionInTheFolder()
+    {
+        var project = new ProjectState();
+        var baseTiles = new[] { 3, 0, 9, 0 }
+            .Select((slot, i) => Tile($"base{i}", i, Root, slot))
+            .ToList();
+        foreach (var t in baseTiles) project.Assets.Add(t);
+        var metatile = Metatile2x2("spikes", baseTiles.ToArray());
+        project.Metatiles.Add(metatile);
+        TileAnimationService.SetTargetFromMetatile(project, AnimFolder, metatile);
+
+        // An empty folder: the next import is position 0, so it must land in the first target's slot.
+        Assert.Equal(3, TileAnimationService.ForcedPaletteSlotFor(project, AssetCategory.Tile4Bpp, AnimFolder, null));
+
+        // Fill the folder one tile at a time: each next import takes the next position, wrapping per frame.
+        int?[] expected = [0, 9, 0, 3, 0];
+        for (var i = 0; i < expected.Length; i++)
+        {
+            project.Assets.Add(Tile($"frame{i}", 100 + i, AnimFolder));
+            Assert.Equal(expected[i], TileAnimationService.ForcedPaletteSlotFor(project, AssetCategory.Tile4Bpp, AnimFolder, null));
+        }
+
+        // Re-quantizing an existing frame tile keeps that tile's own position (the third tile is position 2).
+        var third = TileAnimationService.FrameTiles(project, TileAnimationService.For(project, AnimFolder)!)[2];
+        Assert.Equal(9, TileAnimationService.ForcedPaletteSlotFor(project, AssetCategory.Tile4Bpp, AnimFolder, third.Id));
+    }
+
+    [Fact]
+    public void ForcedPaletteSlotFor_NullWhenNothingConstrainsTheImport()
+    {
+        var (project, metatile) = MakeProject(frameCount: 1);
+
+        // No animation set on the folder yet.
+        Assert.Null(TileAnimationService.ForcedPaletteSlotFor(project, AssetCategory.Tile4Bpp, AnimFolder, null));
+
+        TileAnimationService.SetTargetFromMetatile(project, AnimFolder, metatile);
+
+        // The root folder is not a frame bank, and neither is another category's sub-folder.
+        Assert.Null(TileAnimationService.ForcedPaletteSlotFor(project, AssetCategory.Tile4Bpp, Root, null));
+        Assert.Null(TileAnimationService.ForcedPaletteSlotFor(project, AssetCategory.Tile8Bpp, "tile/8bpp/images/hud", null));
+    }
+
     [Fact]
     public void ClearTarget_RemovesTheSetting_AndLeavesTheFrameTilesAlone()
     {

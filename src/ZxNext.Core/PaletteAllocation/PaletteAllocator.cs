@@ -61,6 +61,38 @@ public static class PaletteAllocator
         return new PaletteAllocationResult(false, -1, new Dictionary<NextColor, int>(), Overflow: true);
     }
 
+    /// <summary>
+    /// Allocates into ONE specific slot, no searching: the tilemap tile animation case, where a frame
+    /// tile has to render against the very slot the tile it overwrites uses (see
+    /// <see cref="ZxNext.Core.Model.TileAnimation"/>) because substituting pattern bytes never rewrites a
+    /// map cell's attribute byte, which is where the slot lives.
+    ///
+    /// <para>
+    /// Strictly ADDITIVE: colours already in the slot keep their existing indices, missing ones go into
+    /// its free entries, and nothing already there is moved or replaced. That is what makes this safe for
+    /// a slot other tiles already use, since their pixel indices still mean the same colours afterwards.
+    /// Fails (Overflow) when the missing colours outnumber the slot's free entries, or when the slot does
+    /// not exist yet: the caller must reduce colours rather than quietly land in a different slot.
+    /// </para>
+    /// </summary>
+    public static PaletteAllocationResult AllocateInSlot(PaletteBank bank, IReadOnlyCollection<NextColor> distinctOpaqueColors, int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= bank.Slots.Count || distinctOpaqueColors.Count > PaletteBank.SlotUsableColors)
+        {
+            return new PaletteAllocationResult(false, -1, new Dictionary<NextColor, int>(), Overflow: true);
+        }
+
+        var slot = bank.Slots[slotIndex];
+        var missing = distinctOpaqueColors.Where(c => !slot.Contains(c)).ToList();
+        if (missing.Count > slot.FreeSlotCount)
+        {
+            return new PaletteAllocationResult(false, -1, new Dictionary<NextColor, int>(), Overflow: true);
+        }
+
+        foreach (var c in missing) slot.TryAdd(c);
+        return Build(slotIndex, slot, distinctOpaqueColors);
+    }
+
     private static PaletteAllocationResult Build(int slotIndex, NextPalette slot, IReadOnlyCollection<NextColor> colors)
     {
         var map = colors.ToDictionary(c => c, slot.IndexOf);

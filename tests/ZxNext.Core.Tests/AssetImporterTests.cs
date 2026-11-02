@@ -105,6 +105,135 @@ public class AssetImporterTests
         Assert.Empty(project.Assets);
     }
 
+    /// <summary>
+    /// <paramref name="colorCount"/> distinct opaque colours (one per row, so at most 8) from a fixed
+    /// 16-colour set, starting at <paramref name="offset"/>, plus a transparent corner. The channel values
+    /// are spaced a full 3-bit step apart so they stay distinct after Next-512 matching, and two calls with
+    /// non-overlapping offsets really do add up in a palette slot.
+    /// </summary>
+    private static byte[] NColorsImage(int colorCount, int offset = 0)
+    {
+        var rgba = new byte[8 * 8 * 4];
+        for (var i = 0; i < 64; i++)
+        {
+            var x = i % 8;
+            var y = i / 8;
+            var o = i * 4;
+            var k = (offset + y % colorCount) % 16;
+            rgba[o] = (byte)(k % 8 * 36);
+            rgba[o + 1] = (byte)(k / 8 * 146);
+            rgba[o + 2] = 73;
+            rgba[o + 3] = x < 2 && y < 2 ? (byte)0 : (byte)255;
+        }
+        return rgba;
+    }
+
+    /// <summary>
+    /// A project where the animation's target tile sits in slot 1 while slot 0 is full, plus a one-tile
+    /// animation target on a Tile4Bpp sub-folder. Returns the target tile.
+    /// </summary>
+    private static GraphicsAsset ProjectWithTargetInSlotOne(ProjectState project, string animFolder)
+    {
+        const string root = "tile/4bpp/images";
+
+        // Slot 0: red, then 14 more colours, which fills it to its 15 usable entries.
+        var red = AssetImporter.Import(project, MakeSource("red_tile", 8, 8), SolidColorWithTransparentCorner(8, 8, (255, 0, 0)), AssetCategory.Tile4Bpp, root, DitherMode.None);
+        Assert.True(red.Success, red.Error);
+        var filler = AssetImporter.Import(project, MakeSource("filler", 8, 8), NColorsImage(7), AssetCategory.Tile4Bpp, root, DitherMode.None);
+        Assert.True(filler.Success, filler.Error);
+        var filler2 = AssetImporter.Import(project, MakeSource("filler2", 8, 8), NColorsImage(7, offset: 7), AssetCategory.Tile4Bpp, root, DitherMode.None);
+        Assert.True(filler2.Success, filler2.Error);
+        Assert.Equal(0, filler2.Asset!.PaletteSlotIndex);
+
+        // The target tile needs a colour slot 0 has no room for, so it lands in a fresh slot 1 while
+        // still containing red: that is what makes the forced-slot behaviour visible below, since the
+        // unforced allocator would subset-match a red frame tile straight into slot 0.
+        var target = AssetImporter.Import(project, MakeSource("base_tile", 8, 8), TwoColorImage((255, 0, 0), (0, 0, 255)), AssetCategory.Tile4Bpp, root, DitherMode.None);
+        Assert.True(target.Success, target.Error);
+        Assert.Equal(1, target.Asset!.PaletteSlotIndex);
+
+        TileAnimationService.SetTargetFromTile(project, animFolder, target.Asset);
+        return target.Asset;
+    }
+
+    /// <summary>Top half one colour, bottom half another, with a transparent corner.</summary>
+    private static byte[] TwoColorImage((byte R, byte G, byte B) top, (byte R, byte G, byte B) bottom)
+    {
+        var rgba = new byte[8 * 8 * 4];
+        for (var i = 0; i < 64; i++)
+        {
+            var x = i % 8;
+            var y = i / 8;
+            var o = i * 4;
+            var c = y < 4 ? top : bottom;
+            rgba[o] = c.R;
+            rgba[o + 1] = c.G;
+            rgba[o + 2] = c.B;
+            rgba[o + 3] = x < 2 && y < 2 ? (byte)0 : (byte)255;
+        }
+        return rgba;
+    }
+
+    /// <summary>
+    /// A frame tile must be quantized into the palette slot of the tile it overwrites at runtime, not
+    /// into whichever slot the bucketing algorithm likes best: substituting pattern bytes never rewrites
+    /// a map cell's attribute byte, which is where the slot lives. Here a plain red frame tile would
+    /// subset-match slot 0, but its target sits in slot 1, so slot 1 is what it must get.
+    /// </summary>
+    [Fact]
+    public void Import_IntoAnAnimationFrameBank_ForcesTheTargetsPaletteSlot()
+    {
+        var project = new ProjectState();
+        const string animFolder = "tile/4bpp/images/water anim";
+        ProjectWithTargetInSlotOne(project, animFolder);
+
+        var frame = AssetImporter.Import(project, MakeSource("frame_0", 8, 8), SolidColorWithTransparentCorner(8, 8, (255, 0, 0)), AssetCategory.Tile4Bpp, animFolder, DitherMode.None);
+
+        Assert.True(frame.Success, frame.Error);
+        Assert.Equal(1, frame.Asset!.PaletteSlotIndex);
+    }
+
+    /// <summary>The same import into the plain ROOT folder keeps the old behaviour: no animation, nothing to pin it to, so the subset match wins.</summary>
+    [Fact]
+    public void Import_IntoTheRoot_StillPicksTheBestSlotItself()
+    {
+        var project = new ProjectState();
+        ProjectWithTargetInSlotOne(project, "tile/4bpp/images/water anim");
+
+        var plain = AssetImporter.Import(project, MakeSource("plain_red", 8, 8), SolidColorWithTransparentCorner(8, 8, (255, 0, 0)), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None);
+
+        Assert.True(plain.Success, plain.Error);
+        Assert.Equal(0, plain.Asset!.PaletteSlotIndex);
+    }
+
+    /// <summary>
+    /// When the frame's colours do not fit the target's slot there is no fallback: a different slot would
+    /// render with the wrong colours on hardware. It fails as a palette overflow so the app's existing
+    /// "reduce colours and retry" flow applies, with a message naming the slot.
+    /// </summary>
+    [Fact]
+    public void Import_IntoAnAnimationFrameBank_FailsWhenTheColoursDoNotFitThatSlot()
+    {
+        var project = new ProjectState();
+        const string animFolder = "tile/4bpp/images/water anim";
+        const string root = "tile/4bpp/images";
+
+        // The target's slot is filled to capacity, so a frame tile with new colours cannot be added to it.
+        var target = AssetImporter.Import(project, MakeSource("base_tile", 8, 8), NColorsImage(8), AssetCategory.Tile4Bpp, root, DitherMode.None);
+        Assert.True(target.Success, target.Error);
+        var topUp = AssetImporter.Import(project, MakeSource("top_up", 8, 8), NColorsImage(7, offset: 8), AssetCategory.Tile4Bpp, root, DitherMode.None);
+        Assert.True(topUp.Success, topUp.Error);
+        Assert.Equal(target.Asset!.PaletteSlotIndex, topUp.Asset!.PaletteSlotIndex);
+        TileAnimationService.SetTargetFromTile(project, animFolder, target.Asset);
+
+        var frame = AssetImporter.Import(project, MakeSource("frame_0", 8, 8), SolidColorWithTransparentCorner(8, 8, (7, 200, 13)), AssetCategory.Tile4Bpp, animFolder, DitherMode.None);
+
+        Assert.False(frame.Success);
+        Assert.Equal(ImportFailureReason.PaletteOverflow, frame.Reason);
+        Assert.Contains("must use palette slot", frame.Error);
+        Assert.Empty(project.Assets.Where(a => a.FolderPath == animFolder));
+    }
+
     private static byte[] ManyDistinctColorsImage(int width, int height)
     {
         var rgba = new byte[width * height * 4];

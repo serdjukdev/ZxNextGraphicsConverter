@@ -78,6 +78,38 @@ public static class TileAnimationService
     public static bool ClearTarget(ProjectState project, string folderPath) =>
         project.TileAnimations.RemoveAll(a => a.FolderPath == folderPath) > 0;
 
+    /// <summary>
+    /// The palette slot a tile being imported into <paramref name="folderPath"/> must use, or null when
+    /// nothing constrains it (not a Tile4Bpp animation bank, no target set yet, or the target tile is
+    /// gone). This is what keeps a frame honest: position i of every frame overwrites target i, whose
+    /// palette slot is frozen in every map cell's attribute byte, so the frame tile has to be quantized
+    /// into that very slot.
+    ///
+    /// <para>
+    /// The position is derived from the folder's own tile order, which IS the frame order: a brand-new
+    /// import lands after everything already there, so its position is "how many are in the folder now"
+    /// modulo the frame size, and a batch slice therefore cycles through positions in the order the cells
+    /// are imported. A re-quantize (<paramref name="reQuantizedAssetId"/> set) keeps the position the
+    /// asset already occupies.
+    /// </para>
+    /// </summary>
+    public static int? ForcedPaletteSlotFor(ProjectState project, AssetCategory category, string folderPath, Guid? reQuantizedAssetId)
+    {
+        if (!category.IsRawTileBankFolder(folderPath)) return null;
+        if (For(project, folderPath) is not { } animation) return null;
+
+        var frameSize = animation.TargetTileIds.Count;
+        if (frameSize == 0) return null;
+
+        var tiles = FrameTiles(project, animation);
+        var position = reQuantizedAssetId is { } id
+            ? tiles.FindIndex(t => t.Id == id)
+            : tiles.Count;
+        if (position < 0) return null;
+
+        return TargetPaletteSlots(project, animation)[position % frameSize];
+    }
+
     /// <summary>The folder's tiles in export order: these ARE the frames, frame by frame.</summary>
     public static List<GraphicsAsset> FrameTiles(ProjectState project, TileAnimation animation) =>
         project.Assets

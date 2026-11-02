@@ -644,7 +644,8 @@ public class MapExporterTests
         var map = FakeMap("level 1", 40, 25, gridSize: 2);
         var asm = MapExporter.ExportInfo(map).AsmText;
 
-        Assert.Equal("level 1_info", MapExporter.ExportInfo(map).RowKey);
+        // The row key is both an asm label prefix and the output filename, so the map name is sanitized.
+        Assert.Equal("level_1_info", MapExporter.ExportInfo(map).RowKey);
         // The map name is sanitized for the module (a space is not a legal label character).
         Assert.Contains("    MODULE level_1\n", asm);
         Assert.Contains("    ENDMODULE\n", asm);

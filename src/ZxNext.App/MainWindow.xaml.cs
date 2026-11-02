@@ -38,6 +38,7 @@ public partial class MainWindow : Window
         ProjectTreeViewControl.DeleteFolderRequested += _viewModel.DeleteFolder;
         ProjectTreeViewControl.ReQuantizeFolderRequested += OnReQuantizeFolderRequested;
         ProjectTreeViewControl.DeleteUnusedRequested += _viewModel.DeleteUnusedAssets;
+        ProjectTreeViewControl.AnimationTargetRequested += OnAnimationTargetRequested;
         ProjectTreeViewControl.SetLockOnFolderRequested += _viewModel.SetLockOnFolder;
         ProjectTreeViewControl.SetAssetLockRequested += _viewModel.SetAssetLock;
         ProjectTreeViewControl.SetLockOnSelectionRequested += _viewModel.SetLockOnSelectedAssets;
@@ -301,6 +302,22 @@ public partial class MainWindow : Window
             await HandlePaletteOverflowAsync(outcome.Error ?? "Palette overflow.", outcome.Category,
                 maxColors => _viewModel.ReQuantizeAsset(assetId, vm.SelectedDitherMode, maxColors));
         }
+    }
+
+    /// <summary>
+    /// Says which tiles a Tile4Bpp sub-folder's animation frames overwrite at runtime, or clears that
+    /// setting: the whole configuration of a tilemap tile animation, see ZxNext.Core.Model.TileAnimation.
+    /// </summary>
+    private void OnAnimationTargetRequested(TreeNodeViewModel node)
+    {
+        if (node.FolderPath is not { } folderPath) return;
+
+        var dialog = new TileAnimationTargetWindow(_viewModel.Project, folderPath) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        if (dialog.Cleared) _viewModel.ClearTileAnimationTarget(folderPath);
+        else if (dialog.ChosenMetatile is { } metatile) _viewModel.SetTileAnimationTarget(folderPath, metatile);
+        else if (dialog.ChosenTile is { } tile) _viewModel.SetTileAnimationTarget(folderPath, tile);
     }
 
     /// <summary>

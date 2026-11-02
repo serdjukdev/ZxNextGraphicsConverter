@@ -143,6 +143,16 @@ public static class ProjectService
                 });
             }
 
+            foreach (var animation in project.TileAnimations)
+            {
+                dto.TileAnimations.Add(new TileAnimationDto
+                {
+                    FolderPath = animation.FolderPath,
+                    TargetTileIds = animation.TargetTileIds.ToList(),
+                    SourceMetatileId = animation.SourceMetatileId
+                });
+            }
+
             foreach (var map in project.Maps)
             {
                 var tilemapEntryName = $"maps/{map.Id}_tilemap.bin";
@@ -317,6 +327,16 @@ public static class ProjectService
                 Height = t.Height,
                 MetatileIndices = t.MetatileIndices,
                 CellAttributes = t.CellAttributes
+            });
+        }
+
+        foreach (var a in dto.TileAnimations)
+        {
+            project.TileAnimations.Add(new TileAnimation
+            {
+                FolderPath = a.FolderPath,
+                TargetTileIds = a.TargetTileIds.ToList(),
+                SourceMetatileId = a.SourceMetatileId
             });
         }
 

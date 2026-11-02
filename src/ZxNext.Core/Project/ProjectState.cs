@@ -29,6 +29,9 @@ public class ProjectState
     public List<MapAsset> Maps { get; } = [];
     public List<MapTemplate> Templates { get; } = [];
 
+    /// <summary>Tilemap tile animations, at most one per Tile4Bpp sub-folder: see <see cref="Model.TileAnimation"/>. A folder with no entry here is a plain tile bank.</summary>
+    public List<TileAnimation> TileAnimations { get; } = [];
+
     /// <summary>
     /// The one metatile GridSize this whole project is locked to, for BOTH MetatileKinds and every map.
     /// Restricted to 1, 2, or 4. 2/4 are powers of two — nothing in the hardware demands that, but the

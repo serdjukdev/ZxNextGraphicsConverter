@@ -86,7 +86,12 @@ public static class AssetImporter
             // designated blank at a predictable index. Only for genuinely NEW imports — a re-quantize
             // (excludeAssetIdFromNameCheck set) is replacing a specific EXISTING asset's identity, which
             // this check has no business vetoing.
-            if (excludeAssetIdFromNameCheck is null && Array.TrueForAll(isTransparent, t => t))
+            // ...except in a raw tile bank (a Tile4Bpp sub-folder = a tile animation's frame bank, see
+            // AssetCategoryExtensions.IsRawTileBankFolder): there the tile is positional data inside a
+            // block the game copies wholesale into tile pattern memory, so a transparent position must
+            // physically exist as its own 32 transparent bytes. Folding it into the one reserved blank
+            // would shorten the frame and shift every byte after it.
+            if (excludeAssetIdFromNameCheck is null && !category.IsRawTileBankFolder(folderPath) && Array.TrueForAll(isTransparent, t => t))
             {
                 return new ImportResult(false, null,
                     $"'{source.FileName}' is fully transparent — identical to {category}'s reserved blank tile, already at export index 0. Not imported as a duplicate.",

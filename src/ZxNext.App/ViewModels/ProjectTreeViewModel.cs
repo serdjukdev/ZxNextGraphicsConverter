@@ -89,7 +89,7 @@ public partial class ProjectTreeViewModel : ObservableObject
         SelectedNode = null;
     }
 
-    /// <summary>Creates a new sub-folder under a category root that supports them (every category except Tile4Bpp — see <see cref="AssetCategoryExtensions.SupportsSubfolders"/>). No-op (returns null) otherwise. The palette (a shared flat palette for 8bpp, the one 16-slot bank for Sprite4Bpp, an independent flat palette for Layer2) is created lazily on the first import into the sub-folder.</summary>
+    /// <summary>Creates a new sub-folder under a category root, which every category now supports (see <see cref="AssetCategoryExtensions.SupportsSubfolders"/>). No-op (returns null) otherwise. The palette (a shared flat palette for 8bpp, the one 16-slot bank for Sprite4Bpp/Tile4Bpp, an independent flat palette for Layer2) is created lazily on the first import into the sub-folder.</summary>
     public TreeNodeViewModel? CreateSubfolder(TreeNodeViewModel parentFolder, string name)
     {
         if (parentFolder.Category is not { } category || !category.SupportsSubfolders())

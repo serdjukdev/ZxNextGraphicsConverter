@@ -244,6 +244,38 @@ public class ProjectServiceTests : IDisposable
         Assert.Null(noAttrs.CellAttributes);
     }
 
+    /// <summary>A tilemap tile animation is one setting per Tile4Bpp sub-folder: which tiles its frames overwrite. Targets are asset IDS, so they survive any later tile renumbering.</summary>
+    [Fact]
+    public void SaveThenLoad_RoundTripsTileAnimations()
+    {
+        var project = new ProjectState();
+        var metatileId = Guid.NewGuid();
+        var firstTarget = Guid.NewGuid();
+        var secondTarget = Guid.NewGuid();
+        project.TileAnimations.Add(new TileAnimation
+        {
+            FolderPath = "tile/4bpp/images/spike anim",
+            SourceMetatileId = metatileId,
+            TargetTileIds = [firstTarget, secondTarget]
+        });
+        project.TileAnimations.Add(new TileAnimation
+        {
+            FolderPath = "tile/4bpp/images/water",
+            TargetTileIds = [firstTarget]
+        });
+
+        ProjectService.Save(project, _tempProjectFile);
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        var spike = Assert.Single(loaded.TileAnimations, a => a.FolderPath == "tile/4bpp/images/spike anim");
+        Assert.Equal(metatileId, spike.SourceMetatileId);
+        Assert.Equal([firstTarget, secondTarget], spike.TargetTileIds);
+
+        var water = Assert.Single(loaded.TileAnimations, a => a.FolderPath == "tile/4bpp/images/water");
+        Assert.Null(water.SourceMetatileId);
+        Assert.Equal([firstTarget], water.TargetTileIds);
+    }
+
     [Fact]
     public void SaveThenLoad_GridSize1Map_RoundTripsCellAttributes()
     {

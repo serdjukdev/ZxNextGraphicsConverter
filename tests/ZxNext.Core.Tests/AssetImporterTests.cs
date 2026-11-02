@@ -469,6 +469,54 @@ public class AssetImporterTests
         Assert.Single(project.Assets, a => a.Category == category && a.IsReservedBlank);
     }
 
+    /// <summary>
+    /// A Tile4Bpp sub-folder is a tile animation's frame bank: the game copies a frame into tile pattern
+    /// memory as one contiguous run of 32-byte tiles, so a transparent position must physically exist as
+    /// its own transparent tile. Folding it into the category's one reserved blank (which is referenced by
+    /// index, never copied) would shorten the frame and shift every byte after it.
+    /// </summary>
+    [Fact]
+    public void Import_FullyTransparentTile_IntoATile4BppSubfolder_IsKept_FrameDataIsPositional()
+    {
+        var project = new ProjectState();
+        var source = MakeSource("frame_top_left", 8, 8);
+
+        var result = AssetImporter.Import(project, source, AllTransparentRgba(8, 8), AssetCategory.Tile4Bpp, "tile/4bpp/images/water anim", DitherMode.None);
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.Asset);
+        Assert.Equal("tile/4bpp/images/water anim", result.Asset!.FolderPath);
+        Assert.False(result.Asset.IsReservedBlank);
+        // Two separate transparent positions in the same frame must both exist, so a second one is kept too.
+        var second = AssetImporter.Import(project, MakeSource("frame_top_right", 8, 8), AllTransparentRgba(8, 8), AssetCategory.Tile4Bpp, "tile/4bpp/images/water anim", DitherMode.None);
+        Assert.True(second.Success);
+        Assert.NotEqual(result.Asset.Id, second.Asset!.Id);
+    }
+
+    /// <summary>The root pool keeps the old rule: an all-transparent tile there is still folded into the one reserved blank.</summary>
+    [Fact]
+    public void Import_FullyTransparentTile_IntoTheTile4BppRoot_StillSkipped()
+    {
+        var project = new ProjectState();
+
+        var result = AssetImporter.Import(project, MakeSource("gap", 8, 8), AllTransparentRgba(8, 8), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(ImportFailureReason.RedundantWithReservedBlank, result.Reason);
+    }
+
+    /// <summary>Tile8Bpp sub-folders are NOT frame banks (their tiles become placeable in metatiles with the SubfolderAssetsInEditor setting), so the blank-folding rule still applies there.</summary>
+    [Fact]
+    public void Import_FullyTransparentTile_IntoATile8BppSubfolder_StillSkipped()
+    {
+        var project = new ProjectState();
+
+        var result = AssetImporter.Import(project, MakeSource("gap", 8, 8), AllTransparentRgba(8, 8), AssetCategory.Tile8Bpp, "tile/8bpp/images/hud", DitherMode.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(ImportFailureReason.RedundantWithReservedBlank, result.Reason);
+    }
+
     [Theory]
     [InlineData(AssetCategory.Sprite4Bpp)]
     [InlineData(AssetCategory.Sprite8Bpp)]

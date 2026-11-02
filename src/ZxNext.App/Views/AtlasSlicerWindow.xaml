@@ -64,7 +64,8 @@
         </Grid>
 
         <CheckBox Content="Skip duplicate cells (identical pixels imported only once)"
-                  IsChecked="{Binding SkipDuplicateCells}" Margin="0,8,0,0" />
+                  IsChecked="{Binding SkipDuplicateCells}" IsEnabled="{Binding CanSkipDuplicateCells}" Margin="0,8,0,0"
+                  ToolTip="Off and locked when slicing into a Tile4Bpp sub-folder: those tiles are an animation frame bank, copied into tile memory as one contiguous block, so every position needs its own physical copy even when two look identical." />
 
         <CheckBox Content="Pad incomplete edge cells with transparency" IsChecked="{Binding PadIncompleteEdgeCells}" Margin="0,8,0,0"
                   Visibility="{Binding CanPadIncompleteEdgeCells, Converter={StaticResource BoolToVis}}"

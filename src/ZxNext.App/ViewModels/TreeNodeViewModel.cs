@@ -47,8 +47,8 @@ public partial class TreeNodeViewModel : ObservableObject
     /// <summary>True only for the four fixed root category folders (not for user-created sub-folders) — used to decide where the "add sub-folder" button appears.</summary>
     public bool IsCategoryRoot { get; init; }
 
-    /// <summary>Whether this category root offers "Add sub-folder...": every category except Tile4Bpp
-    /// (see <see cref="AssetCategoryExtensions.SupportsSubfolders"/>). 8bpp sprite/tile and Sprite4Bpp
+    /// <summary>Whether this category root offers "Add sub-folder...": every category does (see
+    /// <see cref="AssetCategoryExtensions.SupportsSubfolders"/>). 8bpp sprite/tile, Sprite4Bpp and Tile4Bpp
     /// sub-folders are "banks" of one shared palette; Layer2 sub-folders each get their own.</summary>
     public bool CanHaveSubfolders => IsCategoryRoot && Category is { } c && c.SupportsSubfolders();
 

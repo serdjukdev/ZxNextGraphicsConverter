@@ -83,9 +83,18 @@ public partial class AtlasSlicerViewModel : ObservableObject
     [ObservableProperty]
     private int cellCount;
 
-    /// <summary>When true, cells whose pixels are byte-for-byte identical to an earlier cell in this same slice are skipped on import.</summary>
+    /// <summary>When true, cells whose pixels are byte-for-byte identical to an earlier cell in this same slice are skipped on import. Forced (and locked) off when slicing into a raw tile bank: see <see cref="CanSkipDuplicateCells"/>.</summary>
     [ObservableProperty]
     private bool skipDuplicateCells = true;
+
+    /// <summary>
+    /// False when slicing into a raw tile bank (a Tile4Bpp sub-folder = a tile animation's frame bank,
+    /// see <see cref="AssetCategoryExtensions.IsRawTileBankFolder"/>), which disables the checkbox: a
+    /// frame is copied into tile pattern memory as one contiguous block, so two identical pieces need two
+    /// physical copies at their own positions. Dropping the second would shorten the frame and shift
+    /// every byte after it.
+    /// </summary>
+    public bool CanSkipDuplicateCells { get; }
 
     /// <summary>Only meaningful (and only shown) when <see cref="CanOfferTransparentTileFirst"/> is true — see <see cref="ZxNext.App.ViewModels.MainViewModel.ImportSlicedAsync"/> for what actually happens with it.</summary>
     [ObservableProperty]
@@ -140,12 +149,18 @@ public partial class AtlasSlicerViewModel : ObservableObject
         // sub-folder tile's exported label is a per-file LOCAL index, which would never match the
         // project-wide tileIndex byte a metatile cell actually needs), so auto-building a metatile from
         // them here would create exactly the same trap through a different door.
+        CanSkipDuplicateCells = !category.IsRawTileBankFolder(folderPath);
+        if (!CanSkipDuplicateCells) SkipDuplicateCells = false;
+
         var isSubfolder = category.SubfoldersShareOneExportRow() && folderPath != category.ToFolderPath();
         SupportsMetatileBlockSlicing = category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp && project.MetatileGridSize != 1 && !isSubfolder;
         ResolvedGridSize = project.MetatileGridSize;
 
+        // Root-folder tiles only: a Tile4Bpp sub-folder is an animation frame bank whose tiles are never
+        // placeable and never take a tilemap tile index, so they must not eat this budget (the export-side
+        // check, AssetExportIndexer.PlacementExceedsExportableCap, counts root-only for the same reason).
         _remainingTileCapacity = category == AssetCategory.Tile4Bpp
-            ? AssetExportIndexer.MaxAssetsPerCategory - project.Assets.Count(a => a.Category == category)
+            ? AssetExportIndexer.MaxAssetsPerCategory - project.Assets.Count(a => a.Category == category && a.FolderPath == category.ToFolderPath())
             : int.MaxValue;
         _remainingMetatileCapacity = category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp
             ? MetatileService.MaxPerKind - project.Metatiles.Count(m => m.Kind == (category == AssetCategory.Tile4Bpp ? MetatileKind.FourBpp : MetatileKind.EightBpp))

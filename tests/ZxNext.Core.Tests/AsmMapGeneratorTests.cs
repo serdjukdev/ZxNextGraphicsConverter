@@ -102,6 +102,32 @@ public class AsmMapGeneratorTests
         Assert.DoesNotContain(" dw ", text);
     }
 
+    /// <summary>Tile4Bpp gained sub-folders for tilemap tile animation frame banks (see
+    /// AssetCategoryExtensions.IsRawTileBankFolder): a frame tile stays out of the 256 placeable root
+    /// tiles, lives in its own binary, and gets a zero-byte equ index instead of a palette byte, because
+    /// substituting a tile's pixels never rewrites the map cell attribute that carries the slot.</summary>
+    [Fact]
+    public void Generate_Tile4Bpp_Subfolder_IsAFrameBank_EquIndexNoPaletteByte()
+    {
+        var placements = new List<AssetPlacement>
+        {
+            new("water", 0, 0, IsFourBpp: true, PaletteSlotIndex: 5),
+            new("water2", 0, 32, IsFourBpp: true, PaletteSlotIndex: 5),
+        };
+
+        var root = AsmMapGenerator.Generate(placements, chunkCount: 1, AssetCategory.Tile4Bpp);
+        var anim = AsmMapGenerator.Generate(placements, chunkCount: 1, AssetCategory.Tile4Bpp, subfolderName: "water anim");
+
+        Assert.Contains("t4_pal_table:\nt4_water: db 5\n", root);
+        // The sub-folder's name is sanitized for the assembler and folded into the label; the value is the
+        // tile's index inside this bank (byte offset = index * 32), not a palette slot, and costs no bytes.
+        Assert.Contains("t4_water_anim_water: equ 0\n", anim);
+        Assert.Contains("t4_water_anim_water2: equ 1\n", anim);
+        Assert.DoesNotContain(" db ", anim);
+        // No pal-table label in a frame bank: there is no run of bytes to mark the start of.
+        Assert.DoesNotContain("pal_table", anim);
+    }
+
     [Fact]
     public void Generate_Sprite4Bpp_SubfolderFoldsItsNameIntoTheLabels_OnlyRootEmitsPalTable()
     {

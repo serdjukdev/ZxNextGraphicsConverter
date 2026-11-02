@@ -72,17 +72,38 @@ public static class AssetCategoryExtensions
 
     /// <summary>
     /// True for every category whose sub-folders are "banks" of one shared palette (Sprite8Bpp / Tile8Bpp's
-    /// shared flat palette, Sprite4Bpp's shared 16-slot bank) rather than independent images (Layer2). Such
-    /// a category exports as ONE address-map .asm and ONE palette file for the whole category, with a
-    /// separate binary per sub-folder. Only sub-folder support that differs from
+    /// shared flat palette, Sprite4Bpp's and Tile4Bpp's shared 16-slot bank) rather than independent images
+    /// (Layer2). Such a category exports as ONE address-map .asm and ONE palette file for the whole category,
+    /// with a separate binary per sub-folder. Only sub-folder support that differs from
     /// <see cref="SharesPaletteAcrossFolders"/> is the palette storage; the export collapse is identical.
     /// </summary>
     public static bool SubfoldersShareOneExportRow(this AssetCategory category) =>
-        category is AssetCategory.Sprite8Bpp or AssetCategory.Tile8Bpp or AssetCategory.Sprite4Bpp;
+        category is AssetCategory.Sprite8Bpp or AssetCategory.Tile8Bpp or AssetCategory.Sprite4Bpp or AssetCategory.Tile4Bpp;
 
-    /// <summary>True for a category that supports user-created sub-folders (everything except Tile4Bpp — its tiles feed the metatile system and gain nothing from a bank split).</summary>
-    public static bool SupportsSubfolders(this AssetCategory category) =>
-        category is not AssetCategory.Tile4Bpp;
+    /// <summary>
+    /// True for a category that supports user-created sub-folders, which is now every category. Tile4Bpp
+    /// was the one exception ("its tiles feed the metatile system and gain nothing from a bank split")
+    /// until tilemap tile animation arrived: an animation's frame tiles are exactly a useful bank split,
+    /// since they must stay OUT of the 256 placeable root tiles (the game copies a frame's 32 bytes over
+    /// a tile's own pattern memory at runtime) while still being ordinary tiles the app can re-quantize
+    /// and re-dither. A Tile4Bpp sub-folder tile is never placeable in a metatile, unlike Tile8Bpp's,
+    /// whose sub-folder tiles become placeable with the SubfolderAssetsInEditor setting.
+    /// </summary>
+    public static bool SupportsSubfolders(this AssetCategory category) => true;
+
+    /// <summary>
+    /// True for a folder holding RAW POSITIONAL tile data rather than a set of distinct pictures: today
+    /// that is any Tile4Bpp sub-folder, i.e. a tilemap tile animation's frame bank. A frame is copied into
+    /// tile pattern memory as one contiguous block of 32-byte tiles, so every position in it must be
+    /// physically present: a fully transparent piece needs its own 32 transparent bytes in place (it can
+    /// NOT be folded into the category's one reserved blank tile, which is referenced by index, not
+    /// copied), and two identical pieces need two copies. Import must therefore skip the de-duplication
+    /// and blank-folding rules that are right for the placeable root pool. Tile8Bpp sub-folders are
+    /// deliberately NOT included: their tiles become placeable in metatiles with the
+    /// SubfolderAssetsInEditor setting, so they are ordinary distinct tiles, not frame data.
+    /// </summary>
+    public static bool IsRawTileBankFolder(this AssetCategory category, string folderPath) =>
+        category is AssetCategory.Tile4Bpp && folderPath != category.ToFolderPath();
 
     /// <summary>True for the two sprite categories, the only ones whose sub-folder assets can be individually flagged placeable in the Map Editor (see <see cref="GraphicsAsset.IsMapRepresentative"/>). Tiles and Layer2 are never individually placed as map objects.</summary>
     public static bool IsSprite(this AssetCategory category) =>

@@ -1245,7 +1245,15 @@ public partial class MainViewModel : ObservableObject
                 ? _project.Assets.Where(a => a.Category == category).ToList()
                 : _project.Assets.Where(a => a.Category == category && a.FolderPath == folderNode.FolderPath).ToList();
 
-        var unused = scope.Where(a => CascadeDeletionService.IsAssetUnused(_project, a)).ToList();
+        // A raw tile bank (a Tile4Bpp sub-folder holding animation frames, see
+        // AssetCategoryExtensions.IsRawTileBankFolder) is never "used" by this test: no map places a frame
+        // and no metatile references one, because frames exist to be copied over a tile's pattern by the
+        // game's own code. Sweeping them would delete the whole animation, so they are excluded outright
+        // rather than relying on the user having locked every frame.
+        var unused = scope
+            .Where(a => !a.Category.IsRawTileBankFolder(a.FolderPath))
+            .Where(a => CascadeDeletionService.IsAssetUnused(_project, a))
+            .ToList();
         var lockedInScope = scope.Count(a => a.IsLocked);
 
         if (unused.Count == 0)
@@ -1402,6 +1410,36 @@ public partial class MainViewModel : ObservableObject
         PixelEditor.StatusText = locked
             ? $"Locked {changed} tile(s)/sprite(s) in '{folderNode.Name}'."
             : $"Unlocked {changed} tile(s)/sprite(s) in '{folderNode.Name}'.";
+    }
+
+    /// <summary>Forgets what a Tile4Bpp sub-folder animates, leaving its frame tiles in place.</summary>
+    public void ClearTileAnimationTarget(string folderPath)
+    {
+        if (!TileAnimationService.ClearTarget(_project, folderPath)) return;
+        HasUnsavedChanges = true;
+        PixelEditor.StatusText = $"Cleared the animation target of '{folderPath}'. Its tiles are left alone.";
+    }
+
+    /// <summary>Points a Tile4Bpp sub-folder's frames at every tile of one metatile: one frame = that many tiles. See ZxNext.Core.Model.TileAnimation.</summary>
+    public void SetTileAnimationTarget(string folderPath, Metatile metatile) =>
+        ReportTileAnimationTarget(folderPath, TileAnimationService.SetTargetFromMetatile(_project, folderPath, metatile), $"metatile '{metatile.Name}'");
+
+    /// <summary>Points a Tile4Bpp sub-folder's frames at ONE tile: one frame = one 32-byte tile.</summary>
+    public void SetTileAnimationTarget(string folderPath, GraphicsAsset tile) =>
+        ReportTileAnimationTarget(folderPath, TileAnimationService.SetTargetFromTile(_project, folderPath, tile), $"tile '{tile.Name}'");
+
+    /// <summary>
+    /// Shared tail of both setters: the status line reports the resulting frame maths plus whatever
+    /// TileAnimationService found wrong with the bank (an incomplete trailing frame, a frame tile in the
+    /// wrong palette slot, targets that are not consecutive), since those are exactly the mistakes that
+    /// otherwise only show up as a broken animation on real hardware.
+    /// </summary>
+    private void ReportTileAnimationTarget(string folderPath, TileAnimation animation, string targetLabel)
+    {
+        HasUnsavedChanges = true;
+        var info = TileAnimationService.Describe(_project, animation);
+        var head = $"'{folderPath}' animates {targetLabel}: {info.FrameSize} tile(s)/frame, {info.FrameCount} frame(s), {info.FrameSize * 32} bytes per frame.";
+        PixelEditor.StatusText = info.Problems.Count == 0 ? head : head + " " + string.Join(" ", info.Problems);
     }
 
     /// <summary>Toggles the Layer2 priority flag on one Tile8Bpp tile — driven by the green up-arrow on its tree row.</summary>
@@ -1667,7 +1705,7 @@ public partial class MainViewModel : ObservableObject
 
         if (dragged.FolderPath != target.FolderPath)
         {
-            if (!dragged.Category.SubfoldersShareOneExportRow()) return; // Layer2 sub-folder move = re-quantize, not offered here; Tile4Bpp has none
+            if (!dragged.Category.SubfoldersShareOneExportRow()) return; // Layer2 sub-folder move = re-quantize, not offered here
             var check = ReferenceIntegrityService.CanMoveAssetToFolder(_project, dragged, target.FolderPath);
             if (!check.CanDelete)
             {

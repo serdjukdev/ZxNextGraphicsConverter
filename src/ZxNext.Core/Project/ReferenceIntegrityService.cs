@@ -44,6 +44,10 @@ public static class ReferenceIntegrityService
         return results;
     }
 
+    /// <summary>Every tile animation whose target list names the given tile: those frames exist to overwrite exactly that tile's pattern.</summary>
+    public static List<TileAnimation> FindAnimationsTargetingTile(ProjectState project, Guid tileAssetId) =>
+        project.TileAnimations.Where(a => a.TargetTileIds.Contains(tileAssetId)).ToList();
+
     /// <summary>Checks whether a GraphicsAsset (tile or sprite category) can be safely deleted. Non-tile/non-sprite categories (Layer2) have no such reference chain yet and are always deletable by this check.</summary>
     public static DeletionCheck CanDeleteAsset(ProjectState project, GraphicsAsset asset)
     {
@@ -64,6 +68,17 @@ public static class ReferenceIntegrityService
             {
                 return new DeletionCheck(false,
                     $"Cannot delete '{asset.Name}': used in metatile(s) {string.Join(", ", metatiles.Select(m => m.Name))}.");
+            }
+
+            // A tile animation overwrites this tile's pattern at runtime (see TileAnimation). Normally the
+            // metatile check above already blocked it, since a target tile is placed on a map through some
+            // metatile -- this catches the case where that metatile is gone but the animation still names
+            // the tile, where deleting it would leave the animation pointing at nothing.
+            var animations = FindAnimationsTargetingTile(project, asset.Id);
+            if (animations.Count > 0)
+            {
+                return new DeletionCheck(false,
+                    $"Cannot delete '{asset.Name}': it is a target of the tile animation in {string.Join(", ", animations.Select(x => $"'{x.FolderPath}'"))}. Clear that folder's animation target first.");
             }
         }
         else if (asset.Category is AssetCategory.Sprite4Bpp or AssetCategory.Sprite8Bpp)

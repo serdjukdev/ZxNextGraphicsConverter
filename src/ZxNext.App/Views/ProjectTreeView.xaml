@@ -261,7 +261,8 @@
                              0 Rename, 1 Re-quantize, 2 Delete, 3 Lock/Unlock, 4 Add sub-folder,
                              5 Re-quantize folder, 6 Delete folder, 7 Delete unused,
                              8 Lock all in folder, 9 Unlock all in folder, 10 Priority (Tile8Bpp only),
-                             11 Show/Hide in Map Editor (Sprite4Bpp/Sprite8Bpp sub-folder leaf only). -->
+                             11 Show/Hide in Map Editor (Sprite4Bpp/Sprite8Bpp sub-folder leaf only),
+                             12 Animation target (Tile4Bpp sub-folder FOLDER only). -->
                         <Grid.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Rename..." Click="RenameMenuItem_OnClick" />
@@ -283,6 +284,8 @@
                                 <MenuItem Header="Priority" Click="PriorityMenuItem_OnClick"
                                           ToolTip="Layer2 priority: a priority tile draws on top of every layer on real hardware" />
                                 <MenuItem Header="Show in Map Editor" Click="MapRepresentativeMenuItem_OnClick" />
+                                <MenuItem Header="Animation target..." Click="AnimationTargetMenuItem_OnClick"
+                                          ToolTip="Tile4Bpp sub-folder only: say which metatile's tiles this folder's frames overwrite at runtime" />
                             </ContextMenu>
                         </Grid.ContextMenu>
                         <StackPanel Grid.Column="0" Orientation="Horizontal">

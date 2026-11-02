@@ -46,6 +46,9 @@ public partial class ProjectTreeView : UserControl
     /// <summary>Raised from a folder's (category root or sub-folder) right-click "Delete unused..." menu item.</summary>
     public event Action<TreeNodeViewModel>? DeleteUnusedRequested;
 
+    /// <summary>Raised from a Tile4Bpp sub-folder's right-click "Animation target..." menu item.</summary>
+    public event Action<TreeNodeViewModel>? AnimationTargetRequested;
+
     /// <summary>Raised from a folder's right-click "Lock all" / "Unlock all" menu item (bool = lock vs unlock).</summary>
     public event Action<TreeNodeViewModel, bool>? SetLockOnFolderRequested;
 
@@ -635,6 +638,15 @@ public partial class ProjectTreeView : UserControl
             }
         }
 
+        // "Animation target..." is a Tile4Bpp SUB-FOLDER (folder row) only: that is the one folder kind
+        // holding raw animation frame data, see AssetCategoryExtensions.IsRawTileBankFolder.
+        if (menu.Items[12] is MenuItem animationTargetItem)
+        {
+            animationTargetItem.Visibility = node.IsFolder && node.Category is { } animCat && animCat.IsRawTileBankFolder(node.FolderPath)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
         // "Show in Map Editor"/"Hide from Map Editor" is a Sprite4Bpp/Sprite8Bpp sub-folder leaf only.
         // Header flips to "Hide from Map Editor" when every eligible target already shows there.
         if (menu.Items[11] is MenuItem representativeItem)
@@ -751,6 +763,12 @@ public partial class ProjectTreeView : UserControl
     {
         if (sender is not MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement { DataContext: TreeNodeViewModel { IsFolder: true } node } } }) return;
         DeleteUnusedRequested?.Invoke(node);
+    }
+
+    private void AnimationTargetMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement { DataContext: TreeNodeViewModel { IsFolder: true } node } } }) return;
+        AnimationTargetRequested?.Invoke(node);
     }
 
     private void LockAllFolderMenuItem_OnClick(object sender, RoutedEventArgs e)

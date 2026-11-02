@@ -15,15 +15,15 @@ public static class AsmMapGenerator
     /// Null for a category's root folder; the sub-folder's own name (no slashes) otherwise. Folded into the
     /// per-item labels (<c>s4_&lt;subfolder&gt;_&lt;name&gt;</c>, <c>s8_&lt;subfolder&gt;_&lt;name&gt;</c>, ...)
     /// since two different sub-folders can otherwise legally reuse the same asset name. Used by Sprite4Bpp /
-    /// Sprite8Bpp / Tile8Bpp (see <c>AssetCategoryExtensions.SubfoldersShareOneExportRow</c>); Tile4Bpp has
-    /// no sub-folders and Layer2's are handled by <c>Layer2Exporter</c>, so it is ignored there.
+    /// Sprite8Bpp / Tile8Bpp / Tile4Bpp (see <c>AssetCategoryExtensions.SubfoldersShareOneExportRow</c>);
+    /// Layer2's sub-folders are handled by <c>Layer2Exporter</c>, so it is ignored there.
     /// </param>
     public static string Generate(IReadOnlyList<AssetPlacement> placements, int chunkCount, AssetCategory category, string? subfolderName = null) =>
         category switch
         {
             AssetCategory.Sprite4Bpp => GenerateSprite4Bpp(placements, subfolderName),
             AssetCategory.Sprite8Bpp => GenerateBareIndex(placements, "s8", "Sprite8Bpp", subfolderName),
-            AssetCategory.Tile4Bpp => GenerateTile4Bpp(placements),
+            AssetCategory.Tile4Bpp => GenerateTile4Bpp(placements, subfolderName),
             AssetCategory.Tile8Bpp => GenerateBareIndex(placements, "t8", "Tile8Bpp", subfolderName),
             _ => GenerateGeneric(placements, chunkCount)
         };
@@ -114,10 +114,39 @@ public static class AsmMapGenerator
     /// <c>t4_pal_table + &lt;tile number&gt;</c> reaches the same byte. No index constant (the tile number
     /// is just its position here), no bank/byte-offset record: 4bpp tiles upload as one contiguous blob
     /// (chunk 0, then 1, ...), like <see cref="GenerateSprite4Bpp"/>.
+    /// <para>
+    /// A sub-folder is a different thing entirely: a tilemap tile animation's frame bank (see
+    /// <c>AssetCategoryExtensions.IsRawTileBankFolder</c>), i.e. raw positional tile data the game copies
+    /// into tile pattern memory. There the palette byte would be dead weight in the assembled program:
+    /// substituting a tile's pixels never rewrites any tilemap cell's attribute byte, so the slot cannot
+    /// change with the frame and the running code has no use for it. Those tiles get
+    /// <c>t4_&lt;subfolder&gt;_&lt;name&gt;: equ &lt;local index&gt;</c> instead, which costs zero bytes
+    /// and still lets code reach one frame tile by name (byte offset = index * 32). No pal-table label
+    /// either, there is no run of bytes to mark the start of. The sub-folder name is folded into the
+    /// labels because two sub-folders may legally reuse one tile name.
+    /// </para>
     /// </summary>
-    private static string GenerateTile4Bpp(IReadOnlyList<AssetPlacement> placements)
+    private static string GenerateTile4Bpp(IReadOnlyList<AssetPlacement> placements, string? subfolderName)
     {
         var sb = new StringBuilder();
+        var used = new HashSet<string>();
+
+        if (subfolderName is not null)
+        {
+            sb.Append("; Tile4Bpp graphics map (sub-folder '").Append(subfolderName).Append("') -- animation frame bank, raw tile data.\n");
+            sb.Append("; t4_..._<name>: equ <n>   -- 0-based tile index within THIS bank's own binary; byte offset = n * 32.\n");
+            sb.Append("; No palette byte here: a frame replaces a tile's pixels only, and the map cell's attribute byte\n");
+            sb.Append("; (which carries the palette slot) is never rewritten, so the slot stays whatever the base tile had.\n");
+            sb.Append('\n');
+
+            for (var i = 0; i < placements.Count; i++)
+            {
+                sb.Append("t4_").Append(AsmLabel.SanitizeUnique(subfolderName + "_" + placements[i].Name, used)).Append(": equ ").Append(i).Append('\n');
+            }
+
+            return sb.ToString();
+        }
+
         sb.Append("; Tile4Bpp graphics map.\n");
         sb.Append("; t4_<name>: db <n>   -- this tile's 4bpp palette index (0-15). One byte per tile, in tile order.\n");
         sb.Append("; t4_pal_table:       -- start of that run; t4_pal_table + <tile number> is the same byte.\n");
@@ -125,7 +154,6 @@ public static class AsmMapGenerator
         sb.Append('\n');
         sb.Append("t4_pal_table:\n");
 
-        var used = new HashSet<string>();
         foreach (var p in placements)
         {
             sb.Append("t4_").Append(AsmLabel.SanitizeUnique(p.Name, used)).Append(": db ").Append(p.PaletteSlotIndex).Append('\n');

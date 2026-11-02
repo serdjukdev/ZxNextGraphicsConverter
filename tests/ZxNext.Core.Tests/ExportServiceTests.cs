@@ -233,6 +233,51 @@ public class ExportServiceTests : IDisposable
         Assert.Equal(2, Directory.GetFiles(_outputDir, "*.spr").Length); // separate binary per sub-folder
     }
 
+    /// <summary>Tile4Bpp sub-folders (tilemap tile animation frame banks) collapse into the category's one
+    /// asm + one palette exactly like Sprite4Bpp's, each keeping its own binary. The point of the split is
+    /// that a sub-folder tile must NOT take a placeable root index: the root tile stays index 0 either way.</summary>
+    [Fact]
+    public void ExportAll_Tile4BppRootAndSubfolder_CollapseToOneRow_SubfolderTileTakesNoRootIndex()
+    {
+        var project = new ProjectState();
+        var rootSource = new SourceImage { FileName = "water", FilePath = _tempSourceFile, Width = 8, Height = 8 };
+        var frameSource = new SourceImage { FileName = "water_f1", FilePath = _tempSourceFile, Width = 8, Height = 8 };
+        project.SourceImages.Add(rootSource);
+        project.SourceImages.Add(frameSource);
+
+        // Opaque pixels: an all-transparent 4bpp tile import is rejected as a duplicate of the reserved blank tile.
+        var rgba = new byte[8 * 8 * 4];
+        for (var i = 0; i < 8 * 8; i++)
+        {
+            var o = i * 4;
+            rgba[o] = 40; rgba[o + 1] = 80; rgba[o + 2] = 200; rgba[o + 3] = 255;
+        }
+
+        Assert.True(AssetImporter.Import(project, rootSource, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Success);
+        Assert.True(AssetImporter.Import(project, frameSource, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images/water anim", DitherMode.None).Success);
+
+        var results = ExportService.ExportAll(project, _ => ExportChunkSize.EightKb);
+        var row = results.Single(r => r.RowKey == "tile/4bpp/images"); // no separate sub-folder row
+
+        Assert.Equal("tile_4bpp_images_gfx.asm", row.AsmFileName);
+        Assert.Contains("t4_water: db ", row.AsmText);
+        Assert.Contains("t4_water_anim_water_f1: equ 0", row.AsmText); // frame bank: a zero-byte bank index, no palette byte
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(row.AsmText, @"(?m)^t4_pal_table:$"));
+
+        // The frame tile is not placeable, so it must not shift the root tile's placement index. Index 0 is
+        // the reserved blank tile, so the first real root tile is 1 whether or not the sub-folder exists.
+        var rootTile = project.Assets.Single(a => a.Name == "water");
+        var frameTile = project.Assets.Single(a => a.Name == "water_f1");
+        Assert.Equal(1, AssetExportIndexer.PlacementIndexOf(rootTile, project.Assets));
+        Assert.True(AssetExportIndexer.IsSubfolderAsset(frameTile));
+        Assert.Equal(0, AssetExportIndexer.SubfolderLocalIndexOf(frameTile, project.Assets));
+
+        ExportService.WriteToDisk(results, _outputDir);
+        Assert.Single(Directory.GetFiles(_outputDir, "*.asm"));
+        Assert.Single(Directory.GetFiles(_outputDir, "*.pal"));
+        Assert.Equal(2, Directory.GetFiles(_outputDir, "*.til").Length); // separate binary per sub-folder
+    }
+
     /// <summary>Same collapse (and same LOCAL-index label format) as Sprite8Bpp — Tile8Bpp mirrors it exactly
     /// (no slot/offset, per-file-local equ index), by explicit user decision even though this means the
     /// label will NOT match a metatile cell's tileIndex byte once sub-folders are involved.</summary>

@@ -176,7 +176,9 @@ public partial class MetatileEditorViewModel : ObservableObject
     /// because their exported <c>t8_subfolder_name: equ N</c> label is a per-file LOCAL index, not the
     /// project-wide rank a metatile cell's tileIndex uses. When <see cref="AppSettings.SubfolderAssetsInEditor"/>
     /// is on, Tile8Bpp sub-folder tiles are included and their tileIndex at export IS the local sub-folder
-    /// index, which matches the label. Tile4Bpp has no sub-folders (palette-bank category), so always root-only.
+    /// index, which matches the label. Tile4Bpp sub-folders DO exist (tilemap tile animation frame banks),
+    /// but a frame tile is never placeable in a metatile by design, so Tile4Bpp stays root-only here whatever
+    /// that setting says: a frame's whole purpose is to be copied over a placed tile's pattern at runtime.
     /// </summary>
     private void RefreshTilePalette()
     {

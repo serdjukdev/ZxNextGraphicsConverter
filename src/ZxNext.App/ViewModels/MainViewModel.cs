@@ -552,7 +552,7 @@ public partial class MainViewModel : ObservableObject
         var originalName = asset.Name;
 
         var result = _project.ReplaceFlatPaletteAsset(asset, () =>
-            AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, maxFourBppColors, asset.SourceOffsetX, asset.SourceOffsetY, excludeAssetIdFromNameCheck: asset.Id,
+            AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, maxFourBppColors, asset.SourceOffsetX, asset.SourceOffsetY, replacingAssetId: asset.Id,
                 sourceCropWidth: asset.SourceCropWidth, sourceCropHeight: asset.SourceCropHeight, priority: asset.IsPriority));
         if (!result.Success)
         {
@@ -628,7 +628,7 @@ public partial class MainViewModel : ObservableObject
     /// now-invalid palette reference — the caller is told which ones via the returned failed-name list.
     /// Every removed/replaced tile's <see cref="MetatileCell.TileAssetId"/> references are kept valid
     /// (remapped to the replacement, or to the category's reserved blank if there's no replacement) — see
-    /// <see cref="ProjectState.RemapMetatileTileReferences"/>. The category's own reserved blank tile is
+    /// <see cref="ProjectState.RemapAssetReferences"/>. The category's own reserved blank tile is
     /// never fed through re-quantization itself (no source image, would always hit the "no source"
     /// removal branch) — instead it's explicitly recreated fresh up front, and every metatile cell that
     /// referenced the old one is remapped to the new one. Each asset keeps its own original
@@ -664,7 +664,7 @@ public partial class MainViewModel : ObservableObject
 
             if (oldBlank is not null && newBlank is not null)
             {
-                _project.RemapMetatileTileReferences(oldBlank.Id, newBlank.Id);
+                _project.RemapAssetReferences(oldBlank.Id, newBlank.Id);
                 replaced.Add((oldBlank.Id, newBlank));
             }
 
@@ -679,7 +679,7 @@ public partial class MainViewModel : ObservableObject
                         _project.SourceImages.FirstOrDefault(s => s.Id == sourceId) is not { } source)
                     {
                         _project.Assets.Remove(asset);
-                        if (newBlank is not null) _project.RemapMetatileTileReferences(asset.Id, newBlank.Id);
+                        if (newBlank is not null) _project.RemapAssetReferences(asset.Id, newBlank.Id);
                         removedIds.Add(asset.Id);
                         failed.Add(asset.Name);
                         continue;
@@ -691,7 +691,7 @@ public partial class MainViewModel : ObservableObject
                     var cellSource = new SourceImage { Id = source.Id, FileName = asset.Name, FilePath = source.FilePath, Width = asset.Width, Height = asset.Height };
 
                     var result = AssetImporter.Import(_project, cellSource, cellRgba, category, asset.FolderPath, ditherModeFor(asset), maxColorsPerTile, asset.SourceOffsetX, asset.SourceOffsetY,
-                        excludeAssetIdFromNameCheck: asset.Id, priority: asset.IsPriority);
+                        replacingAssetId: asset.Id, priority: asset.IsPriority);
                     _project.Assets.Remove(asset);
 
                     if (result.Success)
@@ -700,13 +700,13 @@ public partial class MainViewModel : ObservableObject
                         result.Asset.SortIndex = asset.SortIndex; // full category rebuild replaces every asset; keep original relative order
                         result.Asset.IsLocked = asset.IsLocked;
                         result.Asset.IsMapRepresentative = asset.IsMapRepresentative;
-                        _project.RemapMetatileTileReferences(asset.Id, result.Asset.Id);
+                        _project.RemapAssetReferences(asset.Id, result.Asset.Id);
                         replaced.Add((asset.Id, result.Asset));
                         succeeded++;
                     }
                     else
                     {
-                        if (newBlank is not null) _project.RemapMetatileTileReferences(asset.Id, newBlank.Id);
+                        if (newBlank is not null) _project.RemapAssetReferences(asset.Id, newBlank.Id);
                         removedIds.Add(asset.Id);
                         failed.Add(asset.Name);
                     }
@@ -948,7 +948,7 @@ public partial class MainViewModel : ObservableObject
                     // colours. All-or-nothing per asset: a failed replacement restores everything for
                     // THIS asset (and any sibling the compaction touched) exactly as it was.
                     var result = _project.ReplaceFlatPaletteAsset(asset, () =>
-                        AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, null, asset.SourceOffsetX, asset.SourceOffsetY, excludeAssetIdFromNameCheck: asset.Id,
+                        AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, newDitherMode, null, asset.SourceOffsetX, asset.SourceOffsetY, replacingAssetId: asset.Id,
                             sourceCropWidth: asset.SourceCropWidth, sourceCropHeight: asset.SourceCropHeight, priority: asset.IsPriority));
                     if (result.Success)
                     {

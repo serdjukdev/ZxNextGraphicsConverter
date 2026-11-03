@@ -234,6 +234,81 @@ public class AssetImporterTests
         Assert.Empty(project.Assets.Where(a => a.FolderPath == animFolder));
     }
 
+    /// <summary>
+    /// Replacing an asset in place (re-quantize, a category rebuild, "Replace image...") must keep its id:
+    /// every reference in the project is by id, and a dangling one is never harmless. A placed sprite used
+    /// to lose its map placements this way, which made the whole export refuse with "places a sprite that
+    /// no longer exists".
+    /// </summary>
+    [Fact]
+    public void Import_ReplacingAnAsset_KeepsItsId_SoMapPlacementsSurvive()
+    {
+        var project = new ProjectState();
+        var source = MakeSource("hero", 16, 16);
+        var original = AssetImporter.Import(project, source, SolidColorWithTransparentCorner(16, 16, (255, 0, 0)), AssetCategory.Sprite4Bpp, "sprite/4bpp/images", DitherMode.None).Asset!;
+
+        var map = new MapAsset(4, 4)
+        {
+            Name = "level1",
+            MetatileGridSize = 2,
+            TilemapLayer = new MapGridLayer { MetatileIndices = new byte[16], CellAttributes = [] },
+            TileLayer8Bpp = new MapGridLayer { MetatileIndices = new byte[16] },
+            SpriteLayer = [new SpritePlacement { SpriteAssetId = original.Id, X = 8, Y = 8 }]
+        };
+        project.Maps.Add(map);
+
+        var replaced = project.ReplaceFlatPaletteAsset(original, () =>
+            AssetImporter.Import(project, source, SolidColorWithTransparentCorner(16, 16, (0, 0, 255)), AssetCategory.Sprite4Bpp, "sprite/4bpp/images", DitherMode.None,
+                replacingAssetId: original.Id));
+
+        Assert.True(replaced.Success, replaced.Error);
+        Assert.Equal(original.Id, replaced.Asset!.Id);
+        // The placement still points at a sprite that exists, so the map still shows it and the export works.
+        Assert.Equal(replaced.Asset.Id, map.SpriteLayer[0].SpriteAssetId);
+        Assert.Contains(project.Assets, a => a.Id == map.SpriteLayer[0].SpriteAssetId);
+    }
+
+    /// <summary>Same rule for a tile that a metatile cell and a tile animation both point at.</summary>
+    [Fact]
+    public void Import_ReplacingATile_KeepsItsId_SoMetatileCellsAndAnimationTargetsSurvive()
+    {
+        var project = new ProjectState();
+        var source = MakeSource("water", 8, 8);
+        var original = AssetImporter.Import(project, source, SolidColorWithTransparentCorner(8, 8, (255, 0, 0)), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
+
+        var metatile = new Metatile
+        {
+            Name = "pond",
+            Kind = MetatileKind.FourBpp,
+            GridSize = 2,
+            SortIndex = 0,
+            Cells = Enumerable.Repeat(original.Id, 4).Select(id => new MetatileCell { TileAssetId = id }).ToList()
+        };
+        project.Metatiles.Add(metatile);
+        project.TileAnimations.Add(new TileAnimation { FolderPath = "tile/4bpp/images/pond anim", TargetTileIds = [original.Id] });
+
+        var replaced = project.ReplaceFlatPaletteAsset(original, () =>
+            AssetImporter.Import(project, source, SolidColorWithTransparentCorner(8, 8, (0, 255, 0)), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None,
+                replacingAssetId: original.Id));
+
+        Assert.True(replaced.Success, replaced.Error);
+        Assert.Equal(original.Id, replaced.Asset!.Id);
+        Assert.All(metatile.Cells, c => Assert.Equal(replaced.Asset.Id, c.TileAssetId));
+        Assert.Equal([replaced.Asset.Id], project.TileAnimations[0].TargetTileIds);
+    }
+
+    /// <summary>A brand-new import still gets a fresh id of its own, replacement is the only case that reuses one.</summary>
+    [Fact]
+    public void Import_BrandNew_GetsItsOwnId()
+    {
+        var project = new ProjectState();
+        var first = AssetImporter.Import(project, MakeSource("a", 8, 8), SolidColorWithTransparentCorner(8, 8, (255, 0, 0)), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
+        var second = AssetImporter.Import(project, MakeSource("b", 8, 8), SolidColorWithTransparentCorner(8, 8, (0, 0, 255)), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
+
+        Assert.NotEqual(Guid.Empty, first.Id);
+        Assert.NotEqual(first.Id, second.Id);
+    }
+
     private static byte[] ManyDistinctColorsImage(int width, int height)
     {
         var rgba = new byte[width * height * 4];
@@ -475,7 +550,7 @@ public class AssetImporterTests
         // asset's own stored crop info — must not throw, unlike naively re-cropping a 320x256 rect.
         var recomposed = Layer2Composer.Compose(actualSource, 100, 80, asset.SourceOffsetX, asset.SourceOffsetY, asset.SourceCropWidth, asset.SourceCropHeight, asset.Width, asset.Height);
         var reQuantized = AssetImporter.Import(project, source, recomposed, AssetCategory.Layer2_320x256, "layer2/320x256/images", DitherMode.OrderedBayer4X4,
-            sourceOffsetX: asset.SourceOffsetX, sourceOffsetY: asset.SourceOffsetY, excludeAssetIdFromNameCheck: asset.Id,
+            sourceOffsetX: asset.SourceOffsetX, sourceOffsetY: asset.SourceOffsetY, replacingAssetId: asset.Id,
             sourceCropWidth: asset.SourceCropWidth, sourceCropHeight: asset.SourceCropHeight);
 
         Assert.True(reQuantized.Success, reQuantized.Error);
@@ -521,9 +596,9 @@ public class AssetImporterTests
         var original = AssetImporter.Import(project, source, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
 
         // Simulates a re-quantize: the OLD asset is still in the project when Import runs again
-        // under the same name, so without excludeAssetIdFromNameCheck this would wrongly become "hero_2".
+        // under the same name, so without replacingAssetId this would wrongly become "hero_2".
         var reQuantized = AssetImporter.Import(project, source, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.OrderedBayer4X4,
-            excludeAssetIdFromNameCheck: original.Id);
+            replacingAssetId: original.Id);
 
         Assert.True(reQuantized.Success, reQuantized.Error);
         Assert.Equal("hero", reQuantized.Asset!.Name);
@@ -560,7 +635,7 @@ public class AssetImporterTests
         Assert.Single(project.Metatiles, m => m.Kind == MetatileKind.FourBpp && !m.IsReservedBlank);
 
         AssetImporter.Import(project, source, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.OrderedBayer4X4,
-            excludeAssetIdFromNameCheck: original.Id);
+            replacingAssetId: original.Id);
 
         Assert.Single(project.Metatiles, m => m.Kind == MetatileKind.FourBpp && !m.IsReservedBlank);
     }
@@ -670,7 +745,7 @@ public class AssetImporterTests
         var original = AssetImporter.Import(project, source, rgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None).Asset!;
 
         var reQuantized = AssetImporter.Import(project, source, AllTransparentRgba(8, 8), AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None,
-            excludeAssetIdFromNameCheck: original.Id);
+            replacingAssetId: original.Id);
 
         Assert.True(reQuantized.Success, reQuantized.Error);
         Assert.NotNull(reQuantized.Asset);

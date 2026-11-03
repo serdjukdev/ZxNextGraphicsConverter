@@ -38,7 +38,11 @@ public static class AssetImporter
         int? maxColors = null,
         int sourceOffsetX = 0,
         int sourceOffsetY = 0,
-        Guid? excludeAssetIdFromNameCheck = null,
+        // Set only when this import REPLACES an existing asset (re-quantize, a category rebuild, and
+        // soon "Replace image..."): it both excludes that asset from the name-uniqueness check (it is
+        // about to be replaced by something under the same name) and is reused as the new asset's own id,
+        // so every reference to it in the project stays valid. Null for a brand-new import.
+        Guid? replacingAssetId = null,
         int? sourceCropWidth = null,
         int? sourceCropHeight = null,
         bool priority = false)
@@ -84,14 +88,14 @@ public static class AssetImporter
             // (or already was) guaranteed above — importing it anyway would just be a second tile at a
             // different SortIndex with the exact same content, defeating the whole point of having ONE
             // designated blank at a predictable index. Only for genuinely NEW imports — a re-quantize
-            // (excludeAssetIdFromNameCheck set) is replacing a specific EXISTING asset's identity, which
+            // (replacingAssetId set) is replacing a specific EXISTING asset's identity, which
             // this check has no business vetoing.
             // ...except in a raw tile bank (a Tile4Bpp sub-folder = a tile animation's frame bank, see
             // AssetCategoryExtensions.IsRawTileBankFolder): there the tile is positional data inside a
             // block the game copies wholesale into tile pattern memory, so a transparent position must
             // physically exist as its own 32 transparent bytes. Folding it into the one reserved blank
             // would shorten the frame and shift every byte after it.
-            if (excludeAssetIdFromNameCheck is null && !category.IsRawTileBankFolder(folderPath) && Array.TrueForAll(isTransparent, t => t))
+            if (replacingAssetId is null && !category.IsRawTileBankFolder(folderPath) && Array.TrueForAll(isTransparent, t => t))
             {
                 return new ImportResult(false, null,
                     $"'{source.FileName}' is fully transparent — identical to {category}'s reserved blank tile, already at export index 0. Not imported as a duplicate.",
@@ -100,19 +104,19 @@ public static class AssetImporter
         }
 
         var result = category.UsesPaletteBank()
-            ? ImportFourBpp(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, excludeAssetIdFromNameCheck,
-                TileAnimationService.ForcedPaletteSlotFor(project, category, folderPath, excludeAssetIdFromNameCheck))
-            : ImportFlatPalette(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, excludeAssetIdFromNameCheck, sourceCropWidth ?? width, sourceCropHeight ?? height, priority && category == AssetCategory.Tile8Bpp);
+            ? ImportFourBpp(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, replacingAssetId,
+                TileAnimationService.ForcedPaletteSlotFor(project, category, folderPath, replacingAssetId))
+            : ImportFlatPalette(project, source, category, folderPath, ditherMode, matched, isTransparent, width, height, maxColors, sourceOffsetX, sourceOffsetY, replacingAssetId, sourceCropWidth ?? width, sourceCropHeight ?? height, priority && category == AssetCategory.Tile8Bpp);
 
         // In a GridSize=1 ("no metatile") project, every real Tile4Bpp/Tile8Bpp tile needs its own 1x1
         // metatile to be paintable on a map at all — see ProjectState.MetatileGridSize's own doc comment.
-        // Auto-creating it here, right after a successful brand-new import (excludeAssetIdFromNameCheck
+        // Auto-creating it here, right after a successful brand-new import (replacingAssetId
         // null — a re-quantize replaces an EXISTING tile's identity and already redirects that tile's
         // existing metatile cells itself, so it must not get a second one here), covers every import path
         // (single-tile drop, Atlas Slicer plain slice) from this one choke point. Best-effort: if it fails
         // (e.g. the 255-per-Kind cap is already hit), the tile import itself still succeeds — the tile just
         // isn't paintable on the map yet, which is an acceptable edge case, not worth failing the import over.
-        if (result.Success && excludeAssetIdFromNameCheck is null
+        if (result.Success && replacingAssetId is null
             && category is AssetCategory.Tile4Bpp or AssetCategory.Tile8Bpp
             && project.MetatileGridSize == 1)
         {
@@ -156,7 +160,7 @@ public static class AssetImporter
     /// </summary>
     private static ImportResult ImportFourBpp(
         ProjectState project, SourceImage source, AssetCategory category, string folderPath, DitherMode ditherMode,
-        NextColor[] matched, bool[] isTransparent, int width, int height, int? maxColors, int sourceOffsetX, int sourceOffsetY, Guid? excludeAssetIdFromNameCheck,
+        NextColor[] matched, bool[] isTransparent, int width, int height, int? maxColors, int sourceOffsetX, int sourceOffsetY, Guid? replacingAssetId,
         int? forcedPaletteSlot = null)
     {
         if (maxColors is { } cap)
@@ -190,7 +194,11 @@ public static class AssetImporter
 
         var asset = new GraphicsAsset
         {
-            Name = EnsureUniqueName(project, source.FileName, excludeAssetIdFromNameCheck),
+            // Replacing an existing asset keeps ITS id: every reference in the project points at an asset
+            // by id (metatile cells, map object placements, a tile animation's targets), so minting a new
+            // one would dangle all of them. See the remarks on replacingAssetId.
+            Id = replacingAssetId ?? Guid.NewGuid(),
+            Name = EnsureUniqueName(project, source.FileName, replacingAssetId),
             Category = category,
             Width = width,
             Height = height,
@@ -212,7 +220,7 @@ public static class AssetImporter
     /// <summary>Shared by every category with one flat per-folder palette: 8bpp sprite/tile (256 colours, 1 byte/pixel) and all three Layer2 categories (256 or 16 colours, 1 byte or 2-per-byte). <paramref name="maxColors"/> matters most for Layer2_640x256x4 — real art almost always has more than its 15 usable colours, unlike the 256-colour modes.</summary>
     private static ImportResult ImportFlatPalette(
         ProjectState project, SourceImage source, AssetCategory category, string folderPath, DitherMode ditherMode,
-        NextColor[] matched, bool[] isTransparent, int width, int height, int? maxColors, int sourceOffsetX, int sourceOffsetY, Guid? excludeAssetIdFromNameCheck,
+        NextColor[] matched, bool[] isTransparent, int width, int height, int? maxColors, int sourceOffsetX, int sourceOffsetY, Guid? replacingAssetId,
         int sourceCropWidth, int sourceCropHeight, bool priority)
     {
         if (maxColors is { } cap)
@@ -273,7 +281,9 @@ public static class AssetImporter
 
         var asset = new GraphicsAsset
         {
-            Name = EnsureUniqueName(project, source.FileName, excludeAssetIdFromNameCheck),
+            // Same identity rule as ImportFourBpp above: a replacement keeps the replaced asset's id.
+            Id = replacingAssetId ?? Guid.NewGuid(),
+            Name = EnsureUniqueName(project, source.FileName, replacingAssetId),
             Category = category,
             Width = width,
             Height = height,

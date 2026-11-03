@@ -174,12 +174,15 @@ public class ProjectStateTests
 
         var result = project.ReplaceFlatPaletteAsset(original, () =>
             AssetImporter.Import(project, cellSource, replacementRgba, AssetCategory.Layer2_640x256x4, folderPath, DitherMode.None, null,
-                original.SourceOffsetX, original.SourceOffsetY, excludeAssetIdFromNameCheck: original.Id,
+                original.SourceOffsetX, original.SourceOffsetY, replacingAssetId: original.Id,
                 sourceCropWidth: original.SourceCropWidth, sourceCropHeight: original.SourceCropHeight));
 
         Assert.True(result.Success, result.Error);
-        Assert.DoesNotContain(project.Assets, a => a.Id == original.Id);
-        Assert.Contains(project.Assets, a => a.Id == result.Asset!.Id);
+        // The replacement deliberately KEEPS the replaced asset's id (AssetImporter.Import's
+        // replacingAssetId), so every reference to it stays valid; the object itself is a new instance.
+        Assert.Equal(original.Id, result.Asset!.Id);
+        Assert.Contains(project.Assets, a => ReferenceEquals(a, result.Asset));
+        Assert.DoesNotContain(project.Assets, a => ReferenceEquals(a, original));
         Assert.Equal(0, project.GetOrCreateFolderPalette(AssetCategory.Layer2_640x256x4, folderPath).FreeSlotCount);
     }
 
@@ -206,7 +209,7 @@ public class ProjectStateTests
 
         var result = project.ReplaceFlatPaletteAsset(target, () =>
             AssetImporter.Import(project, cellSource, replacementRgba, AssetCategory.Layer2_640x256x4, folderPath, DitherMode.None, null,
-                target.SourceOffsetX, target.SourceOffsetY, excludeAssetIdFromNameCheck: target.Id,
+                target.SourceOffsetX, target.SourceOffsetY, replacingAssetId: target.Id,
                 sourceCropWidth: target.SourceCropWidth, sourceCropHeight: target.SourceCropHeight));
 
         Assert.False(result.Success);
@@ -244,7 +247,7 @@ public class ProjectStateTests
 
         var result = project.ReplaceFlatPaletteAsset(original, () =>
             AssetImporter.Import(project, cellSource, replacementRgba, AssetCategory.Tile4Bpp, "tile/4bpp/images", DitherMode.None, null,
-                original.SourceOffsetX, original.SourceOffsetY, excludeAssetIdFromNameCheck: original.Id));
+                original.SourceOffsetX, original.SourceOffsetY, replacingAssetId: original.Id));
 
         Assert.True(result.Success, result.Error);
         var newAsset = result.Asset!;

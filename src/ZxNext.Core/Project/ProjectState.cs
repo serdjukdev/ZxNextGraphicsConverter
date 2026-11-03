@@ -363,7 +363,7 @@ public class ProjectState
             var bankResult = importReplacement();
             if (bankResult.Success)
             {
-                RemapMetatileTileReferences(oldAsset.Id, bankResult.Asset!.Id);
+                RemapAssetReferences(oldAsset.Id, bankResult.Asset!.Id);
                 return bankResult;
             }
 
@@ -390,7 +390,7 @@ public class ProjectState
         var result = importReplacement();
         if (result.Success)
         {
-            RemapMetatileTileReferences(oldAsset.Id, result.Asset!.Id);
+            RemapAssetReferences(oldAsset.Id, result.Asset!.Id);
             return result;
         }
 
@@ -404,22 +404,49 @@ public class ProjectState
     }
 
     /// <summary>
-    /// Every re-quantize path replaces a Tile4Bpp/Tile8Bpp asset with a brand-new <see cref="GraphicsAsset"/>
-    /// instance (a new <see cref="GraphicsAsset.Id"/>) rather than mutating the old one in place — so any
-    /// <see cref="MetatileCell.TileAssetId"/> still pointing at the old id would otherwise go dangling, making
-    /// every metatile cell that placed that tile silently render/export as empty. Called after every
-    /// successful asset replacement (from <see cref="ReplaceFlatPaletteAsset"/> and the bulk 4bpp category
-    /// rebuild in the App layer) so no re-quantize path can leave this dangling. A no-op for Sprite/Layer2
-    /// categories, since nothing there is ever referenced by a <see cref="MetatileCell"/>.
+    /// Repoints EVERY reference to <paramref name="oldAssetId"/> at <paramref name="newAssetId"/>: metatile
+    /// cells, map object placements, and a tile animation's target list. Those are the three places that
+    /// hold an asset by id, and none of them tolerates a dangling one.
+    ///
+    /// <para>
+    /// Ordinary replacement (re-quantize, a category rebuild, "Replace image...") does not rely on this
+    /// anymore: <see cref="Conversion.AssetImporter.Import"/>'s <c>replacingAssetId</c> gives the
+    /// replacement the SAME id, so every reference stays valid by construction and this call is a no-op.
+    /// It still matters where an asset genuinely becomes a different one, e.g. a failed re-import whose
+    /// metatile cells are pointed at the reserved blank tile instead, or a regenerated blank. It covers all
+    /// three reference kinds on purpose: it used to cover metatile cells alone, which silently broke the
+    /// map placements of any re-quantized sprite. A new kind of reference belongs here, not at a call site.
+    /// </para>
     /// </summary>
-    public void RemapMetatileTileReferences(Guid oldTileAssetId, Guid newTileAssetId)
+    public void RemapAssetReferences(Guid oldAssetId, Guid newAssetId)
     {
-        if (oldTileAssetId == newTileAssetId) return;
+        if (oldAssetId == newAssetId) return;
+
         foreach (var metatile in Metatiles)
         {
             foreach (var cell in metatile.Cells)
             {
-                if (cell.TileAssetId == oldTileAssetId) cell.TileAssetId = newTileAssetId;
+                if (cell.TileAssetId == oldAssetId) cell.TileAssetId = newAssetId;
+            }
+        }
+
+        // Map object placements: a dangling one does not just render as nothing, it makes the whole export
+        // refuse with "places a sprite that no longer exists". Re-quantizing a placed sprite used to do
+        // exactly that, because this method only ever covered metatile cells.
+        foreach (var map in Maps)
+        {
+            foreach (var placement in map.SpriteLayer)
+            {
+                if (placement.SpriteAssetId == oldAssetId) placement.SpriteAssetId = newAssetId;
+            }
+        }
+
+        // A tile animation's targets: the tiles its frames overwrite at runtime.
+        foreach (var animation in TileAnimations)
+        {
+            for (var i = 0; i < animation.TargetTileIds.Count; i++)
+            {
+                if (animation.TargetTileIds[i] == oldAssetId) animation.TargetTileIds[i] = newAssetId;
             }
         }
     }

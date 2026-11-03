@@ -1,4 +1,4 @@
-using ZxNext.Core.Export;
+﻿using ZxNext.Core.Export;
 using ZxNext.Core.Model;
 using Xunit;
 
@@ -18,10 +18,12 @@ public class AsmMapGeneratorTests
 
         var text = AsmMapGenerator.Generate(placements, chunkCount: 2, AssetCategory.Tile4Bpp);
 
-        Assert.Contains("t4_pal_table:\nt4_player_idle: db 3\n", text); // table-start label right before the first byte
-        Assert.Contains("t4_player_idle_2: db 3\n", text);              // sanitization collision -> suffix
-        Assert.Contains("t4_enemy_a: db 7\n", text);
-        Assert.DoesNotContain("equ", text);                             // no index constant, just the palette byte
+        // Index and palette slot are both equ (zero bytes); the byte table is one contiguous run at the end.
+        // The palette value is pre-shifted into bits 7:4 (slot * 16), with the raw slot as a comment.
+        Assert.Contains("t4_player_idle: equ 0\nt4_player_idle_pal: equ 48   ; slot 3\n", text);
+        Assert.Contains("t4_player_idle_2: equ 1\nt4_player_idle_2_pal: equ 48   ; slot 3\n", text); // collision -> suffix
+        Assert.Contains("t4_enemy_a: equ 2\nt4_enemy_a_pal: equ 112   ; slot 7\n", text);
+        Assert.Contains("t4_pal_table:\n    db 48,48,112\n", text);
         Assert.DoesNotContain("slot_", text);                           // no bank record
         Assert.DoesNotContain(" dw ", text);                            // no byte offset
         Assert.DoesNotContain("8KB bank", text);
@@ -94,10 +96,10 @@ public class AsmMapGeneratorTests
         var text = AsmMapGenerator.Generate(placements, chunkCount: 1, AssetCategory.Sprite4Bpp);
 
         Assert.Contains("s4_hero: equ 0\n", text);
-        Assert.Contains("s4_hero_pal:\n    db 0\n", text);
+        Assert.Contains("s4_hero_pal: equ 0   ; slot 0\n", text);    // an equ, not a byte: naming a slot costs nothing
         Assert.Contains("s4_enemy_robot_01: equ 1\n", text);        // spaces and '.' sanitized to '_'
-        Assert.Contains("s4_enemy_robot_01_pal:\n    db 8\n", text);
-        Assert.Contains("s4_pal_table:\ns4_hero: equ 0\n", text);    // one shared label, right before the first _pal byte
+        Assert.Contains("s4_enemy_robot_01_pal: equ 128   ; slot 8\n", text); // slot 8 -> bits 7:4
+        Assert.Contains("s4_pal_table:\n    db 0,128\n", text);      // the runtime lookup table, pre-shifted too
         Assert.DoesNotContain("slot_", text);                       // no bank/offset record for 4bpp sprites
         Assert.DoesNotContain(" dw ", text);
     }
@@ -118,7 +120,8 @@ public class AsmMapGeneratorTests
         var root = AsmMapGenerator.Generate(placements, chunkCount: 1, AssetCategory.Tile4Bpp);
         var anim = AsmMapGenerator.Generate(placements, chunkCount: 1, AssetCategory.Tile4Bpp, subfolderName: "water anim");
 
-        Assert.Contains("t4_pal_table:\nt4_water: db 5\n", root);
+        Assert.Contains("t4_water: equ 0\nt4_water_pal: equ 80   ; slot 5\n", root);
+        Assert.Contains("t4_pal_table:\n    db 80,80\n", root);
         // The sub-folder's name is sanitized for the assembler and folded into the label; the value is the
         // tile's index inside this bank (byte offset = index * 32), not a palette slot, and costs no bytes.
         Assert.Contains("t4_water_anim_water: equ 0\n", anim);
@@ -142,7 +145,8 @@ public class AsmMapGeneratorTests
         Assert.Contains("s4_hero: equ 0\n", root);
         Assert.Contains("s4_pal_table:\n", root);
         Assert.Contains("s4_walk_hero: equ 0\n", walk);
-        Assert.Contains("s4_walk_hero_pal:\n    db 3\n", walk);
+        Assert.Contains("s4_walk_hero_pal: equ 48   ; slot 3\n", walk);
+        Assert.Contains("s4_walk_pal_table:\n    db 48\n", walk);  // the sub-folder gets its own table, indexed locally
         // Concatenating root + sub-folder asm (what UnifyAcrossSubfolders does) must leave exactly one s4_pal_table.
         Assert.DoesNotContain("s4_pal_table", walk);
     }

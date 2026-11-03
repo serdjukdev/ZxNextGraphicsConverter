@@ -42,6 +42,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool subfolderAssetsInEditor;
     [ObservableProperty] private bool ulaOverTilemapAttributeBit;
     [ObservableProperty] private bool extendedObjectBytes;
+    [ObservableProperty] private bool exportPaletteLookupTables = true;
 
     [ObservableProperty] private string mapEditorTileGridColorHex;
     [ObservableProperty] private double mapEditorTileGridOpacity;
@@ -71,6 +72,7 @@ public partial class SettingsViewModel : ObservableObject
         subfolderAssetsInEditor = s.SubfolderAssetsInEditor ?? false;
         ulaOverTilemapAttributeBit = s.UlaOverTilemapAttributeBit ?? false;
         extendedObjectBytes = s.ExtendedObjectBytes ?? false;
+        exportPaletteLookupTables = s.ExportPaletteLookupTables ?? true;
 
         mapEditorTileGridColorHex = s.MapEditorTileGridColorHex ?? DefaultTileGridColorHex;
         mapEditorTileGridOpacity = s.MapEditorTileGridOpacity ?? 0.12;
@@ -112,6 +114,8 @@ public partial class SettingsViewModel : ObservableObject
         s.SubfolderAssetsInEditor = SubfolderAssetsInEditor ? true : null;
         s.UlaOverTilemapAttributeBit = UlaOverTilemapAttributeBit ? true : null;
         s.ExtendedObjectBytes = ExtendedObjectBytes ? true : null;
+        // Default is ON here, so the stored value is only interesting when it is OFF.
+        s.ExportPaletteLookupTables = ExportPaletteLookupTables ? null : false;
 
         s.MapEditorTileGridColorHex = NullIfDefault(MapEditorTileGridColorHex, DefaultTileGridColorHex);
         s.MapEditorTileGridOpacity = MapEditorTileGridOpacity;

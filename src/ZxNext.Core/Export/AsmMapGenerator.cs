@@ -1,5 +1,6 @@
-using System.Text;
+﻿using System.Text;
 using ZxNext.Core.Model;
+using ZxNext.Core.Settings;
 
 namespace ZxNext.Core.Export;
 
@@ -29,36 +30,45 @@ public static class AsmMapGenerator
         };
 
     /// <summary>
-    /// Sprite4Bpp: <c>s4_&lt;name&gt;: equ &lt;pattern number&gt;</c> plus <c>s4_&lt;name&gt;_pal: db &lt;n&gt;</c>
+    /// Sprite4Bpp: <c>s4_&lt;name&gt;: equ &lt;pattern number&gt;</c> plus <c>s4_&lt;name&gt;_pal: equ &lt;n&gt;</c>
     /// (that sprite's 4bpp palette slot 0-15, for bits 7:4 of its attribute byte). Patterns upload as one
     /// contiguous blob, so there is no per-sprite bank or byte offset.
     /// <para>
+    /// BOTH are <c>equ</c>, so naming a sprite's palette slot in your own code costs no bytes at all. The
+    /// same slots are also available as a real byte table for a RUNTIME lookup
+    /// (<c>s4_pal_table + spriteIndex</c>, or <c>s4_&lt;subfolder&gt;_pal_table + localIndex</c>), written
+    /// as one contiguous run at the END of the file (the <c>equ</c> lines above emit nothing, so they
+    /// cannot break its continuity). That table is the only part of this file that costs bytes, so it is
+    /// written only while <see cref="Settings.AppSettings.ExportPaletteLookupTables"/> is on.
+    /// </para>
+    /// <para>
     /// Root export (<paramref name="subfolderName"/> null): the pattern number is the same 0-based rank a
-    /// map's <c>_objects.asm</c> writes as the sprite's <c>spriteIndex</c> byte, and a single
-    /// <c>s4_pal_table:</c> label sits right before the first <c>_pal</c> byte so code can read a slot by
-    /// index (<c>s4_pal_table + spriteIndex</c>).
-    /// Sub-folder export: the pattern number is the local 0-based rank within this sub-folder's own binary.
-    /// A <c>s4_&lt;subfolder&gt;_pal_table:</c> label sits before the first <c>_pal</c> byte so code can
-    /// read a slot by local index the same way (<c>s4_&lt;subfolder&gt;_pal_table + localIndex</c>).
+    /// map's <c>_objects.asm</c> writes as the sprite's <c>spriteIndex</c> byte. Sub-folder export: it is
+    /// the local 0-based rank within this sub-folder's own binary.
     /// </para>
     /// </summary>
     private static string GenerateSprite4Bpp(IReadOnlyList<AssetPlacement> placements, string? subfolderName)
     {
+        var withTable = AppSettingsStore.Load().ExportPaletteLookupTables ?? true;
+        var sanitizedFolder = subfolderName is null ? null : AsmLabel.Sanitize(subfolderName);
+        var tableLabel = subfolderName is null ? "s4_pal_table" : $"s4_{sanitizedFolder}_pal_table";
+
         var sb = new StringBuilder();
         sb.Append("; Sprite4Bpp graphics map").Append(subfolderName is null ? "" : $" (sub-folder '{subfolderName}')").Append(".\n");
-        sb.Append("; s4_..._<name>: equ <n>      -- 0-based sprite pattern number").Append(subfolderName is null ? " (the spriteIndex byte in a map's _objects.asm)" : " within this sub-folder's own binary").Append(".\n");
-        sb.Append("; s4_..._<name>_pal: db <n>   -- this sprite's 4bpp palette slot (0-15): bits 7:4 of its attribute byte.\n");
-        var sanitizedFolder = subfolderName is null ? null : AsmLabel.Sanitize(subfolderName);
-        if (subfolderName is null)
-            sb.Append("; s4_pal_table:              -- start of the _pal byte run, indexable by spriteIndex.\n");
+        sb.Append("; s4_..._<name>: equ <n>       -- 0-based sprite pattern number").Append(subfolderName is null ? " (the spriteIndex byte in a map's _objects.asm)" : " within this sub-folder's own binary").Append(".\n");
+        sb.Append("; s4_..._<name>_pal: equ <n>   -- this sprite's palette ALREADY SHIFTED into bits 7:4 (slot * 16), so it ORs straight into the attribute byte. An equ, so it costs no bytes.\n");
+        if (withTable)
+        {
+            sb.Append("; ").Append(tableLabel).Append(": db ...  -- the same slots as DATA at the end of this file, for a runtime lookup by ")
+                .Append(subfolderName is null ? "spriteIndex" : "local sprite index").Append(".\n");
+            sb.Append("; That table is the only part of this file that costs bytes: turn off \"Export palette lookup tables\" in Settings to drop it.\n");
+        }
         else
-            sb.Append($"; s4_{sanitizedFolder}_pal_table: -- start of the _pal byte run, indexable by local sprite index.\n");
+        {
+            sb.Append("; No ").Append(tableLabel).Append(" byte table: \"Export palette lookup tables\" is off in Settings, so the slots are equ constants only (zero bytes).\n");
+        }
         sb.Append("; Patterns upload as one contiguous blob, so there is no per-sprite bank or byte offset.\n");
         sb.Append('\n');
-        if (subfolderName is null)
-            sb.Append("s4_pal_table:\n");
-        else
-            sb.Append($"s4_{sanitizedFolder}_pal_table:\n");
 
         var folderPrefix = subfolderName is null ? "" : subfolderName + "_";
         var used = new HashSet<string>();
@@ -66,8 +76,15 @@ public static class AsmMapGenerator
         {
             var label = "s4_" + AsmLabel.SanitizeUnique(folderPrefix + placements[i].Name, used);
             sb.Append(label).Append(": equ ").Append(i).Append('\n');
-            sb.Append(label).Append("_pal:\n");
-            sb.Append("    db ").Append(placements[i].PaletteSlotIndex).Append('\n');
+            sb.Append(label).Append("_pal: equ ").Append(PaletteAttributeByte(placements[i].PaletteSlotIndex))
+                .Append("   ; slot ").Append(placements[i].PaletteSlotIndex).Append('\n');
+        }
+
+        if (withTable)
+        {
+            sb.Append('\n');
+            sb.Append(tableLabel).Append(":\n");
+            AsmByteDataWriter.AppendDataBytes(sb, placements.Select(p => PaletteAttributeByte(p.PaletteSlotIndex)).ToList());
         }
 
         return sb.ToString();
@@ -147,20 +164,49 @@ public static class AsmMapGenerator
             return sb.ToString();
         }
 
+        var withTable = AppSettingsStore.Load().ExportPaletteLookupTables ?? true;
+
         sb.Append("; Tile4Bpp graphics map.\n");
-        sb.Append("; t4_<name>: db <n>   -- this tile's 4bpp palette index (0-15). One byte per tile, in tile order.\n");
-        sb.Append("; t4_pal_table:       -- start of that run; t4_pal_table + <tile number> is the same byte.\n");
+        sb.Append("; t4_<name>: equ <n>       -- 0-based tile number (the value a tilemap cell / metatile cell stores).\n");
+        sb.Append("; t4_<name>_pal: equ <n>   -- that tile's palette ALREADY SHIFTED into bits 7:4 (slot * 16), so it ORs straight into a tilemap attribute byte. An equ, so it costs no bytes.\n");
+        if (withTable)
+        {
+            sb.Append("; t4_pal_table: db ...     -- the same indices as DATA at the end of this file; t4_pal_table + <tile number> is one of them.\n");
+            sb.Append("; That table is the only part of this file that costs bytes: turn off \"Export palette lookup tables\" in Settings to drop it.\n");
+        }
+        else
+        {
+            sb.Append("; No t4_pal_table byte table: \"Export palette lookup tables\" is off in Settings, so the indices are equ constants only (zero bytes).\n");
+        }
         sb.Append("; Tiles upload as one contiguous blob, so there is no per-tile bank or byte offset.\n");
         sb.Append('\n');
-        sb.Append("t4_pal_table:\n");
 
-        foreach (var p in placements)
+        for (var i = 0; i < placements.Count; i++)
         {
-            sb.Append("t4_").Append(AsmLabel.SanitizeUnique(p.Name, used)).Append(": db ").Append(p.PaletteSlotIndex).Append('\n');
+            var label = "t4_" + AsmLabel.SanitizeUnique(placements[i].Name, used);
+            sb.Append(label).Append(": equ ").Append(i).Append('\n');
+            sb.Append(label).Append("_pal: equ ").Append(PaletteAttributeByte(placements[i].PaletteSlotIndex))
+                .Append("   ; slot ").Append(placements[i].PaletteSlotIndex).Append('\n');
+        }
+
+        if (withTable)
+        {
+            // One contiguous run at the END, same shape as GenerateSprite4Bpp: the equ lines above emit
+            // nothing, so nothing can break the table's continuity.
+            sb.Append('\n');
+            sb.Append("t4_pal_table:\n");
+            AsmByteDataWriter.AppendDataBytes(sb, placements.Select(p => PaletteAttributeByte(p.PaletteSlotIndex)).ToList());
         }
 
         return sb.ToString();
     }
+
+    /// <summary>
+    /// A palette slot as the hardware wants it: in the HIGH nibble. Both a sprite's attribute byte 3 and a
+    /// tilemap attribute byte carry the palette in bits 7:4, so every exported constant and table byte is
+    /// pre-shifted (slot * 16) and ORs straight into place instead of making the caller shift it first.
+    /// </summary>
+    private static byte PaletteAttributeByte(int paletteSlotIndex) => (byte)(Math.Clamp(paletteSlotIndex, 0, 15) << 4);
 
     private static string GenerateGeneric(IReadOnlyList<AssetPlacement> placements, int chunkCount)
     {

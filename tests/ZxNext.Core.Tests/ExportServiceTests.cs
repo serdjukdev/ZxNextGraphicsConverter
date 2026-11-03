@@ -1,4 +1,4 @@
-using ZxNext.Core.Conversion;
+﻿using ZxNext.Core.Conversion;
 using ZxNext.Core.Export;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
@@ -60,10 +60,10 @@ public class ExportServiceTests : IDisposable
         Assert.Equal(PaletteFileWriter.FileSizeBytes, new FileInfo(palFiles[0]).Length);
 
         var asmText = File.ReadAllText(asmFiles[0]);
-        Assert.Contains("t4_pal_table:", asmText);
-        Assert.Matches(@"t4_\w+: db \d", asmText);   // name-based label per tile, value is just the 4bpp palette index
+        Assert.Contains("t4_pal_table:", asmText);   // the runtime lookup table, one contiguous run at the end
+        Assert.Matches(@"t4_\w+: equ \d", asmText);       // name-based tile number constant
+        Assert.Matches(@"t4_\w+_pal: equ \d", asmText);   // ...and its palette index, also an equ (zero bytes)
         Assert.DoesNotContain("slot_", asmText);     // no bank/offset record any more
-        Assert.DoesNotContain("equ", asmText);       // no index constant
     }
 
     [Fact]
@@ -219,9 +219,9 @@ public class ExportServiceTests : IDisposable
 
         Assert.Equal("sprite_4bpp_images_gfx.asm", row.AsmFileName);
         Assert.Contains("s4_hero: equ 0\n", row.AsmText);
-        Assert.Contains("s4_hero_pal:\n    db ", row.AsmText);
+        Assert.Contains("s4_hero_pal: equ ", row.AsmText);
         Assert.Contains("s4_anim1_walk_0: equ 0\n", row.AsmText);        // sub-folder name folded in, local index
-        Assert.Contains("s4_anim1_walk_0_pal:\n    db ", row.AsmText);
+        Assert.Contains("s4_anim1_walk_0_pal: equ ", row.AsmText);
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(row.AsmText, @"(?m)^s4_pal_table:$")); // exactly one shared label (not the comment mentioning it)
         var rootLabelAt = row.AsmText.IndexOf("s4_hero: equ", StringComparison.Ordinal);
         var subLabelAt = row.AsmText.IndexOf("s4_anim1_walk_0: equ", StringComparison.Ordinal);
@@ -260,7 +260,8 @@ public class ExportServiceTests : IDisposable
         var row = results.Single(r => r.RowKey == "tile/4bpp/images"); // no separate sub-folder row
 
         Assert.Equal("tile_4bpp_images_gfx.asm", row.AsmFileName);
-        Assert.Contains("t4_water: db ", row.AsmText);
+        Assert.Contains("t4_water: equ ", row.AsmText);
+        Assert.Contains("t4_water_pal: equ ", row.AsmText);
         Assert.Contains("t4_water_anim_water_f1: equ 0", row.AsmText); // frame bank: a zero-byte bank index, no palette byte
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(row.AsmText, @"(?m)^t4_pal_table:$"));
 

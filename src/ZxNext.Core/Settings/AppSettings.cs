@@ -72,6 +72,17 @@ public class AppSettings
     /// </summary>
     public bool? ExtendedObjectBytes { get; set; }
 
+    /// <summary>
+    /// When true (the DEFAULT, unlike every other flag here: null means ON), a Sprite4Bpp or Tile4Bpp asm
+    /// map also writes its palette slots as a real byte table (<c>s4_pal_table</c> / <c>t4_pal_table</c>)
+    /// for a runtime lookup by index. Each slot is ALWAYS available as an <c>equ</c> constant
+    /// (<c>s4_&lt;name&gt;_pal</c>), which costs nothing; the byte table is the only part that occupies
+    /// memory in the assembled program, roughly one byte per sprite/tile, which is dead weight for a game
+    /// that names the palette slot it wants directly. Defaults to on so an existing project's export does
+    /// not silently lose a table its code already reads.
+    /// </summary>
+    public bool? ExportPaletteLookupTables { get; set; }
+
     /// <summary>When true, assets in user sub-folders appear in the map/metatile editors: Sprite4Bpp and Sprite8Bpp sub-folder sprites in the map editor sprite palette, Tile8Bpp sub-folder tiles in the metatile editor tile palette. Their export index is local to the sub-folder binary. Null/false = sub-folder assets excluded from the editors (original behaviour).</summary>
     public bool? SubfolderAssetsInEditor { get; set; }
 

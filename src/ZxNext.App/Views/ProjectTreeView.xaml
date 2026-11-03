@@ -1,4 +1,4 @@
-<UserControl x:Class="ZxNext.App.Views.ProjectTreeView"
+﻿<UserControl x:Class="ZxNext.App.Views.ProjectTreeView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
@@ -262,7 +262,8 @@
                              5 Re-quantize folder, 6 Delete folder, 7 Delete unused,
                              8 Lock all in folder, 9 Unlock all in folder, 10 Priority (Tile8Bpp only),
                              11 Show/Hide in Map Editor (Sprite4Bpp/Sprite8Bpp sub-folder leaf only),
-                             12 Animation target (Tile4Bpp sub-folder FOLDER only). -->
+                             12 Animation target (Tile4Bpp sub-folder FOLDER only),
+                             13 Replace image (single asset leaf only). -->
                         <Grid.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Rename..." Click="RenameMenuItem_OnClick" />
@@ -286,6 +287,8 @@
                                 <MenuItem Header="Show in Map Editor" Click="MapRepresentativeMenuItem_OnClick" />
                                 <MenuItem Header="Animation target..." Click="AnimationTargetMenuItem_OnClick"
                                           ToolTip="Tile4Bpp sub-folder only: say which metatile's tiles this folder's frames overwrite at runtime" />
+                                <MenuItem Header="Replace image..." Click="ReplaceImageMenuItem_OnClick"
+                                          ToolTip="Give this tile/sprite a new picture, keeping its name and its export index (so nothing placed with it, and no index in your code, moves)" />
                             </ContextMenu>
                         </Grid.ContextMenu>
                         <StackPanel Grid.Column="0" Orientation="Horizontal">

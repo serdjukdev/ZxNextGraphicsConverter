@@ -49,6 +49,9 @@ public partial class ProjectTreeView : UserControl
     /// <summary>Raised from a Tile4Bpp sub-folder's right-click "Animation target..." menu item.</summary>
     public event Action<TreeNodeViewModel>? AnimationTargetRequested;
 
+    /// <summary>Right-click "Replace image..." on one asset leaf: give that tile/sprite/Layer2 image a new picture while it stays the same asset (same name, same export index).</summary>
+    public event Action<Guid>? ReplaceImageRequested;
+
     /// <summary>Raised from a folder's right-click "Lock all" / "Unlock all" menu item (bool = lock vs unlock).</summary>
     public event Action<TreeNodeViewModel, bool>? SetLockOnFolderRequested;
 
@@ -660,6 +663,14 @@ public partial class ProjectTreeView : UserControl
                 representativeItem.ToolTip = "Shows this sprite as its own entry in the Map Editor's sprite palette, so it can be placed on a map independently of other frames in the same sub-folder. Purely a palette preview, never changes already-placed objects.";
             }
         }
+
+        // "Replace image..." is one asset leaf at a time: the whole point is picking a specific region of
+        // a specific source image for THIS asset, which has no sensible bulk form. The reserved blank is
+        // excluded, since it is transparent by definition and has no source image at all.
+        if (menu.Items[13] is MenuItem replaceImageItem)
+        {
+            replaceImageItem.Visibility = isLeaf && !isBulkTarget && !node.IsReservedBlank ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 
     private void RenameMenuItem_OnClick(object sender, RoutedEventArgs e)
@@ -667,6 +678,14 @@ public partial class ProjectTreeView : UserControl
         if (TryGetContextNode(sender, out var node) && node.AssetId is { } assetId)
         {
             RenameAssetRequested?.Invoke(assetId);
+        }
+    }
+
+    private void ReplaceImageMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (TryGetContextNode(sender, out var node) && node.AssetId is { } assetId)
+        {
+            ReplaceImageRequested?.Invoke(assetId);
         }
     }
 

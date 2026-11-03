@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -39,6 +39,7 @@ public partial class MainWindow : Window
         ProjectTreeViewControl.ReQuantizeFolderRequested += OnReQuantizeFolderRequested;
         ProjectTreeViewControl.DeleteUnusedRequested += _viewModel.DeleteUnusedAssets;
         ProjectTreeViewControl.AnimationTargetRequested += OnAnimationTargetRequested;
+        ProjectTreeViewControl.ReplaceImageRequested += OnReplaceImageRequested;
         ProjectTreeViewControl.SetLockOnFolderRequested += _viewModel.SetLockOnFolder;
         ProjectTreeViewControl.SetAssetLockRequested += _viewModel.SetAssetLock;
         ProjectTreeViewControl.SetLockOnSelectionRequested += _viewModel.SetLockOnSelectedAssets;
@@ -301,6 +302,39 @@ public partial class MainWindow : Window
         {
             await HandlePaletteOverflowAsync(outcome.Error ?? "Palette overflow.", outcome.Category,
                 maxColors => _viewModel.ReQuantizeAsset(assetId, vm.SelectedDitherMode, maxColors));
+        }
+    }
+
+    /// <summary>
+    /// "Replace image...": gives one existing tile/sprite/Layer2 asset a new picture, from a source image
+    /// in the project, without the asset itself changing (same name, same export index, everything placed
+    /// with it keeps working) — see <see cref="MainViewModel.ReplaceAssetImage"/>. The dialog picks the
+    /// source and the region; a tile/sprite snaps to whole cells of that source, a Layer2 image is placed
+    /// freely against its canvas, which is the same distinction the IMPORT paths make (atlas slicer grid
+    /// vs Layer2 placement).
+    /// </summary>
+    private async void OnReplaceImageRequested(Guid assetId)
+    {
+        if (_viewModel.Project.Assets.FirstOrDefault(a => a.Id == assetId) is not { } asset) return;
+
+        var vm = new ReplaceImageViewModel(_viewModel.SourceImages, asset.Name, asset.Width, asset.Height,
+            snapToGrid: !asset.Category.IsLayer2(), preselectSourceId: asset.SourceImageId);
+        var dialog = new ReplaceImageWindow { DataContext = vm, Owner = this };
+        if (dialog.ShowDialog() != true || vm.SelectedSource is null) return;
+
+        // Read the placement out BEFORE the first attempt: a palette-overflow retry must repeat the exact
+        // same region, and the dialog's view model is gone as far as the user is concerned.
+        var sourceId = vm.SelectedSource.Model.Id;
+        var offsetLeft = vm.OffsetLeft;
+        var offsetTop = vm.OffsetTop;
+        var copyWidth = vm.CopyWidth;
+        var copyHeight = vm.CopyHeight;
+
+        var outcome = _viewModel.ReplaceAssetImage(assetId, sourceId, offsetLeft, offsetTop, copyWidth, copyHeight);
+        if (!outcome.Success && IsPaletteFullReason(outcome.Reason))
+        {
+            await HandlePaletteOverflowAsync(outcome.Error ?? "Palette overflow.", outcome.Category,
+                maxColors => _viewModel.ReplaceAssetImage(assetId, sourceId, offsetLeft, offsetTop, copyWidth, copyHeight, maxColors));
         }
     }
 

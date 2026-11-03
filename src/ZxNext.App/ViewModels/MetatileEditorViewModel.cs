@@ -640,7 +640,8 @@ public partial class MetatileEditorViewModel : ObservableObject
     /// MainViewModel's own multi-asset delete confirmation) — for <see cref="DeleteUnused"/> specifically
     /// this is always empty by construction (nothing "unused" can have map impact), but a hand-picked
     /// multi-selection can very much include metatiles still placed on maps, and the caller has no way to
-    /// know that without this. Re-checks each metatile is still actually present before deleting it, since
+    /// know that without this. The confirmation also names every metatile in the batch, the same way the
+    /// tile/sprite "Delete unused..." sweep does. Re-checks each metatile is still actually present before deleting it, since
     /// deleting one GridSize=1 entry can cascade-remove a sibling metatile too (an obscure duplicate-wrapper
     /// edge case — see <see cref="DeleteUnused"/>'s own doc comment). Multi-selection flags need no explicit
     /// clearing — <see cref="RefreshMetatileList"/> rebuilds every item fresh (defaulting to unselected).
@@ -672,7 +673,17 @@ public partial class MetatileEditorViewModel : ObservableObject
             }
         }
 
-        var confirmLines = new List<string> { headline };
+        // Name every metatile in the batch, not just a count: the tile/sprite sweep
+        // (MainViewModel.DeleteUnusedAssets) has always listed names, and a count alone gives no real
+        // chance to say no to an irreversible delete. ScrollableMessageWindow scrolls, so a long list is
+        // fine. For a GridSize=1 entry the name shown is the wrapper's, which is its tile's own name.
+        var confirmLines = new List<string>
+        {
+            headline,
+            "",
+            string.Join(", ", metatiles.Where(m => !m.IsReservedBlank).Select(m => m.Name)),
+            "",
+        };
         if (lockedSkipped > 0)
         {
             confirmLines.Add($"{lockedSkipped} locked tile(s) will be skipped.");

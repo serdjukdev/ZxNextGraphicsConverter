@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -585,6 +585,97 @@ public partial class MainViewModel : ObservableObject
 
         HasUnsavedChanges = true;
         PixelEditor.StatusText = $"Re-quantized {originalName} (dither: {newDitherMode}).";
+        return new ImportOutcome(true, ImportFailureReason.None, asset.Category, null);
+    }
+
+    /// <summary>
+    /// "Replace image...": gives one existing tile/sprite/Layer2 asset a NEW picture, taken from
+    /// <paramref name="newSourceImageId"/> at <paramref name="offsetX"/>/<paramref name="offsetY"/>, while
+    /// the asset itself stays the same asset: same id, name, export index (SortIndex), lock, folder and
+    /// tree position, so every metatile cell, map placement and animation target that uses it keeps
+    /// working and no hardcoded index in the user's own game code moves. Mechanically this IS
+    /// <see cref="ReQuantizeAsset"/> pointed at a different source region, which is why both go through
+    /// <see cref="ProjectState.ReplaceFlatPaletteAsset"/> (all-or-nothing palette handling) and
+    /// <c>replacingAssetId</c> (identity kept, see <see cref="AssetImporter.Import"/>).
+    ///
+    /// <para>
+    /// The asset's live source link moves to the new source image, since that is what a later re-quantize
+    /// or dither change must read. The old source image is therefore left with one fewer asset made from
+    /// it, and once nothing is made from it at all, deleting it in the Source Images panel is a plain
+    /// one-question delete with no cascade (see <see cref="DeleteSourceImage"/>).
+    /// </para>
+    ///
+    /// <para>
+    /// <paramref name="copyWidth"/>/<paramref name="copyHeight"/> are how many real source pixels get
+    /// read, which equals the asset's size for a tile/sprite but can be less for a Layer2 image placed
+    /// from a source smaller than the canvas (the rest stays transparent) — stored on the asset so a later
+    /// re-quantize reproduces this same composition instead of over-reading past the source, exactly as
+    /// the Layer2 import path already does.
+    /// </para>
+    /// </summary>
+    public ImportOutcome ReplaceAssetImage(Guid assetId, Guid newSourceImageId, int offsetX, int offsetY, int copyWidth, int copyHeight, int? maxColors = null)
+    {
+        var asset = _project.Assets.FirstOrDefault(a => a.Id == assetId);
+        if (asset is null) return new ImportOutcome(false, ImportFailureReason.None, default, "Asset no longer exists.");
+
+        if (_project.SourceImages.FirstOrDefault(s => s.Id == newSourceImageId) is not { } source)
+        {
+            PixelEditor.StatusText = "Can't replace the image: that source image is no longer in the project.";
+            return new ImportOutcome(false, ImportFailureReason.None, asset.Category, "Source image missing.");
+        }
+
+        var decoded = _decoder.Decode(source.FilePath);
+        byte[] cellRgba;
+        if (asset.Category.IsLayer2())
+        {
+            cellRgba = Layer2Composer.Compose(decoded.Rgba32, decoded.Width, decoded.Height,
+                offsetX, offsetY, copyWidth, copyHeight, asset.Width, asset.Height);
+        }
+        else
+        {
+            // A tile/sprite reads its exact size, so the region has to be fully inside the image — the
+            // dialog already snaps and clamps it, this is the guard for anything else calling in.
+            if (offsetX < 0 || offsetY < 0 || offsetX + asset.Width > decoded.Width || offsetY + asset.Height > decoded.Height)
+            {
+                PixelEditor.StatusText = $"Can't replace the image: that {asset.Width}x{asset.Height} region doesn't fit inside \"{source.FileName}\".";
+                return new ImportOutcome(false, ImportFailureReason.None, asset.Category, "Region outside the image.");
+            }
+            cellRgba = PixelRectExtractor.Extract(decoded.Rgba32, decoded.Width, new PixelRect(offsetX, offsetY, asset.Width, asset.Height));
+        }
+
+        var originalName = asset.Name;
+        var cellSource = new SourceImage { Id = source.Id, FileName = asset.Name, FilePath = source.FilePath, Width = asset.Width, Height = asset.Height };
+
+        var result = _project.ReplaceFlatPaletteAsset(asset, () =>
+            AssetImporter.Import(_project, cellSource, cellRgba, asset.Category, asset.FolderPath, asset.DitherMode, maxColors, offsetX, offsetY,
+                replacingAssetId: asset.Id, sourceCropWidth: copyWidth, sourceCropHeight: copyHeight, priority: asset.IsPriority));
+        if (!result.Success)
+        {
+            PixelEditor.StatusText = $"Replacing {originalName}'s image failed: {result.Error}";
+            return new ImportOutcome(false, result.Reason, asset.Category, result.Error);
+        }
+
+        // Identical bookkeeping to ReQuantizeAsset's own success path: the import builds a fresh
+        // GraphicsAsset object (with the old id), so everything that is NOT derived from the pixels has to
+        // be carried over by hand.
+        result.Asset!.Name = originalName;
+        result.Asset.SortIndex = asset.SortIndex;
+        result.Asset.IsLocked = asset.IsLocked;
+        result.Asset.IsMapRepresentative = asset.IsMapRepresentative;
+        Tree.ReplaceAssetNode(asset.Id, result.Asset, _project);
+
+        if (asset.Category.UsesPaletteBank())
+        {
+            _project.CompactPaletteBank(asset.Category);
+        }
+        else
+        {
+            _undoStack.Clear();
+            OnSelectionChanged();
+        }
+
+        HasUnsavedChanges = true;
+        PixelEditor.StatusText = $"Replaced {originalName}'s image from \"{source.FileName}\" at {offsetX},{offsetY}.";
         return new ImportOutcome(true, ImportFailureReason.None, asset.Category, null);
     }
 

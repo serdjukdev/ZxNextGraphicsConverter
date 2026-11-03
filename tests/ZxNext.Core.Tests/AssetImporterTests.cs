@@ -1,4 +1,4 @@
-using ZxNext.Core.AtlasSlicer;
+﻿using ZxNext.Core.AtlasSlicer;
 using ZxNext.Core.Conversion;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
@@ -231,7 +231,7 @@ public class AssetImporterTests
         Assert.False(frame.Success);
         Assert.Equal(ImportFailureReason.PaletteOverflow, frame.Reason);
         Assert.Contains("must use palette slot", frame.Error);
-        Assert.Empty(project.Assets.Where(a => a.FolderPath == animFolder));
+        Assert.DoesNotContain(project.Assets, a => a.FolderPath == animFolder);
     }
 
     /// <summary>

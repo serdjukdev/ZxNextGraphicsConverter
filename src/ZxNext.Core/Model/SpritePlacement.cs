@@ -3,6 +3,27 @@
 /// <summary>One freeform sprite placement on a <see cref="MapAsset"/>'s Sprite layer — no grid, no metatile concept, no 16KB budget (unlike the two grid layers).</summary>
 public class SpritePlacement
 {
+    /// <summary>Every sprite asset this app can place is 16x16, which is the box a plain placement occupies; a placement made from an object occupies that object's own measured box instead (see <see cref="BoxOf"/>).</summary>
+    public const int SpritePixels = 16;
+
+    /// <summary>
+    /// Where this placement's picture sits and how big it is, relative to the placement's own X/Y: a lone
+    /// sprite is simply 0,0,16,16, while an object is its definition's measured bounds, whose Left/Top can
+    /// be NEGATIVE when one of its rows is nudged left or up. One place, so the map renderer, the hit test
+    /// and the selection box can never disagree about where a placed object actually is.
+    /// </summary>
+    public static (int Left, int Top, int Width, int Height) BoxOf(SpritePlacement placement, IReadOnlyList<MapObjectDefinition> objectDefinitions)
+    {
+        if (placement.ObjectDefinitionId is { } id &&
+            objectDefinitions.FirstOrDefault(d => d.Id == id) is { } definition)
+        {
+            var (left, top, width, height) = definition.MeasureBounds();
+            return (left, top, Math.Max(SpritePixels, width), Math.Max(SpritePixels, height));
+        }
+
+        return (0, 0, SpritePixels, SpritePixels);
+    }
+
     public Guid Id { get; init; } = Guid.NewGuid();
     public required Guid SpriteAssetId { get; set; }
     public int X { get; set; }

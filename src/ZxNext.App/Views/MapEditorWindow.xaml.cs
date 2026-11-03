@@ -543,7 +543,8 @@ public partial class MapEditorWindow : Window
         {
             foreach (var sprite in vm.SelectedSprites)
             {
-                DrawSelectionRect(sprite.X + deltaX, sprite.Y + deltaY, MapEditorViewModel.SpritePixelSize, MapEditorViewModel.SpritePixelSize, thickness);
+                var (boxLeft, boxTop, boxWidth, boxHeight) = vm.BoxOf(sprite);
+                DrawSelectionRect(sprite.X + deltaX + boxLeft, sprite.Y + deltaY + boxTop, boxWidth, boxHeight, thickness);
             }
         }
         else if (vm.GridSelection is { } gridRect)
@@ -688,12 +689,19 @@ public partial class MapEditorWindow : Window
         HoverOverlay.Children.Clear();
         if (vm.SelectedMap is null) return;
 
+        // Armed with EITHER palette: the objects tab leaves SelectedPaletteSprite null, and checking only
+        // that one is what made the snap preview vanish while placing an object.
+        var armedForPlacement = vm.IsObjectPaletteActive ? vm.SelectedPaletteObject is not null : vm.SelectedPaletteSprite is not null;
         if (vm.ActiveLayer == MapLayerKind.Sprites &&
-            Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) && vm.SelectedPaletteSprite is not null)
+            Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) && armedForPlacement)
         {
             var snapX = pixelX / MapEditorViewModel.TileSnapSize * MapEditorViewModel.TileSnapSize;
             var snapY = pixelY / MapEditorViewModel.TileSnapSize * MapEditorViewModel.TileSnapSize;
-            DrawHighlightRect(snapX, snapY, MapEditorViewModel.SpritePixelSize, MapEditorViewModel.SpritePixelSize, Brushes.LimeGreen, Color.FromArgb(80, 0, 255, 0));
+            // The armed object's own footprint, so the preview matches what the click will actually drop.
+            var (previewLeft, previewTop, previewWidth, previewHeight) = vm.IsObjectPaletteActive && vm.SelectedPaletteObject is { } armed
+                ? armed.Definition.MeasureBounds()
+                : (0, 0, MapEditorViewModel.SpritePixelSize, MapEditorViewModel.SpritePixelSize);
+            DrawHighlightRect(snapX + previewLeft, snapY + previewTop, previewWidth, previewHeight, Brushes.LimeGreen, Color.FromArgb(80, 0, 255, 0));
             return;
         }
 
@@ -717,7 +725,8 @@ public partial class MapEditorWindow : Window
         {
             var hit = vm.FindSpriteAt(pixelX, pixelY);
             if (hit is null) return;
-            DrawHighlightRect(hit.X, hit.Y, MapEditorViewModel.SpritePixelSize, MapEditorViewModel.SpritePixelSize, Brushes.Red, Color.FromArgb(64, 255, 0, 0));
+            var (hitLeft, hitTop, hitWidth, hitHeight) = vm.BoxOf(hit);
+            DrawHighlightRect(hit.X + hitLeft, hit.Y + hitTop, hitWidth, hitHeight, Brushes.Red, Color.FromArgb(64, 255, 0, 0));
         }
         else
         {

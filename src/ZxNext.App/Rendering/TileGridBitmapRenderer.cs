@@ -155,6 +155,15 @@ public static class TileGridBitmapRenderer
 
         foreach (var placement in placements)
         {
+            // A placement made from a named object draws that object's whole picture; anything else is the
+            // one 16x16 sprite it carries. Both are anchored at the placement's X/Y, with the object's own
+            // bounds offset applied so its grid origin lands exactly there (a row nudged left makes Left negative).
+            if (ObjectPictureOf(placement, project, cache) is var (objectBitmap, left, top) && objectBitmap is not null)
+            {
+                BlitOver(composite, objectBitmap, placement.X + left, placement.Y + top);
+                continue;
+            }
+
             var spriteAsset = project.Assets.FirstOrDefault(a => a.Id == placement.SpriteAssetId);
             if (spriteAsset is null) continue;
 
@@ -348,9 +357,20 @@ public static class TileGridBitmapRenderer
     {
         foreach (var placement in placements)
         {
-            const int spriteSize = 16; // MapEditorViewModel.SpritePixelSize — every sprite asset is fixed 16x16
-            if (placement.X + spriteSize <= destRect.X || placement.X >= destRect.X + destRect.Width) continue;
-            if (placement.Y + spriteSize <= destRect.Y || placement.Y >= destRect.Y + destRect.Height) continue;
+            // Cull against the placement's REAL box: an object is usually bigger than one sprite, and
+            // culling it as 16x16 would make it vanish the moment its top-left corner left the dirty region.
+            var (boxLeft, boxTop, boxWidth, boxHeight) = SpritePlacement.BoxOf(placement, project.ObjectDefinitions);
+            var x = placement.X + boxLeft;
+            var y = placement.Y + boxTop;
+            if (x + boxWidth <= destRect.X || x >= destRect.X + destRect.Width) continue;
+            if (y + boxHeight <= destRect.Y || y >= destRect.Y + destRect.Height) continue;
+
+            if (ObjectPictureOf(placement, project, cache) is var (objectBitmap, left, top) && objectBitmap is not null)
+            {
+                BlitOverBuffer(destBuffer, destStride, destRect.Width, destRect.Height, objectBitmap,
+                    placement.X + left - destRect.X, placement.Y + top - destRect.Y);
+                continue;
+            }
 
             var spriteAsset = project.Assets.FirstOrDefault(a => a.Id == placement.SpriteAssetId);
             if (spriteAsset is null) continue;
@@ -359,6 +379,25 @@ public static class TileGridBitmapRenderer
             BlitOverBuffer(destBuffer, destStride, destRect.Width, destRect.Height, spriteBitmap,
                 placement.X - destRect.X, placement.Y - destRect.Y);
         }
+    }
+
+    /// <summary>
+    /// The picture of the named object this placement was made from, plus where that picture starts relative
+    /// to the placement's X/Y. Null bitmap when the placement is a lone sprite, when its object is gone
+    /// (deleting one leaves its placements alone on purpose), or when the object has no sprites yet.
+    /// </summary>
+    private static (WriteableBitmap? Bitmap, int Left, int Top) ObjectPictureOf(SpritePlacement placement, ProjectState project, MapRenderCache? cache)
+    {
+        if (placement.ObjectDefinitionId is not { } id) return (null, 0, 0);
+        if (project.ObjectDefinitions.FirstOrDefault(d => d.Id == id) is not { } definition) return (null, 0, 0);
+
+        var bitmap = cache is not null
+            ? cache.GetObjectBitmapOrNull(definition, project)
+            : RenderObjectDefinition(definition, project);
+        if (bitmap is null) return (null, 0, 0);
+
+        var (left, top, _, _) = definition.MeasureBounds();
+        return (bitmap, left, top);
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-using System.Windows.Media.Imaging;
+﻿using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ZxNext.App.Rendering;
 using ZxNext.Core.Model;
@@ -30,4 +30,33 @@ public partial class TilePaletteItemViewModel(GraphicsAsset asset, ProjectState 
     private int placedCount;
 
     public string ToolTipText => $"{Name} ({PlacedCount} on map)";
+}
+
+/// <summary>
+/// One entry in the Map Editor's OBJECT palette: a named object (rows of sprites) shown by its whole
+/// picture, so the palette looks like what the map will. <see cref="Preview"/> is null for an object with
+/// no sprites in it yet, which the template shows as an empty thumbnail rather than hiding the entry.
+/// </summary>
+public partial class ObjectPaletteItemViewModel(MapObjectDefinition definition, ProjectState project, MapRenderCache? cache = null) : ObservableObject
+{
+    public MapObjectDefinition Definition { get; } = definition;
+    public string Name => Definition.Name;
+
+    public WriteableBitmap? Preview { get; } = cache is not null
+        ? cache.GetObjectBitmapOrNull(definition, project)
+        : TileGridBitmapRenderer.RenderObjectDefinition(definition, project);
+
+    /// <summary>Set by MapEditorViewModel after each sprite-layer mutation: how many objects made from this definition the current map holds.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ToolTipText))]
+    private int placedCount;
+
+    public string ToolTipText
+    {
+        get
+        {
+            var (_, _, width, height) = Definition.MeasureBounds();
+            return $"{Name}, {width}x{height} px ({PlacedCount} on map). Click to arm, then click the map. Hold Shift to snap to the 8x8 tile grid.";
+        }
+    }
 }

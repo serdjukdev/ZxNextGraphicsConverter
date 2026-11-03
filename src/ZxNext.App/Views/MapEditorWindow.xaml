@@ -241,23 +241,57 @@
                         </Style.Triggers>
                     </Style>
                 </Border.Style>
-                <ListBox ItemsSource="{Binding SpritePalette}" SelectedItem="{Binding SelectedPaletteSprite}"
-                         BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}">
-                    <ListBox.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel />
-                        </ItemsPanelTemplate>
-                    </ListBox.ItemsPanel>
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding ToolTipText}">
-                                <Image Source="{Binding Preview}" Width="48" Height="48" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                                <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="52" HorizontalAlignment="Center" />
-                            </StackPanel>
-                        </DataTemplate>
+                <DockPanel>
+                    <!-- Two tabs over one palette: the project's named objects (the default, since that is
+                         what gets placed once any exist) and the plain root sprites. Both place onto the
+                         Sprites layer and snap the same way. -->
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="2,2,2,4">
+                        <ToggleButton Content="objects" MinWidth="64" Padding="8,2" IsChecked="{Binding IsObjectPaletteActive, Mode=OneWay}"
+                                      ToolTip="Place whole objects built in Tools &#8594; Object Editor. The map draws all of an object's sprites."
+                                      Command="{Binding ShowObjectPaletteCommand}" />
+                        <ToggleButton Content="root" MinWidth="64" Padding="8,2" Margin="4,0,0,0" IsChecked="{Binding IsSpritePaletteActive, Mode=OneWay}"
+                                      ToolTip="Place a single root-folder sprite, exactly as before objects existed."
+                                      Command="{Binding ShowSpritePaletteCommand}" />
+                    </StackPanel>
+
+                    <ListBox ItemsSource="{Binding ObjectPalette}" SelectedItem="{Binding SelectedPaletteObject}"
+                             BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}"
+                             Visibility="{Binding IsObjectPaletteActive, Converter={StaticResource BoolToVis}}">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding ToolTipText}">
+                                    <Image Source="{Binding Preview}" Width="48" Height="48" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                    <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="52" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <ListBox ItemsSource="{Binding SpritePalette}" SelectedItem="{Binding SelectedPaletteSprite}"
+                             BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}"
+                             Visibility="{Binding IsSpritePaletteActive, Converter={StaticResource BoolToVis}}">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="2" Background="Transparent" ToolTip="{Binding ToolTipText}">
+                                    <Image Source="{Binding Preview}" Width="48" Height="48" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                    <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="52" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
                     </ListBox.ItemTemplate>
-                </ListBox>
+                    </ListBox>
+                </DockPanel>
             </Border>
 
             <!-- Two buttons per row, stretched to the pane width so nothing spills under the canvas

@@ -183,6 +183,46 @@ public partial class MapEditorViewModel : ObservableObject
     private ObservableCollection<TilePaletteItemViewModel> spritePalette = [];
 
     [ObservableProperty]
+    private ObservableCollection<ObjectPaletteItemViewModel> objectPalette = [];
+
+    /// <summary>
+    /// Which of the two palette tabs the Sprites layer shows: the project's named OBJECTS (the default
+    /// whenever any exist, since that is what gets placed) or the plain root sprites. Both place onto the
+    /// same layer and both snap the same way; an object placement just also remembers which object it came
+    /// from, which is what lets the map draw its whole picture.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSpritePaletteActive))]
+    private bool isObjectPaletteActive = true;
+
+    public bool IsSpritePaletteActive => !IsObjectPaletteActive;
+
+    [ObservableProperty]
+    private ObjectPaletteItemViewModel? selectedPaletteObject;
+
+    /// <summary>The two palette tabs. Switching drops the other tab's armed selection, so a click on the map can never place the thing the user cannot see.</summary>
+    [RelayCommand]
+    private void ShowObjectPalette()
+    {
+        if (ObjectPalette.Count == 0)
+        {
+            StatusText = "No objects yet: build one in Tools > Object Editor.";
+            IsStatusError = false;
+            return;
+        }
+
+        IsObjectPaletteActive = true;
+        SelectedPaletteSprite = null;
+    }
+
+    [RelayCommand]
+    private void ShowSpritePalette()
+    {
+        IsObjectPaletteActive = false;
+        SelectedPaletteObject = null;
+    }
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsPaintReady))]
     [NotifyPropertyChangedFor(nameof(CanvasHintText))]
     [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
@@ -869,6 +909,7 @@ public partial class MapEditorViewModel : ObservableObject
     /// </summary>
     private void RefreshSpritePalette()
     {
+        RefreshObjectPalette();
         var includeSubfolders = AppSettingsStore.Load().SubfolderAssetsInEditor ?? false;
 
         // Curated addition, independent of the broader SubfolderAssetsInEditor setting (see the matching
@@ -888,6 +929,19 @@ public partial class MapEditorViewModel : ObservableObject
         RefreshSpriteCounts();
     }
 
+    /// <summary>
+    /// The object palette: every named object in the project, drawn as its whole picture. Objects are what
+    /// the user places most of the time once any exist, which is why the palette opens on this tab.
+    /// </summary>
+    private void RefreshObjectPalette()
+    {
+        ObjectPalette = new ObservableCollection<ObjectPaletteItemViewModel>(
+            _project.ObjectDefinitions.Select(d => new ObjectPaletteItemViewModel(d, _project, _renderCache)));
+
+        if (ObjectPalette.Count == 0) IsObjectPaletteActive = false;
+        RefreshSpriteCounts();
+    }
+
     private void RefreshSpriteCounts()
     {
         var counts = SelectedMap?.Map.SpriteLayer
@@ -895,6 +949,13 @@ public partial class MapEditorViewModel : ObservableObject
             .ToDictionary(g => g.Key, g => g.Count());
         foreach (var item in SpritePalette)
             item.PlacedCount = counts is not null && counts.TryGetValue(item.Asset.Id, out var c) ? c : 0;
+
+        var objectCounts = SelectedMap?.Map.SpriteLayer
+            .Where(p => p.ObjectDefinitionId is not null)
+            .GroupBy(p => p.ObjectDefinitionId!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
+        foreach (var item in ObjectPalette)
+            item.PlacedCount = objectCounts is not null && objectCounts.TryGetValue(item.Definition.Id, out var oc) ? oc : 0;
     }
 
     public void BeginStroke()
@@ -906,9 +967,58 @@ public partial class MapEditorViewModel : ObservableObject
     }
 
     /// <summary>Sprite under a given map-canvas pixel position, or null — shared by the erase hit-test below and by the View's hover-highlight (drawn while the Erase tool or Ctrl is active over the Sprite layer).</summary>
+    /// <summary>
+    /// The placement a click would add: an object (its base sprite, its type and its user byte, plus the
+    /// link that makes the map draw its whole picture) when the object tab is armed, otherwise the plain
+    /// single sprite this editor has always placed. Null when nothing is armed, or when the armed object
+    /// has no sprites in it yet, since a placement must carry a real sprite for the export's spriteIndex.
+    /// </summary>
+    private SpritePlacement? BuildPlacementToPlace(int pixelX, int pixelY, bool snapToGrid)
+    {
+        var placeX = snapToGrid ? pixelX / TileSnapSize * TileSnapSize : pixelX;
+        var placeY = snapToGrid ? pixelY / TileSnapSize * TileSnapSize : pixelY;
+
+        if (IsObjectPaletteActive)
+        {
+            if (SelectedPaletteObject is not { } item) return null;
+            if (ObjectDefinitionService.BaseSpriteOf(item.Definition) is not { } baseSprite)
+            {
+                StatusText = $"'{item.Definition.Name}' has no sprites in it yet: open Tools > Object Editor and fill a cell.";
+                IsStatusError = true;
+                return null;
+            }
+
+            return new SpritePlacement
+            {
+                SpriteAssetId = baseSprite,
+                X = placeX,
+                Y = placeY,
+                ObjectDefinitionId = item.Definition.Id,
+                TypeId = item.Definition.TypeId,
+                UserByte = item.Definition.UserByte
+            };
+        }
+
+        if (SelectedPaletteSprite is null) return null;
+        return new SpritePlacement { SpriteAssetId = SelectedPaletteSprite.Asset.Id, X = placeX, Y = placeY };
+    }
+
+    /// <summary>
+    /// The placement under a canvas pixel, tested against its REAL box: a placed object covers its whole
+    /// picture, not just the 16x16 of its base sprite, so clicking its far end selects/erases it. Later
+    /// placements win, which keeps "click the one you can see on top" true.
+    /// </summary>
+    /// <summary>Where a placement's picture sits and how big it is, for the View's selection/hover rectangles: a lone sprite is 16x16, a placed object its own measured box.</summary>
+    public (int Left, int Top, int Width, int Height) BoxOf(SpritePlacement placement) =>
+        SpritePlacement.BoxOf(placement, _project.ObjectDefinitions);
+
     public SpritePlacement? FindSpriteAt(int pixelX, int pixelY) =>
-        SelectedMap?.Map.SpriteLayer.FirstOrDefault(p =>
-            pixelX >= p.X && pixelX < p.X + SpritePixelSize && pixelY >= p.Y && pixelY < p.Y + SpritePixelSize);
+        SelectedMap?.Map.SpriteLayer.LastOrDefault(p =>
+        {
+            var (left, top, width, height) = SpritePlacement.BoxOf(p, _project.ObjectDefinitions);
+            return pixelX >= p.X + left && pixelX < p.X + left + width &&
+                   pixelY >= p.Y + top && pixelY < p.Y + top + height;
+        });
 
     /// <summary>
     /// Paints (or, if <paramref name="forceErase"/> is set, erases) at one map-canvas pixel position, on
@@ -930,16 +1040,16 @@ public partial class MapEditorViewModel : ObservableObject
             Int32Rect affectedRect;
             if (!forceErase)
             {
-                if (SelectedPaletteSprite is null) return;
-                var placeX = snapToGrid ? (pixelX / TileSnapSize) * TileSnapSize : pixelX;
-                var placeY = snapToGrid ? (pixelY / TileSnapSize) * TileSnapSize : pixelY;
-                var placement = new SpritePlacement { SpriteAssetId = SelectedPaletteSprite.Asset.Id, X = placeX, Y = placeY };
+                var placement = BuildPlacementToPlace(pixelX, pixelY, snapToGrid);
+                if (placement is null) return;
+
                 map.SpriteLayer.Add(placement);
                 RefreshSpriteCounts();
                 PushUndo(
                     undo: () => { map.SpriteLayer.Remove(placement); RenderPreview(); RefreshSelectedMapThumbnail(); },
                     redo: () => { map.SpriteLayer.Add(placement); RenderPreview(); RefreshSelectedMapThumbnail(); });
-                affectedRect = new Int32Rect(placeX, placeY, SpritePixelSize, SpritePixelSize);
+                var (boxLeft, boxTop, boxWidth, boxHeight) = SpritePlacement.BoxOf(placement, _project.ObjectDefinitions);
+                affectedRect = new Int32Rect(placement.X + boxLeft, placement.Y + boxTop, boxWidth, boxHeight);
             }
             else
             {
@@ -947,7 +1057,8 @@ public partial class MapEditorViewModel : ObservableObject
                 if (hit is null) return;
                 map.SpriteLayer.Remove(hit);
                 _strokeRemovedSprites.Add(hit);
-                affectedRect = new Int32Rect(hit.X, hit.Y, SpritePixelSize, SpritePixelSize);
+                var (hitLeft, hitTop, hitWidth, hitHeight) = SpritePlacement.BoxOf(hit, _project.ObjectDefinitions);
+                affectedRect = new Int32Rect(hit.X + hitLeft, hit.Y + hitTop, hitWidth, hitHeight);
             }
             _strokeChangedAnything = true;
             RenderPreviewRegion(affectedRect);
@@ -1269,7 +1380,12 @@ public partial class MapEditorViewModel : ObservableObject
         SelectedSprites.Clear();
         foreach (var sprite in SelectedMap.Map.SpriteLayer)
         {
-            var intersects = sprite.X < x1 && sprite.X + SpritePixelSize > x0 && sprite.Y < y1 && sprite.Y + SpritePixelSize > y0;
+            // The real box, so a marquee catches a placed object by any part of it, not only by the
+            // 16x16 of its base sprite.
+            var (boxLeft, boxTop, boxWidth, boxHeight) = SpritePlacement.BoxOf(sprite, _project.ObjectDefinitions);
+            var spriteX = sprite.X + boxLeft;
+            var spriteY = sprite.Y + boxTop;
+            var intersects = spriteX < x1 && spriteX + boxWidth > x0 && spriteY < y1 && spriteY + boxHeight > y0;
             if (intersects) SelectedSprites.Add(sprite);
         }
     }
@@ -1277,7 +1393,11 @@ public partial class MapEditorViewModel : ObservableObject
     public bool IsCellInGridSelection(int col, int row) => GridSelection is { } rect && rect.Contains(col, row);
 
     public bool IsPixelInSpriteSelection(int pixelX, int pixelY) =>
-        SelectedSprites.Any(s => pixelX >= s.X && pixelX < s.X + SpritePixelSize && pixelY >= s.Y && pixelY < s.Y + SpritePixelSize);
+        SelectedSprites.Any(s =>
+        {
+            var (left, top, width, height) = SpritePlacement.BoxOf(s, _project.ObjectDefinitions);
+            return pixelX >= s.X + left && pixelX < s.X + left + width && pixelY >= s.Y + top && pixelY < s.Y + top + height;
+        });
 
     /// <summary>
     /// One Ctrl+C snapshot of a grid-layer selection (Tilemap or 8bpp) — raw per-cell values, tagged with

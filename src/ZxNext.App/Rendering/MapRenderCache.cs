@@ -31,6 +31,7 @@ public sealed class MapRenderCache
     private readonly Dictionary<Guid, WriteableBitmap> _metatileBitmaps = [];
     private readonly Dictionary<Guid, WriteableBitmap?> _metatilePriorityOverlays = [];
     private readonly Dictionary<MetatileKind, Dictionary<int, Metatile>> _metatilesBySortIndex = [];
+    private readonly Dictionary<Guid, WriteableBitmap?> _objectBitmaps = [];
 
     /// <summary>Base (untransformed — no mirror/rotate) render of a tile or sprite asset, cached by (asset, palette-slot-override).</summary>
     public WriteableBitmap GetTileBitmap(GraphicsAsset asset, ProjectState project, int? paletteSlotOverride)
@@ -75,6 +76,22 @@ public sealed class MapRenderCache
         _metatileBitmaps.Clear();
         _metatilePriorityOverlays.Clear();
         _metatilesBySortIndex.Clear();
+        _objectBitmaps.Clear();
+    }
+
+    /// <summary>
+    /// The whole picture of a named object (its rows of sprites, offsets applied), cached by definition id.
+    /// Null for an object with no sprites yet, so a caller can fall back to the placement's own single
+    /// sprite. Safe without invalidation for the same reason as the rest of this cache: an object's layout
+    /// is only edited in the Object Editor, which is a separate modal window.
+    /// </summary>
+    public WriteableBitmap? GetObjectBitmapOrNull(MapObjectDefinition definition, ProjectState project)
+    {
+        if (_objectBitmaps.TryGetValue(definition.Id, out var cached)) return cached;
+
+        var rendered = TileGridBitmapRenderer.RenderObjectDefinition(definition, project);
+        _objectBitmaps[definition.Id] = rendered;
+        return rendered;
     }
 
     /// <summary>Metatiles of one Kind indexed by their export SortIndex — built once per Kind instead of on every <see cref="TileGridBitmapRenderer.RenderMapGridLayer"/> call.</summary>

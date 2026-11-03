@@ -235,17 +235,6 @@ public partial class MapEditorWindow : Window
         vm.CreateMap(newMapVm.Name, newMapVm.Width, newMapVm.Height, gridSize);
     }
 
-    private void ManageTypes_OnClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is not MapEditorViewModel vm) return;
-
-        var typesVm = new ObjectTypesViewModel(vm.Project);
-        var dialog = new ObjectTypesWindow { DataContext = typesVm, Owner = this };
-        dialog.ShowDialog();
-
-        vm.RefreshObjectTypePalette();
-        if (typesVm.HasChanges) vm.MarkChanged();
-    }
 
     private void ShowMetatilesPalette_OnClick(object sender, RoutedEventArgs e)
     {

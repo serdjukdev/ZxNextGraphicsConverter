@@ -143,9 +143,8 @@
                 </StackPanel>
             </Grid>
 
-            <Grid Grid.Row="2" Margin="0,0,0,6" Visibility="{Binding IsSpritesLayerActive, Converter={StaticResource BoolToVis}}">
-                <Button Content="Manage Types..." Click="ManageTypes_OnClick" Style="{StaticResource FlatButtonStyle}" HorizontalAlignment="Left" />
-            </Grid>
+            <!-- Object types moved into the Object Editor (Tools menu): a type is project-wide exported
+                 data, and that window is where a type is already picked for an object. -->
 
             <TextBlock Grid.Row="4" Margin="0,0,0,4" TextWrapping="Wrap"
                        Text="{Binding CanvasHintText}" Foreground="{Binding CanvasHintForeground}" />

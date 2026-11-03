@@ -304,7 +304,7 @@ public partial class ObjectEditorViewModel : ObservableObject
         _project = project;
         for (var bit = 0; bit < 8; bit++) UserByteBits.Add(new UserByteBitViewModel(bit, OnUserByteBitToggled));
         RefreshSpriteFolders();   // ...which selects the first folder and fills the palette from it
-        RefreshTypes();
+        RefreshTypeRows();        // ...which also fills the Objects tab's own Type combo
         RefreshDefinitions();
         SelectedDefinition = Definitions.FirstOrDefault();
     }

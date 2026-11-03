@@ -9,6 +9,7 @@
         Title="Object Editor" Width="980" Height="700" MinWidth="820" MinHeight="560"
         WindowStartupLocation="CenterOwner">
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <Style x:Key="EditorStatusTextStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#1A7A1A" />
             <Style.Triggers>
@@ -34,12 +35,122 @@
         <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,8" FontSize="10" Foreground="Gray" TextWrapping="Wrap"
                    Text="An object is a named group of sprites: a 5-wide platform, a character of one sprite over two. Each ROW has its own length and its own offset, so the shape does not have to be a rectangle. The Map Editor places one as a single unit and draws its whole picture. The sprite layout is never exported; what the export takes from it is the object's size and its palette. Objects are optional: with none, the Map Editor behaves exactly as before and you place lone sprites." />
 
-        <!-- left: the library -->
+        <!-- left: two tabs, the object library and the project's object types -->
         <DockPanel Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
-            <TextBlock DockPanel.Dock="Top" Text="Objects" FontSize="11" Margin="0,0,0,4" />
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
+                <ToggleButton Content="Objects" MinWidth="76" Padding="8,2" IsChecked="{Binding IsObjectsTabActive, Mode=OneWay}"
+                              Command="{Binding ShowObjectsTabCommand}" ToolTip="The objects you build out of sprites." />
+                <ToggleButton Content="Types" MinWidth="76" Padding="8,2" Margin="4,0,0,0" IsChecked="{Binding IsTypesTabActive, Mode=OneWay}"
+                              Command="{Binding ShowTypesTabCommand}"
+                              ToolTip="Object types and their subtypes: project-wide exported data (the object record's type byte, the obj_ numbers, each map's per-type counts and the init order)." />
+            </StackPanel>
+
+            <!-- Types tab -->
+            <DockPanel DockPanel.Dock="Top" Visibility="{Binding IsTypesTabActive, Converter={StaticResource BoolToVis}}">
+                <StackPanel DockPanel.Dock="Bottom" IsEnabled="{Binding HasManagedTypeSelection}">
+                    <TextBlock Text="{Binding ManagedTypeHeader}" FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,8,0,0" />
+                    <TextBlock Text="Defaults for a placement that has this type but no object of its own:" FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,4,0,0" />
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                            <TextBlock Text="Pal 0-15" FontSize="10" />
+                            <TextBox Text="{Binding ManagedTypePalette, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="0,0,4,0">
+                            <TextBlock Text="W px" FontSize="10" />
+                            <TextBox Text="{Binding ManagedTypeWidth, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="H px" FontSize="10" />
+                            <TextBox Text="{Binding ManagedTypeHeight, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="Subtypes (max 8, one bit of the user byte each)" FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,8,0,2" />
+                    <Border BorderBrush="#999" BorderThickness="1">
+                        <ListBox x:Name="SubtypeList" Height="96" BorderThickness="0"
+                                 ItemsSource="{Binding SubtypeRows}" SelectedItem="{Binding SelectedSubtypeRow}">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="4,3" />
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Background="Transparent">
+                                        <Grid.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Rename..." Click="RenameSubtypeMenuItem_OnClick" />
+                                                <MenuItem Header="Delete" Click="DeleteSubtypeMenuItem_OnClick" />
+                                            </ContextMenu>
+                                        </Grid.ContextMenu>
+                                        <TextBlock Text="{Binding Display}" ToolTip="Right-click for Rename and Delete." />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Content="Add..." Width="70" Height="24" Click="AddSubtype_OnClick"
+                                ToolTip="Adds a subtype on the lowest free bit. Rename and Delete are on its right-click menu." />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <TextBlock Text="bit" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0" />
+                            <ComboBox Width="52" Height="24" ItemsSource="{Binding BitChoices}" SelectedItem="{Binding SelectedSubtypeBit}"
+                                      ToolTip="Which bit of the user byte the selected subtype owns. A bit another subtype of this type already owns is refused." />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+
+                <Button DockPanel.Dock="Bottom" Content="Add..." Height="26" Margin="0,6,0,0" Click="AddType_OnClick"
+                        ToolTip="Create an object type: asks for a name. Rename and Delete are on the type's own right-click menu." />
+                <Border BorderBrush="#999" BorderThickness="1" Height="150">
+                    <ListBox x:Name="TypeList" ItemsSource="{Binding TypeRows}" SelectedItem="{Binding SelectedManagedType}"
+                             BorderThickness="0"
+                             PreviewMouseLeftButtonDown="TypeList_OnPreviewMouseLeftButtonDown"
+                             PreviewMouseMove="TypeList_OnPreviewMouseMove"
+                             AllowDrop="True" Drop="TypeList_OnDrop"
+                             DragOver="TypeList_OnDragOver" DragLeave="TypeList_OnDragLeave">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="4,3" />
+                                <Setter Property="BorderBrush" Value="#2ECC40" />
+                                <Setter Property="BorderThickness" Value="0" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Background="Transparent">
+                                    <Grid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Rename..." Click="RenameTypeMenuItem_OnClick" />
+                                            <MenuItem Header="Delete" Click="DeleteTypeMenuItem_OnClick" />
+                                        </ContextMenu>
+                                    </Grid.ContextMenu>
+                                    <TextBlock Text="{Binding Display}" ToolTip="The number on the left is this type's exported obj_ number, which is its position in the list. Drag to reorder. Right-click for Rename and Delete." />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </DockPanel>
+
+            <!-- Objects tab -->
+            <TextBlock DockPanel.Dock="Top" Text="Objects" FontSize="11" Margin="0,0,0,4"
+                       Visibility="{Binding IsObjectsTabActive, Converter={StaticResource BoolToVis}}" />
             <Button DockPanel.Dock="Bottom" Content="Add..." Height="26" Margin="0,6,0,0" Click="Add_OnClick"
+                    Visibility="{Binding IsObjectsTabActive, Converter={StaticResource BoolToVis}}"
                     ToolTip="Create a new object: asks for a name. Rename and Delete live on the object's own right-click menu." />
-            <Border BorderBrush="#999" BorderThickness="1">
+            <Border BorderBrush="#999" BorderThickness="1" Visibility="{Binding IsObjectsTabActive, Converter={StaticResource BoolToVis}}">
                 <ListBox x:Name="DefinitionList" ItemsSource="{Binding Definitions}" SelectedItem="{Binding SelectedDefinition}"
                          BorderThickness="0"
                          PreviewMouseLeftButtonDown="DefinitionList_OnPreviewMouseLeftButtonDown"
@@ -78,7 +189,8 @@
         </DockPanel>
 
         <!-- right: the selected object -->
-        <DockPanel Grid.Row="1" Grid.Column="1" IsEnabled="{Binding HasSelection}">
+        <DockPanel Grid.Row="1" Grid.Column="1" IsEnabled="{Binding HasSelection}"
+                   Visibility="{Binding IsObjectsTabActive, Converter={StaticResource BoolToVis}}">
             <StackPanel DockPanel.Dock="Top">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Type:" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />

@@ -25,6 +25,13 @@ public partial class ObjectEditorWindow : Window
     /// <summary>The row currently showing the green drop line, so it can be cleared again without walking the whole list.</summary>
     private ListBoxItem? _dropIndicatorRow;
 
+    /// <summary>The same three fields again for the Types tab's own list: the two drags are independent, so they keep separate state and separate formats.</summary>
+    private const string TypeDragFormat = "ZxNext.ObjectTypeReorder";
+    private Point _typeDragStart;
+    private bool _typeDragArmed;
+    private ObjectType? _typeDragCandidate;
+    private ListBoxItem? _typeDropIndicatorRow;
+
     public ObjectEditorWindow()
     {
         InitializeComponent();
@@ -148,6 +155,140 @@ public partial class ObjectEditorWindow : Window
             $"Delete the object '{definition.Name}'?\n\nObjects already placed on maps stay where they are and keep their own sprite.",
             "Delete object", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm == MessageBoxResult.Yes) vm.DeleteDefinition(definition);
+    }
+
+    // ---- Types tab ----
+
+    private void AddType_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ObjectEditorViewModel vm) return;
+
+        var dialog = new RenameAssetWindow("", candidate => vm.IsTypeNameTaken(candidate), "Another object type already uses this name.", "Create")
+        {
+            Owner = this,
+            Title = "New object type"
+        };
+        if (dialog.ShowDialog() == true) vm.CreateType(dialog.NewName);
+    }
+
+    private void RenameTypeMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ObjectEditorViewModel vm) return;
+        if (sender is not FrameworkElement { DataContext: ObjectTypeRowViewModel row }) return;
+
+        var dialog = new RenameAssetWindow(row.Type.Name, candidate => vm.IsTypeNameTaken(candidate, row.Type), "Another object type already uses this name.")
+        {
+            Owner = this,
+            Title = "Rename object type"
+        };
+        if (dialog.ShowDialog() == true) vm.RenameType(row.Type, dialog.NewName);
+    }
+
+    /// <summary>Deleting a type is blocked while anything still uses it; the view model reports that in the status line rather than this dialog guessing.</summary>
+    private void DeleteTypeMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ObjectEditorViewModel vm) return;
+        if (sender is not FrameworkElement { DataContext: ObjectTypeRowViewModel row }) return;
+
+        var confirm = MessageBox.Show(
+            $"Delete the object type '{row.Type.Name}'?\n\nEvery later type's exported number moves down by one.",
+            "Delete object type", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (confirm == MessageBoxResult.Yes) vm.DeleteType(row.Type);
+    }
+
+    private void AddSubtype_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ObjectEditorViewModel vm) return;
+
+        var dialog = new RenameAssetWindow("", candidate => vm.SubtypeNameTakenReason(candidate) is not null,
+            "A subtype with this name already exists in this project.", "Create")
+        {
+            Owner = this,
+            Title = "New subtype"
+        };
+        if (dialog.ShowDialog() == true) vm.CreateSubtype(dialog.NewName);
+    }
+
+    private void RenameSubtypeMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ObjectEditorViewModel vm) return;
+        if (sender is not FrameworkElement { DataContext: ObjectSubtypeRowViewModel row }) return;
+
+        var dialog = new RenameAssetWindow(row.Subtype.Name, candidate => vm.SubtypeNameTakenReason(candidate, row.Subtype) is not null,
+            "A subtype with this name already exists in this project.")
+        {
+            Owner = this,
+            Title = "Rename subtype"
+        };
+        if (dialog.ShowDialog() == true) vm.RenameSubtype(row.Subtype, dialog.NewName);
+    }
+
+    private void DeleteSubtypeMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ObjectEditorViewModel vm) return;
+        if (sender is not FrameworkElement { DataContext: ObjectSubtypeRowViewModel row }) return;
+
+        var confirm = MessageBox.Show(
+            $"Delete the subtype '{row.Subtype.Name}'?\n\nUser bytes already set on maps are left exactly as they are.",
+            "Delete subtype", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (confirm == MessageBoxResult.Yes) vm.DeleteSubtype(row.Subtype);
+    }
+
+    /// <summary>The type list reorders by drag, exactly like the object list: a type's position IS its exported number.</summary>
+    private void TypeList_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _typeDragArmed = false;
+        _typeDragCandidate = null;
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is not ObjectTypeRowViewModel row) return;
+
+        _typeDragStart = e.GetPosition(null);
+        _typeDragCandidate = row.Type;
+        _typeDragArmed = true;
+    }
+
+    private void TypeList_OnPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_typeDragArmed || e.LeftButton != MouseButtonState.Pressed || _typeDragCandidate is not { } dragged) return;
+
+        var current = e.GetPosition(null);
+        if (Math.Abs(current.X - _typeDragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(current.Y - _typeDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        _typeDragArmed = false;
+        DragDrop.DoDragDrop(TypeList, new DataObject(TypeDragFormat, dragged), DragDropEffects.Move);
+    }
+
+    private void TypeList_OnDragOver(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(TypeDragFormat)) return;
+
+        e.Effects = DragDropEffects.Move;
+        SetTypeDropIndicator(RowUnder(e.OriginalSource));
+        e.Handled = true;
+    }
+
+    private void TypeList_OnDragLeave(object sender, DragEventArgs e) => SetTypeDropIndicator(null);
+
+    private void TypeList_OnDrop(object sender, DragEventArgs e)
+    {
+        SetTypeDropIndicator(null);
+        if (DataContext is not ObjectEditorViewModel vm) return;
+        if (e.Data.GetData(TypeDragFormat) is not ObjectType dragged) return;
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is not ObjectTypeRowViewModel target) return;
+
+        vm.ReorderType(dragged, target.Type);
+    }
+
+    private void SetTypeDropIndicator(ListBoxItem? row)
+    {
+        if (ReferenceEquals(_typeDropIndicatorRow, row)) return;
+
+        if (_typeDropIndicatorRow is not null) _typeDropIndicatorRow.BorderThickness = new Thickness(0);
+        _typeDropIndicatorRow = row;
+        if (_typeDropIndicatorRow is not null) _typeDropIndicatorRow.BorderThickness = new Thickness(0, 2, 0, 0);
     }
 
     private void Close_OnClick(object sender, RoutedEventArgs e) => Close();

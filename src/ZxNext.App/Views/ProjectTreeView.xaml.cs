@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -642,7 +642,7 @@ public partial class ProjectTreeView : UserControl
         // holding raw animation frame data, see AssetCategoryExtensions.IsRawTileBankFolder.
         if (menu.Items[12] is MenuItem animationTargetItem)
         {
-            animationTargetItem.Visibility = node.IsFolder && node.Category is { } animCat && animCat.IsRawTileBankFolder(node.FolderPath)
+            animationTargetItem.Visibility = node.IsFolder && node.Category is { } animCat && node.FolderPath is { } animFolder && animCat.IsRawTileBankFolder(animFolder)
                 ? Visibility.Visible
                 : Visibility.Collapsed;
         }

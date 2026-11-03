@@ -1,4 +1,4 @@
-namespace ZxNext.Core.Model;
+﻿namespace ZxNext.Core.Model;
 
 /// <summary>
 /// Result of a resize/trim computation, ready to hand to <see cref="MapAsset.ApplyResizePlan"/>.
@@ -77,7 +77,10 @@ public static class MapResizeCalculator
                 Y = newY,
                 TypeId = sprite.TypeId,
                 LinkedPlacementId = sprite.LinkedPlacementId,
-                UserByte = sprite.UserByte
+                UserByte = sprite.UserByte,
+                PaletteIndexOverride = sprite.PaletteIndexOverride,
+                WidthOverride = sprite.WidthOverride,
+                HeightOverride = sprite.HeightOverride
             });
         }
 

@@ -1,4 +1,4 @@
-<Window x:Class="ZxNext.App.Views.SettingsWindow"
+﻿<Window x:Class="ZxNext.App.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
@@ -63,6 +63,9 @@
                         <TextBlock Text="Sprite4Bpp/Sprite8Bpp sub-folder sprites appear in the map editor palette; Tile8Bpp sub-folder tiles appear in the metatile editor. Indices are local to the sub-folder binary. Turning this off removes any existing sub-folder placements." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,2,0,0" />
                         <CheckBox Content="Set ULA-over-tilemap bit (bit 0) on every exported Tilemap attribute byte" IsChecked="{Binding UlaOverTilemapAttributeBit}" Margin="0,6,0,0" />
                         <TextBlock Text="Every 4bpp Tilemap tile's exported attribute byte (bits 7-4 palette, bit 3 Mirror X, bit 2 Mirror Y, bit 1 Rotate) has an unused bit 0, which real hardware (nextreg 0x6C) uses as a per-tile ULA-over-tilemap priority flag. Off (default) writes 0 to every tile's bit 0, as before; on writes 1 to every tile's bit 0 instead. Project-wide, not per-tile." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,2,0,0" />
+
+                        <CheckBox Content="Extended object bytes (palette, width, height)" IsChecked="{Binding ExtendedObjectBytes}" Margin="0,6,0,0" />
+                        <TextBlock Text="Every map's _objects.asm always writes three extra bytes per object (byte 8 palette number in the high nibble, byte 9 width in pixels, byte 10 height in pixels) inside an IFDEF OBJ_EXT block, and a matching &lt;map&gt;_obj_size constant. This checkbox only decides whether the single DEFINE OBJ_EXT line in the project-wide object_types.asm is active or commented out: off (default) assembles the original 8-byte records, on assembles 11-byte ones. Values come from each object's type in the Map Editor's 'Manage Types...', unless that object overrides them itself. Because the switch is one line in one file, you can flip it by hand in the exported source without re-exporting." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,2,0,0" />
 
                         <TextBlock Text="Default dither mode for new imports" FontWeight="Bold" FontSize="12" Margin="0,16,0,0" />
                         <ComboBox ItemsSource="{Binding AvailableDitherModes}" SelectedItem="{Binding DefaultDitherMode}" Width="160" HorizontalAlignment="Left" Margin="0,6,0,0" />

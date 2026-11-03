@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ZxNext.Core.Conversion;
@@ -31,6 +31,23 @@ public partial class ObjectTypesViewModel : ObservableObject
     [ObservableProperty]
     private string renameText = "";
 
+    /// <summary>
+    /// The selected type's palette number, width and height, mirrored into the view model rather than
+    /// bound straight at the model: writing them has to mark the project dirty, and a plain binding to a
+    /// non-observable <see cref="ObjectType"/> could not. Guarded by <see cref="_loadingSelection"/> so
+    /// merely selecting another type in the list doesn't count as an edit.
+    /// </summary>
+    [ObservableProperty]
+    private int selectedPaletteIndex;
+
+    [ObservableProperty]
+    private int selectedWidth = ObjectType.DefaultSize;
+
+    [ObservableProperty]
+    private int selectedHeight = ObjectType.DefaultSize;
+
+    private bool _loadingSelection;
+
     [ObservableProperty]
     private string? statusText;
 
@@ -39,13 +56,68 @@ public partial class ObjectTypesViewModel : ObservableObject
 
     public bool HasChanges { get; private set; }
 
+    /// <summary>Drives the per-type object-data fields' IsEnabled: they describe whichever type is selected, so with nothing selected there is nothing to edit.</summary>
+    public bool HasSelectedType => SelectedType is not null;
+
     public ObjectTypesViewModel(ProjectState project)
     {
         _project = project;
         Refresh();
     }
 
-    partial void OnSelectedTypeChanged(ObjectType? value) => RenameText = value?.Name ?? "";
+    partial void OnSelectedTypeChanged(ObjectType? value)
+    {
+        RenameText = value?.Name ?? "";
+        OnPropertyChanged(nameof(HasSelectedType));
+
+        _loadingSelection = true;
+        SelectedPaletteIndex = value?.PaletteIndex ?? 0;
+        SelectedWidth = value?.Width ?? ObjectType.DefaultSize;
+        SelectedHeight = value?.Height ?? ObjectType.DefaultSize;
+        _loadingSelection = false;
+    }
+
+    partial void OnSelectedPaletteIndexChanged(int value)
+    {
+        var clamped = Math.Clamp(value, 0, 15);
+        if (clamped != value)
+        {
+            SelectedPaletteIndex = clamped;
+            return;
+        }
+        if (_loadingSelection || SelectedType is null || SelectedType.PaletteIndex == clamped) return;
+
+        SelectedType.PaletteIndex = clamped;
+        HasChanges = true;
+    }
+
+    partial void OnSelectedWidthChanged(int value)
+    {
+        var clamped = Math.Clamp(value, 0, 255);
+        if (clamped != value)
+        {
+            SelectedWidth = clamped;
+            return;
+        }
+        if (_loadingSelection || SelectedType is null || SelectedType.Width == clamped) return;
+
+        SelectedType.Width = clamped;
+        HasChanges = true;
+    }
+
+    partial void OnSelectedHeightChanged(int value)
+    {
+        var clamped = Math.Clamp(value, 0, 255);
+        if (clamped != value)
+        {
+            SelectedHeight = clamped;
+            return;
+        }
+        if (_loadingSelection || SelectedType is null || SelectedType.Height == clamped) return;
+
+        SelectedType.Height = clamped;
+        HasChanges = true;
+    }
 
     private void Refresh()
     {

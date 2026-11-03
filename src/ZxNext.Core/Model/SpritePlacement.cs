@@ -1,4 +1,4 @@
-namespace ZxNext.Core.Model;
+﻿namespace ZxNext.Core.Model;
 
 /// <summary>One freeform sprite placement on a <see cref="MapAsset"/>'s Sprite layer — no grid, no metatile concept, no 16KB budget (unlike the two grid layers).</summary>
 public class SpritePlacement
@@ -16,4 +16,16 @@ public class SpritePlacement
 
     /// <summary>Reserved general-purpose byte (future: 8 individually-settable bit flags). Always 0 for now.</summary>
     public byte UserByte { get; set; }
+
+    /// <summary>
+    /// Palette number 0-15 for THIS object only; null (the default) means "use the type's
+    /// <see cref="ObjectType.PaletteIndex"/>". An object with no type at all exports 0.
+    /// </summary>
+    public int? PaletteIndexOverride { get; set; }
+
+    /// <summary>Width in pixels for THIS object only; null means "use the type's <see cref="ObjectType.Width"/>". An object with no type at all exports its sprite's own pixel width.</summary>
+    public int? WidthOverride { get; set; }
+
+    /// <summary>Height in pixels for THIS object only; null means "use the type's <see cref="ObjectType.Height"/>". An object with no type at all exports its sprite's own pixel height.</summary>
+    public int? HeightOverride { get; set; }
 }

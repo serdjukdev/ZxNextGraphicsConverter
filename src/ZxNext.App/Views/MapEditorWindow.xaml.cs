@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -910,6 +910,40 @@ public partial class MapEditorWindow : Window
         if (_objectActionPopupTarget is null) return;
         OpenSetUserByteDialogFor(vm, _objectActionPopupTarget);
         _objectActionPopupTarget = null;
+    }
+
+    /// <summary>
+    /// Right-click "Object Data..." — the extended per-object bytes (palette, width, height). In batch
+    /// mode the dialog is pre-filled from the first selected object (just a starting point for a mixed
+    /// selection, same convention as the batch Set User Byte flow) and applied to every selected object.
+    /// </summary>
+    private void ObjectActionPopup_ObjectData_OnClick(object sender, RoutedEventArgs e)
+    {
+        ObjectActionPopup.IsOpen = false;
+        if (DataContext is not MapEditorViewModel vm) return;
+
+        if (_objectActionPopupIsBatch)
+        {
+            if (vm.SelectedSprites.Count == 0) return;
+
+            var first = vm.SelectedSprites[0];
+            var batchDialog = new ObjectDataWindow(vm.TypeOf(first), first.PaletteIndexOverride, first.WidthOverride, first.HeightOverride,
+                vm.SelectedSprites.Count) { Owner = this };
+            if (batchDialog.ShowDialog() == true)
+            {
+                vm.ApplyObjectDataToSelection(batchDialog.PaletteIndexResult, batchDialog.WidthResult, batchDialog.HeightResult);
+            }
+            return;
+        }
+
+        if (_objectActionPopupTarget is not { } target) return;
+        _objectActionPopupTarget = null;
+
+        var dialog = new ObjectDataWindow(vm.TypeOf(target), target.PaletteIndexOverride, target.WidthOverride, target.HeightOverride) { Owner = this };
+        if (dialog.ShowDialog() == true)
+        {
+            vm.ApplyObjectData(target, dialog.PaletteIndexResult, dialog.WidthResult, dialog.HeightResult);
+        }
     }
 
     private void ObjectActionPopup_Link_OnClick(object sender, RoutedEventArgs e)

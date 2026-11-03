@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ZxNext.Core.Conversion;
@@ -194,7 +194,10 @@ public static class ProjectService
                         Y = s.Y,
                         TypeId = s.TypeId,
                         LinkedPlacementId = s.LinkedPlacementId,
-                        UserByte = s.UserByte
+                        UserByte = s.UserByte,
+                        PaletteIndexOverride = s.PaletteIndexOverride,
+                        WidthOverride = s.WidthOverride,
+                        HeightOverride = s.HeightOverride
                     }).ToList(),
                     TilemapLayerVisible = map.TilemapLayerVisible,
                     TileLayer8BppVisible = map.TileLayer8BppVisible,
@@ -205,7 +208,14 @@ public static class ProjectService
 
             foreach (var type in project.ObjectTypes)
             {
-                dto.ObjectTypes.Add(new ObjectTypeDto { Id = type.Id, Name = type.Name });
+                dto.ObjectTypes.Add(new ObjectTypeDto
+                {
+                    Id = type.Id,
+                    Name = type.Name,
+                    PaletteIndex = type.PaletteIndex,
+                    Width = type.Width,
+                    Height = type.Height
+                });
             }
 
             var jsonEntry = zip.CreateEntry("project.json", CompressionLevel.Fastest);
@@ -377,7 +387,10 @@ public static class ProjectService
                     Y = s.Y,
                     TypeId = s.TypeId,
                     LinkedPlacementId = s.LinkedPlacementId,
-                    UserByte = s.UserByte
+                    UserByte = s.UserByte,
+                    PaletteIndexOverride = s.PaletteIndexOverride,
+                    WidthOverride = s.WidthOverride,
+                    HeightOverride = s.HeightOverride
                 }).ToList(),
                 TilemapLayerVisible = mapDto.TilemapLayerVisible,
                 TileLayer8BppVisible = mapDto.TileLayer8BppVisible,
@@ -388,7 +401,14 @@ public static class ProjectService
 
         foreach (var t in dto.ObjectTypes)
         {
-            project.ObjectTypes.Add(new ObjectType { Id = t.Id, Name = t.Name });
+            project.ObjectTypes.Add(new ObjectType
+            {
+                Id = t.Id,
+                Name = t.Name,
+                PaletteIndex = t.PaletteIndex ?? 0,
+                Width = t.Width ?? ObjectType.DefaultSize,
+                Height = t.Height ?? ObjectType.DefaultSize
+            });
         }
 
         // Projects saved before the project-wide metatile GridSize lock existed have no dto value —

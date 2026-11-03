@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Text;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
@@ -190,7 +190,17 @@ public static class MapExporter
     /// <summary>0xFF sentinel shared by both Type and Connect: "no type assigned" / "no link" respectively — resolved from the placement's Guid reference (<see cref="SpritePlacement.TypeId"/>/<see cref="SpritePlacement.LinkedPlacementId"/>) into this positional byte only here, at export time; the live app never stores or renumbers a raw index itself.</summary>
     private const byte NoneByte = 0xFF;
 
-    private readonly record struct ObjectRecord(byte SpriteIndex, short X, short Y, string SpriteName, byte Type, byte Connect, byte UserByte, string? TypeName, int? LinkTargetIndex, string? LinkTargetName);
+    /// <summary>The name of the assembler symbol that switches the extended object bytes on. Written as an active or commented-out <c>DEFINE</c> line in the project-wide object_types.asm (see <see cref="ObjectTypesExporter"/>) and tested with <c>IFDEF</c> here, so ONE line decides the record size for the whole project and no map file ever has to be re-exported to change it.</summary>
+    public const string ExtendedBytesDefine = "OBJ_EXT";
+
+    /// <summary>Bytes 0-7: the original record, unchanged since before extended bytes existed.</summary>
+    private const int BaseObjectRecordSize = 8;
+
+    /// <summary>Bytes 8-10: palette, width, height. Appending more later changes only this number and the IFDEF block that writes them.</summary>
+    private const int ExtendedObjectRecordSize = 11;
+
+    private readonly record struct ObjectRecord(byte SpriteIndex, short X, short Y, string SpriteName, byte Type, byte Connect, byte UserByte, string? TypeName, int? LinkTargetIndex, string? LinkTargetName,
+        byte PaletteByte, byte Width, byte Height, string PaletteSource);
 
     /// <summary>
     /// One `db` line per object — deliberately NOT run through <see cref="AsmByteDataWriter"/>'s generic
@@ -220,11 +230,26 @@ public static class MapExporter
         sb.Append(";   byte 5   type         -- obj_<name> from object_types.asm (0xFF = no type)\n");
         sb.Append(";   byte 6   connect      -- index of the linked object in this list (0xFF = no link)\n");
         sb.Append(";   byte 7   userByte     -- per-object user byte 0-255, set in the Map Editor\n");
+        sb.Append("; Bytes 8-10 are the EXTENDED block, written inside IFDEF ").Append(ExtendedBytesDefine).Append(" right after each record:\n");
+        sb.Append(";   byte 8   palette      -- palette number 0-15 in the HIGH nibble (value = n * 16); the low nibble is 0, reserved\n");
+        sb.Append(";   byte 9   width        -- width in PIXELS (0-255)\n");
+        sb.Append(";   byte 10  height       -- height in PIXELS (0-255)\n");
+        sb.Append("; ").Append(ExtendedBytesDefine).Append(" is defined (or left commented out) in ONE place, the project-wide object_types.asm,\n");
+        sb.Append("; so every map's records are the same length in any one build. <rowKey>_obj_size below is that length.\n");
+        sb.Append("; Palette/width/height come from the object's TYPE ('Manage Types...'), unless the object overrides them itself.\n");
         sb.Append("; Each db line has its own address label: <name>_<x>_<y>\n");
         sb.Append("; Per-type counts below cover every type from 'Manage Types...', even ones placing 0 objects on this map\n");
         sb.Append("; A <rowKey>_<type> address label marks the start of each type's contiguous block below (objects are\n");
         sb.Append("; grouped by type -- see BuildObjectRecords); a type placing 0 objects on this map gets no block label.\n");
         sb.Append(rowKey).Append("_count: equ ").Append(records!.Count).Append('\n');
+
+        // Record size as a real constant, switched by the same define as the bytes themselves, so game
+        // code steps through this table with no hardcoded 8 (or 11) anywhere.
+        sb.Append("    IFDEF ").Append(ExtendedBytesDefine).Append('\n');
+        sb.Append(rowKey).Append("_obj_size: equ ").Append(ExtendedObjectRecordSize).Append('\n');
+        sb.Append("    ELSE").Append('\n');
+        sb.Append(rowKey).Append("_obj_size: equ ").Append(BaseObjectRecordSize).Append('\n');
+        sb.Append("    ENDIF").Append('\n');
 
         // One equ per project-wide object type, in objectTypes list order, even when this particular map
         // places none of that type -- so game code can rely on every type's <rowKey>_<name>_count constant
@@ -287,6 +312,15 @@ public static class MapExporter
             sb.Append(rowKey).Append('_').Append(label).Append(": db ")
                 .Append(r.SpriteIndex).Append(',').Append(xLo).Append(',').Append(xHi).Append(',').Append(yLo).Append(',').Append(yHi)
                 .Append(',').Append(r.Type).Append(',').Append(r.Connect).Append(',').Append(r.UserByte).Append('\n');
+
+            // The extended bytes are always written, always behind the same IFDEF: whether they reach the
+            // binary is decided by the one DEFINE line in object_types.asm, never by re-exporting. No
+            // address label of their own -- they are the tail of the record the label above points at.
+            sb.Append("    IFDEF ").Append(ExtendedBytesDefine).Append('\n');
+            sb.Append("    db ").Append(r.PaletteByte).Append(',').Append(r.Width).Append(',').Append(r.Height)
+                .Append("    ; palette ").Append(r.PaletteByte >> 4).Append(" (").Append(r.PaletteSource).Append("), ")
+                .Append(r.Width).Append('x').Append(r.Height).Append(" px").Append('\n');
+            sb.Append("    ENDIF").Append('\n');
         }
 
         var result = new FolderExportResult(rowKey, $"map/{map.Name}", [], [], sb.ToString(), $"{SanitizeFileName(rowKey)}.asm", null, IsChunked: false,
@@ -377,8 +411,23 @@ public static class MapExporter
                 linkTargetName = projectAssets.FirstOrDefault(a => a.Id == orderedPlacements[linkIdx].SpriteAssetId)?.Name;
             }
 
+            // Palette/size: the object's own override first, then its type's value, then a last-resort
+            // default for an object with no type at all (palette 0, and the sprite's own real pixel size,
+            // the only size this app actually knows about it).
+            var type = placement.TypeId is { } ownTypeId && typeIndexById.TryGetValue(ownTypeId, out var ownTypeIdx)
+                ? objectTypes[ownTypeIdx]
+                : null;
+
+            var paletteIndex = placement.PaletteIndexOverride ?? type?.PaletteIndex ?? 0;
+            var width = placement.WidthOverride ?? type?.Width ?? asset.Width;
+            var height = placement.HeightOverride ?? type?.Height ?? asset.Height;
+            var paletteSource = placement.PaletteIndexOverride is not null
+                ? "this object"
+                : type is not null ? "type " + type.Name : "no type";
+
             records.Add(new ObjectRecord(spriteIndex, (short)placement.X, (short)placement.Y, asset.Name,
-                typeByte, connectByte, placement.UserByte, typeName, linkTargetIndex, linkTargetName));
+                typeByte, connectByte, placement.UserByte, typeName, linkTargetIndex, linkTargetName,
+                (byte)(Math.Clamp(paletteIndex, 0, 15) << 4), (byte)Math.Clamp(width, 0, 255), (byte)Math.Clamp(height, 0, 255), paletteSource));
         }
 
         return (true, records, null);

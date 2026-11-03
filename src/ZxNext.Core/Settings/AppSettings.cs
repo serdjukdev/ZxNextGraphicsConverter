@@ -1,4 +1,4 @@
-using ZxNext.Core.Export;
+﻿using ZxNext.Core.Export;
 using ZxNext.Core.Model;
 using ZxNext.Core.Quantization;
 
@@ -61,6 +61,16 @@ public class AppSettings
     /// Null/false = bit 0 stays 0 (original behaviour).
     /// </summary>
     public bool? UlaOverTilemapAttributeBit { get; set; }
+
+    /// <summary>
+    /// When true, the exported <c>object_types.asm</c> carries an ACTIVE <c>DEFINE OBJ_EXT</c> line, which
+    /// switches on the extended bytes (palette, width, height) every map's objects file already writes
+    /// inside an <c>IFDEF OBJ_EXT</c> block. Off (null/false) writes that same line commented out, so each
+    /// object record assembles to the original 8 bytes. The bytes themselves are always exported either
+    /// way: the switch is the one line, so turning it on later needs no re-export, and new bytes can be
+    /// added to the block without changing the format again.
+    /// </summary>
+    public bool? ExtendedObjectBytes { get; set; }
 
     /// <summary>When true, assets in user sub-folders appear in the map/metatile editors: Sprite4Bpp and Sprite8Bpp sub-folder sprites in the map editor sprite palette, Tile8Bpp sub-folder tiles in the metatile editor tile palette. Their export index is local to the sub-folder binary. Null/false = sub-folder assets excluded from the editors (original behaviour).</summary>
     public bool? SubfolderAssetsInEditor { get; set; }

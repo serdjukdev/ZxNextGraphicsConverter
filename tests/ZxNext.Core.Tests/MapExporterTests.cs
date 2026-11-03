@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using ZxNext.Core.Export;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
@@ -69,7 +69,15 @@ public class MapExporterTests
 
     /// <summary>Parses every `db a,b,c` line following `{label}:` (skipping `;` comment lines, tolerating an
     /// optional per-line `someLabel:` prefix before the `db`, stopping at the first line that's neither) back
-    /// into a flat byte list — lets tests assert exact byte values without depending on line-wrap boundaries.</summary>
+    /// into a flat byte list — lets tests assert exact byte values without depending on line-wrap boundaries.
+    ///
+    /// <para>
+    /// Anything inside an `IFDEF ... ENDIF` block is skipped, i.e. this reads exactly what an assembler
+    /// with no symbols defined would emit: every object's BASE 8 bytes, not the extended palette/width/height
+    /// block that an active DEFINE OBJ_EXT would add (see <see cref="ZxNext.Core.Export.MapExporter.ExtendedBytesDefine"/>).
+    /// Tests for the extended bytes read those lines directly instead.
+    /// </para>
+    /// </summary>
     private static List<byte> ExtractDbBytes(string asmText, string label)
     {
         var lines = asmText.Split('\n');
@@ -77,9 +85,21 @@ public class MapExporterTests
         Assert.True(startIndex > 0, $"Label '{label}:' not found in:\n{asmText}");
 
         var result = new List<byte>();
+        var insideConditional = false;
         for (var i = startIndex; i < lines.Length; i++)
         {
             var line = lines[i].Trim();
+            if (line.StartsWith("IFDEF", StringComparison.Ordinal) || line.StartsWith("IFNDEF", StringComparison.Ordinal))
+            {
+                insideConditional = true;
+                continue;
+            }
+            if (line.StartsWith("ENDIF", StringComparison.Ordinal) || line.StartsWith("ELSE", StringComparison.Ordinal))
+            {
+                insideConditional = line.StartsWith("ELSE", StringComparison.Ordinal);
+                continue;
+            }
+            if (insideConditional) continue;
             if (line.StartsWith(';')) continue;
             if (line.Length > 0 && line.EndsWith(":")) continue; // a bare per-record label line
             var dbColon = line.IndexOf(": db ", StringComparison.Ordinal);
@@ -301,6 +321,65 @@ public class MapExporterTests
         Assert.Equal(0xFF, dataBytes[13]);
         Assert.Equal(0xFF, dataBytes[14]);
         Assert.Equal(0, dataBytes[15]);
+    }
+
+    /// <summary>
+    /// The extended per-object bytes (8 palette, 9 width, 10 height). They are ALWAYS written, inside an
+    /// IFDEF, so a project can switch to 11-byte records by uncommenting one line instead of re-exporting.
+    /// Values come from the object's type unless the object pins its own.
+    /// </summary>
+    [Fact]
+    public void ExportObjects_WritesPaletteWidthHeightInsideAnIfdef_FromTheTypeUnlessTheObjectOverridesThem()
+    {
+        var sprite = FakeSprite("hero", sortIndex: 0);
+        var assets = new List<GraphicsAsset> { sprite };
+
+        var enemyType = new ObjectType { Name = "enemy", PaletteIndex = 3, Width = 24, Height = 48 };
+        var objectTypes = new List<ObjectType> { enemyType };
+
+        var fromType = new SpritePlacement { SpriteAssetId = sprite.Id, X = 0, Y = 0, TypeId = enemyType.Id };
+        var pinned = new SpritePlacement
+        {
+            SpriteAssetId = sprite.Id, X = 8, Y = 8, TypeId = enemyType.Id,
+            PaletteIndexOverride = 10, WidthOverride = 64, HeightOverride = 7
+        };
+        var untyped = new SpritePlacement { SpriteAssetId = sprite.Id, X = 16, Y = 16 };
+        var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [fromType, pinned, untyped]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, assets, objectTypes);
+
+        Assert.True(success, error);
+        var asm = result!.AsmText;
+
+        // Palette is the number in the HIGH nibble: 3 -> 48, 10 -> 160.
+        Assert.Contains("    db 48,24,48", asm);
+        Assert.Contains("    db 160,64,7", asm);
+        // No type at all: palette 0 and the sprite's own real pixel size.
+        Assert.Contains($"    db 0,{sprite.Width},{sprite.Height}", asm);
+
+        // Every one of them sits inside its own conditional block (3 records), plus the one around the
+        // record-size equ -- never appended to the plain record line.
+        var blockOpener = "    IFDEF " + MapExporter.ExtendedBytesDefine + "\n";
+        Assert.Equal(4, asm.Split(blockOpener).Length - 1);
+        Assert.DoesNotContain("db 0,0,0,0,0,0,255,0,0", asm);
+    }
+
+    /// <summary>The record size is a constant switched by the same define as the bytes, so game code never hardcodes 8 or 11.</summary>
+    [Fact]
+    public void ExportObjects_WritesARecordSizeEqu_EightWithoutTheDefineAndElevenWithIt()
+    {
+        var sprite = FakeSprite("hero", sortIndex: 0);
+        var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [new SpritePlacement { SpriteAssetId = sprite.Id, X = 0, Y = 0 }]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, [sprite], []);
+
+        Assert.True(success, error);
+        var asm = result!.AsmText;
+        Assert.Contains("    IFDEF " + MapExporter.ExtendedBytesDefine, asm);
+        Assert.Contains("level1_objects_obj_size: equ 11", asm);
+        Assert.Contains("    ELSE", asm);
+        Assert.Contains("level1_objects_obj_size: equ 8", asm);
+        Assert.Contains("    ENDIF", asm);
     }
 
     [Fact]

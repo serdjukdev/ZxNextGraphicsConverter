@@ -1,4 +1,4 @@
-using ZxNext.Core.Model;
+﻿using ZxNext.Core.Model;
 using ZxNext.Core.Quantization;
 
 namespace ZxNext.Core.Project;
@@ -139,12 +139,24 @@ public class SpritePlacementDto
     public Guid? TypeId { get; set; }
     public Guid? LinkedPlacementId { get; set; }
     public byte UserByte { get; set; }
+
+    // Null in a project saved before per-object palette/size existed, which is exactly what "inherit the
+    // type's value" means, so an old project needs no migration.
+    public int? PaletteIndexOverride { get; set; }
+    public int? WidthOverride { get; set; }
+    public int? HeightOverride { get; set; }
 }
 
 public class ObjectTypeDto
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = "";
+
+    // Nullable only so a project saved before these existed falls back to the model's own defaults
+    // (palette 0, 16x16) instead of to 0x0.
+    public int? PaletteIndex { get; set; }
+    public int? Width { get; set; }
+    public int? Height { get; set; }
 }
 
 /// <summary>

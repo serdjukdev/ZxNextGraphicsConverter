@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -422,7 +422,11 @@ public partial class MapEditorViewModel : ObservableObject
     }
 
     private static List<SpritePlacement> CloneSprites(IEnumerable<SpritePlacement> sprites) =>
-        sprites.Select(s => new SpritePlacement { Id = s.Id, SpriteAssetId = s.SpriteAssetId, X = s.X, Y = s.Y, TypeId = s.TypeId, LinkedPlacementId = s.LinkedPlacementId, UserByte = s.UserByte }).ToList();
+        sprites.Select(s => new SpritePlacement
+        {
+            Id = s.Id, SpriteAssetId = s.SpriteAssetId, X = s.X, Y = s.Y, TypeId = s.TypeId, LinkedPlacementId = s.LinkedPlacementId, UserByte = s.UserByte,
+            PaletteIndexOverride = s.PaletteIndexOverride, WidthOverride = s.WidthOverride, HeightOverride = s.HeightOverride
+        }).ToList();
 
     [RelayCommand]
     private void MoveLayerUp()
@@ -612,6 +616,53 @@ public partial class MapEditorViewModel : ObservableObject
     {
         IsSetUserByteToolActive = false;
     }
+
+    /// <summary>
+    /// Applies this one object's palette/width/height overrides, each null meaning "inherit the type's
+    /// value" (see <see cref="SpritePlacement.PaletteIndexOverride"/>). One undo step for all three, since
+    /// they are edited together in one dialog. Nothing about the map's appearance depends on them, so no
+    /// re-render is needed: they are export data only.
+    /// </summary>
+    public void ApplyObjectData(SpritePlacement sprite, int? paletteIndex, int? width, int? height)
+    {
+        if (sprite.PaletteIndexOverride == paletteIndex && sprite.WidthOverride == width && sprite.HeightOverride == height) return;
+
+        var previous = (sprite.PaletteIndexOverride, sprite.WidthOverride, sprite.HeightOverride);
+        sprite.PaletteIndexOverride = paletteIndex;
+        sprite.WidthOverride = width;
+        sprite.HeightOverride = height;
+        PushUndo(
+            undo: () => (sprite.PaletteIndexOverride, sprite.WidthOverride, sprite.HeightOverride) = previous,
+            redo: () => (sprite.PaletteIndexOverride, sprite.WidthOverride, sprite.HeightOverride) = (paletteIndex, width, height));
+        HasChanges = true;
+        StatusText = "Object data set.";
+        IsStatusError = false;
+    }
+
+    /// <summary>Batch counterpart to <see cref="ApplyObjectData"/>: the right-click-on-a-selection flow, one undo step for the whole group (same shape as <see cref="ApplyUserByteToSelection"/>).</summary>
+    public void ApplyObjectDataToSelection(int? paletteIndex, int? width, int? height)
+    {
+        var targets = SelectedSprites.ToList();
+        if (targets.Count == 0) return;
+
+        var previous = targets.Select(s => (Sprite: s, Values: (s.PaletteIndexOverride, s.WidthOverride, s.HeightOverride))).ToList();
+        foreach (var sprite in targets)
+        {
+            sprite.PaletteIndexOverride = paletteIndex;
+            sprite.WidthOverride = width;
+            sprite.HeightOverride = height;
+        }
+        PushUndo(
+            undo: () => { foreach (var (sprite, values) in previous) (sprite.PaletteIndexOverride, sprite.WidthOverride, sprite.HeightOverride) = values; },
+            redo: () => { foreach (var sprite in targets) (sprite.PaletteIndexOverride, sprite.WidthOverride, sprite.HeightOverride) = (paletteIndex, width, height); });
+        HasChanges = true;
+        StatusText = $"Object data set on {targets.Count} object(s).";
+        IsStatusError = false;
+    }
+
+    /// <summary>The type an object belongs to, or null when it has none: the Object Data dialog shows that type's values as the ones an unset field inherits.</summary>
+    public ObjectType? TypeOf(SpritePlacement sprite) =>
+        sprite.TypeId is { } id ? Project.ObjectTypes.FirstOrDefault(t => t.Id == id) : null;
 
     /// <summary>Applies a raw byte to exactly one placement's <see cref="SpritePlacement.UserByte"/>, the Set User Byte tool's click target. Called by the View once the user confirms the value in the picker dialog.</summary>
     public void ApplyUserByte(SpritePlacement sprite, byte value)
@@ -1252,6 +1303,12 @@ public partial class MapEditorViewModel : ObservableObject
         public required int OffsetY { get; init; }
         public Guid? TypeId { get; init; }
         public byte UserByte { get; init; }
+
+        // An object's own palette/size overrides travel with it: pasting a copy that silently fell back to
+        // its type's values would quietly change what gets exported.
+        public int? PaletteIndexOverride { get; init; }
+        public int? WidthOverride { get; init; }
+        public int? HeightOverride { get; init; }
     }
 
     /// <summary>
@@ -1295,7 +1352,10 @@ public partial class MapEditorViewModel : ObservableObject
                 OffsetX = s.X - minX,
                 OffsetY = s.Y - minY,
                 TypeId = s.TypeId,
-                UserByte = s.UserByte
+                UserByte = s.UserByte,
+                PaletteIndexOverride = s.PaletteIndexOverride,
+                WidthOverride = s.WidthOverride,
+                HeightOverride = s.HeightOverride
             }).ToList();
 
             _spriteClipboard = entries;
@@ -1353,7 +1413,10 @@ public partial class MapEditorViewModel : ObservableObject
                     X = anchorX + e.OffsetX,
                     Y = anchorY + e.OffsetY,
                     TypeId = e.TypeId,
-                    UserByte = e.UserByte
+                    UserByte = e.UserByte,
+                    PaletteIndexOverride = e.PaletteIndexOverride,
+                    WidthOverride = e.WidthOverride,
+                    HeightOverride = e.HeightOverride
                 })
                 .Where(p => map.ContainsSpriteOrigin(p.X, p.Y))
                 .ToList();
@@ -1650,7 +1713,11 @@ public partial class MapEditorViewModel : ObservableObject
                 IsStatusError = false;
                 return;
             }
-            var copies = copyable.Select(s => new SpritePlacement { SpriteAssetId = s.SpriteAssetId, X = s.X + deltaX, Y = s.Y + deltaY, TypeId = s.TypeId, UserByte = s.UserByte }).ToList();
+            var copies = copyable.Select(s => new SpritePlacement
+            {
+                SpriteAssetId = s.SpriteAssetId, X = s.X + deltaX, Y = s.Y + deltaY, TypeId = s.TypeId, UserByte = s.UserByte,
+                PaletteIndexOverride = s.PaletteIndexOverride, WidthOverride = s.WidthOverride, HeightOverride = s.HeightOverride
+            }).ToList();
             map.SpriteLayer.AddRange(copies);
             RefreshSpriteCounts();
             PushUndo(

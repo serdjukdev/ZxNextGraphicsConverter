@@ -1,4 +1,4 @@
-<Window x:Class="ZxNext.App.Views.MapEditorWindow"
+﻿<Window x:Class="ZxNext.App.Views.MapEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
@@ -417,6 +417,9 @@
                             HorizontalContentAlignment="Left" Padding="8,3" Margin="0,1" MinWidth="110" />
                     <Button Content="Set Type" Click="ObjectActionPopup_SetType_OnClick"
                             HorizontalContentAlignment="Left" Padding="8,3" Margin="0,1" MinWidth="110" />
+                    <Button Content="Object Data..." Click="ObjectActionPopup_ObjectData_OnClick"
+                            HorizontalContentAlignment="Left" Padding="8,3" Margin="0,1" MinWidth="110"
+                            ToolTip="Palette number, width and height in pixels: the extended bytes 8-10 of this object's exported record. Each one either follows the object's type or is pinned here." />
                 </StackPanel>
             </Border>
         </Popup>

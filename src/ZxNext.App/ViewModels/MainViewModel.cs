@@ -680,6 +680,69 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Decodes a source image for a caller that only has its id — the Metatile Editor's "Replace
+    /// image...", which needs the pixels both to preview the plan and to apply it.
+    /// </summary>
+    public (SourceImage Source, DecodedImage Decoded)? DecodeProjectSource(Guid sourceImageId)
+    {
+        if (_project.SourceImages.FirstOrDefault(s => s.Id == sourceImageId) is not { } source) return null;
+        return (source, _decoder.Decode(source.FilePath));
+    }
+
+    /// <summary>
+    /// "Replace image..." for a WHOLE metatile: the picked region is cut into the metatile's own grid of
+    /// 8x8 pieces and each piece replaces that cell's tile in place, so the metatile keeps its name, its
+    /// SortIndex (the byte every map grid cell stores for it) and every placement on every map. All the
+    /// per-cell decisions live in <see cref="MetatileImageReplacer"/> (shared tiles, reserved-blank cells,
+    /// mirror/rotate flags); this method is the project-and-tree bookkeeping around them.
+    /// </summary>
+    public ImportOutcome ReplaceMetatileImage(Metatile metatile, Guid sourceImageId, int offsetX, int offsetY, int? maxColors = null)
+    {
+        if (DecodeProjectSource(sourceImageId) is not { } decodedSource)
+        {
+            PixelEditor.StatusText = "Can't replace the image: that source image is no longer in the project.";
+            return new ImportOutcome(false, ImportFailureReason.None, MetatileImageReplacer.TileCategoryOf(metatile), "Source image missing.");
+        }
+
+        var (source, decoded) = decodedSource;
+        var category = MetatileImageReplacer.TileCategoryOf(metatile);
+        var result = MetatileImageReplacer.Apply(_project, metatile, source, decoded.Rgba32, decoded.Width, decoded.Height, offsetX, offsetY, maxColors);
+
+        foreach (var (oldId, newAsset) in result.ReplacedAssets)
+        {
+            Tree.ReplaceAssetNode(oldId, newAsset, _project);
+        }
+        foreach (var createdAsset in result.CreatedAssets)
+        {
+            Tree.AddAssetNode(createdAsset, _project);
+        }
+
+        if (result.ReplacedAssets.Count > 0 || result.CreatedAssets.Count > 0)
+        {
+            if (category.UsesPaletteBank()) _project.CompactPaletteBank(category);
+            else
+            {
+                // Same reasoning as the single-asset path: a flat-palette replacement can have remapped
+                // every other asset sharing the folder's palette, so any pending undo entry may reference
+                // stale pixel indices.
+                _undoStack.Clear();
+                OnSelectionChanged();
+            }
+            HasUnsavedChanges = true;
+        }
+
+        if (!result.Success)
+        {
+            var detail = string.Join("; ", result.Errors);
+            PixelEditor.StatusText = $"Replacing '{metatile.Name}' picture: {result.ReplacedAssets.Count + result.CreatedAssets.Count} tile(s) done, {result.Errors.Count} failed — {detail}";
+            return new ImportOutcome(false, result.Reason, category, detail);
+        }
+
+        PixelEditor.StatusText = $"Replaced '{metatile.Name}' picture from \"{source.FileName}\" at {offsetX},{offsetY}: {result.ReplacedAssets.Count} tile(s) replaced in place, {result.CreatedAssets.Count} new tile(s).";
+        return new ImportOutcome(true, ImportFailureReason.None, category, null);
+    }
+
+    /// <summary>
     /// Rebuilds an entire category's palette from scratch — the palette BANK for a 4bpp category
     /// (<see cref="AssetCategoryExtensions.UsesPaletteBank"/>), or the ONE shared flat palette for a
     /// <see cref="AssetCategoryExtensions.SharesPaletteAcrossFolders"/> category (Sprite8Bpp/Tile8Bpp,

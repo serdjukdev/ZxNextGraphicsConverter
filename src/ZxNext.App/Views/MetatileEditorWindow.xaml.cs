@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -110,6 +110,13 @@ public partial class MetatileEditorWindow : Window
     private void RenameMetatileMenuItem_OnClick(object sender, RoutedEventArgs e)
     {
         if (sender is MenuItem { DataContext: MetatileListItemViewModel item }) RenameMetatile(item);
+    }
+
+    /// <summary>Hands the metatile up to whoever owns the project's assets and source images (MainWindow): replacing a picture imports tiles and touches the project tree, neither of which this dialog owns.</summary>
+    private void ReplaceImageMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MetatileEditorViewModel vm) return;
+        if (sender is MenuItem { DataContext: MetatileListItemViewModel { IsReservedBlank: false } item }) vm.RequestReplaceImage(item.Metatile);
     }
 
     /// <summary>F2 on the gallery renames whatever single item is selected — the keyboard twin of the right-click menu item above. Ignored for a multi-selection (renaming several metatiles to one name is impossible, names are unique ASM labels).</summary>

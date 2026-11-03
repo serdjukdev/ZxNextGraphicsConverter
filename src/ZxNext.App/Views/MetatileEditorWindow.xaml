@@ -1,4 +1,4 @@
-<Window x:Class="ZxNext.App.Views.MetatileEditorWindow"
+﻿<Window x:Class="ZxNext.App.Views.MetatileEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
@@ -124,6 +124,19 @@
                                                         <DataTrigger Binding="{Binding IsReservedBlank}" Value="True">
                                                             <Setter Property="IsEnabled" Value="False" />
                                                             <Setter Property="ToolTip" Value="The reserved blank metatile can&apos;t be renamed." />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </MenuItem.Style>
+                                        </MenuItem>
+                                        <MenuItem Header="Replace image..." Click="ReplaceImageMenuItem_OnClick"
+                                                  ToolTip="Give this whole metatile a new picture: the region you pick is cut into its 8x8 cells and each cell's tile is replaced in place, so the metatile keeps its name, its export index and every placement on every map.">
+                                            <MenuItem.Style>
+                                                <Style TargetType="MenuItem">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsReservedBlank}" Value="True">
+                                                            <Setter Property="IsEnabled" Value="False" />
+                                                            <Setter Property="ToolTip" Value="The reserved blank metatile is the project's empty cell: it has no picture to replace." />
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>

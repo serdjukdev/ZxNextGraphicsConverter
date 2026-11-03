@@ -588,6 +588,9 @@ public partial class MainWindow : Window
     {
         var vm = new MetatileEditorViewModel(_viewModel.Project);
         var dialog = new MetatileEditorWindow { DataContext = vm, Owner = this };
+        // "Replace image..." on a metatile imports tiles and touches the Project Tree, neither of which
+        // the Metatile Editor owns, so it asks for it and this window does the work.
+        vm.ReplaceImageRequested += metatile => ReplaceMetatileImage(metatile, vm, dialog);
         dialog.ShowDialog();
         if (vm.HasChanges) _viewModel.HasUnsavedChanges = true;
         // Creating the very first metatile of some Kind+GridSize can silently auto-create that Kind's
@@ -601,6 +604,87 @@ public partial class MainWindow : Window
         // ...and the same window's GridSize=1 "rename a metatile, rename its tile too" path (see
         // MetatileEditorViewModel.RenameMetatile) leaves the tree showing the old tile name until this.
         _viewModel.SyncRenamedAssetNodes(vm.RenamedTileAssetIds);
+    }
+
+    /// <summary>
+    /// "Replace image..." for a whole metatile: picks a source region the size of the metatile's footprint
+    /// with the same dialog a single tile uses, spells out what the replacement will do to the cells'
+    /// TILES (which is where the real surprises live: a tile shared by two cells, a currently blank cell,
+    /// mirror/rotate flags, and other metatiles built from the same tiles), and then applies it. The
+    /// metatile itself keeps its name, its export index and every placement on every map.
+    /// </summary>
+    private async void ReplaceMetatileImage(Metatile metatile, MetatileEditorViewModel editorVm, Window owner)
+    {
+        var (footprintWidth, footprintHeight) = MetatileImageReplacer.FootprintOf(metatile);
+
+        // Open on the source image this metatile's own tiles came from: redrawing a platform usually means
+        // another region of the same sheet.
+        var currentSourceId = metatile.Cells
+            .Select(cell => _viewModel.Project.Assets.FirstOrDefault(a => a.Id == cell.TileAssetId))
+            .FirstOrDefault(a => a is { IsReservedBlank: false })?.SourceImageId;
+
+        var pickerVm = new ReplaceImageViewModel(_viewModel.SourceImages, metatile.Name, footprintWidth, footprintHeight,
+            snapToGrid: true, preselectSourceId: currentSourceId);
+        var picker = new ReplaceImageWindow { DataContext = pickerVm, Owner = owner, Title = $"Replace Image: {metatile.Name}" };
+        if (picker.ShowDialog() != true || pickerVm.SelectedSource is null) return;
+
+        var sourceId = pickerVm.SelectedSource.Model.Id;
+        var offsetLeft = pickerVm.OffsetLeft;
+        var offsetTop = pickerVm.OffsetTop;
+
+        if (_viewModel.DecodeProjectSource(sourceId) is not { } decodedSource) return;
+        var (source, decoded) = decodedSource;
+        var plan = MetatileImageReplacer.Plan(_viewModel.Project, metatile, decoded.Rgba32, decoded.Width, decoded.Height, offsetLeft, offsetTop);
+
+        var lines = new List<string>
+        {
+            $"Give '{metatile.Name}' the {plan.FootprintWidth}x{plan.FootprintHeight} picture at {offsetLeft},{offsetTop} in \"{source.FileName}\"?",
+            "",
+            $"{plan.TilesReplacedInPlace} tile(s) get new pixels and keep their name and export index."
+        };
+        if (plan.NewTilesForSharedCells > 0)
+        {
+            lines.Add($"{plan.NewTilesForSharedCells} new tile(s) will be created: those cells share one tile with an earlier cell, which cannot show two different pictures. New tiles are added at the end, so no existing tile's export index moves.");
+        }
+        if (plan.NewTilesForBlankCells > 0)
+        {
+            lines.Add($"{plan.NewTilesForBlankCells} new tile(s) will be created for cell(s) that are currently blank (the project's blank tile is shared by every empty map cell, so it is never overwritten).");
+        }
+        if (plan.BlankCellsLeftBlank > 0)
+        {
+            lines.Add($"{plan.BlankCellsLeftBlank} blank cell(s) stay blank (their new piece is fully transparent too).");
+        }
+        if (plan.TransformsCleared > 0)
+        {
+            lines.Add($"Mirror/rotate is cleared on {plan.TransformsCleared} cell(s): the new pieces are written the right way round instead of being flipped by hardware.");
+        }
+        if (plan.OtherMetatilesAffected.Count > 0)
+        {
+            lines.Add($"These tiles are used by {plan.OtherMetatilesAffected.Count} other metatile(s) too, which change with them: {string.Join(", ", plan.OtherMetatilesAffected)}.");
+        }
+        lines.Add("Colours are re-converted from scratch, so a 4bpp tile can end up in a different palette slot than before.");
+        lines.Add("");
+        lines.Add("This cannot be undone.");
+
+        if (ScrollableMessageWindow.Show(string.Join(Environment.NewLine, lines), "Replace metatile image", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        var outcome = _viewModel.ReplaceMetatileImage(metatile, sourceId, offsetLeft, offsetTop);
+        if (!outcome.Success && IsPaletteFullReason(outcome.Reason))
+        {
+            await HandlePaletteOverflowAsync(outcome.Error ?? "Palette overflow.", outcome.Category,
+                maxColors => _viewModel.ReplaceMetatileImage(metatile, sourceId, offsetLeft, offsetTop, maxColors));
+        }
+
+        // Every preview in the Metatile Editor is built from the project's assets, and a replaced tile
+        // keeps its id, so nothing there would notice on its own.
+        editorVm.RefreshAfterExternalTileChange();
+        if (!outcome.Success)
+        {
+            MessageBox.Show(_viewModel.PixelEditor.StatusText, "Replace metatile image", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void MapEditor_OnClick(object sender, RoutedEventArgs e)

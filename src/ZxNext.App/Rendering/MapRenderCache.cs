@@ -1,4 +1,4 @@
-using System.Windows.Media.Imaging;
+﻿using System.Windows.Media.Imaging;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
 
@@ -17,6 +17,13 @@ namespace ZxNext.App.Rendering;
 /// references (including a GridSize=1 map's per-cell mirror/rotate/palette attribute, which lives in
 /// <see cref="MapGridLayer.CellAttributes"/>, entirely separate from the metatile library). The set of
 /// possible rendered bitmaps is therefore fixed for the whole session.
+///
+/// <para>
+/// The Metatile Editor keeps its own instance, where that reasoning does NOT fully hold: its
+/// "Replace image..." rewrites existing tiles' pixels (and can repoint a metatile's cells) while the
+/// window stays open, and a replaced tile deliberately keeps its id, so every key here would still hit.
+/// That one path calls <see cref="Clear"/>.
+/// </para>
 /// </summary>
 public sealed class MapRenderCache
 {
@@ -59,6 +66,15 @@ public sealed class MapRenderCache
         var rendered = TileGridBitmapRenderer.RenderMetatilePriorityOverlay(metatile, project, this);
         _metatilePriorityOverlays[metatile.Id] = rendered;
         return rendered;
+    }
+
+    /// <summary>Drops every cached bitmap, for the one caller that changes an existing asset's PIXELS mid-session (the Metatile Editor's "Replace image...", see the remarks on this class). A replaced asset keeps its id, so nothing here would expire by itself.</summary>
+    public void Clear()
+    {
+        _tileBitmaps.Clear();
+        _metatileBitmaps.Clear();
+        _metatilePriorityOverlays.Clear();
+        _metatilesBySortIndex.Clear();
     }
 
     /// <summary>Metatiles of one Kind indexed by their export SortIndex — built once per Kind instead of on every <see cref="TileGridBitmapRenderer.RenderMapGridLayer"/> call.</summary>

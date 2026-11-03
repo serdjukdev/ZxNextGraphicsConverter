@@ -54,6 +54,34 @@ public partial class MetatileEditorViewModel : ObservableObject
     /// <summary>Tile assets removed via <see cref="DeleteUnderlyingTile"/> (the GridSize=1 "deleting a metatile really means deleting its one tile" path) — this window has no Project Tree of its own to keep in sync, so MainWindow reads this once the dialog closes and removes the matching tree nodes itself, the same way it already does for a tile deleted directly from the tree.</summary>
     public List<Guid> DeletedTileAssetIds { get; } = [];
 
+    /// <summary>
+    /// Raised by the gallery's "Replace image..." item. This window owns neither the project's source
+    /// images nor the Project Tree, and replacing a metatile's picture needs both (it imports tiles), so
+    /// the owner (MainWindow) runs it and calls <see cref="RefreshAfterExternalTileChange"/> afterwards.
+    /// </summary>
+    public event Action<Metatile>? ReplaceImageRequested;
+
+    public void RequestReplaceImage(Metatile metatile) => ReplaceImageRequested?.Invoke(metatile);
+
+    /// <summary>
+    /// Called back once the owner has replaced a metatile's picture: existing tiles now hold different
+    /// pixels (under the same ids) and some cells may point at brand-new tiles, so every cached render is
+    /// stale, both lists have to be rebuilt, and the draft has to be re-read from the metatile it shows.
+    /// </summary>
+    public void RefreshAfterExternalTileChange()
+    {
+        HasChanges = true;
+        _renderCache.Clear();
+
+        var selectedId = SelectedMetatile?.Metatile.Id;
+        RefreshTilePalette();
+        RefreshMetatileList();
+
+        // Re-selecting by id (the list items are rebuilt, so the old instance is gone) re-runs
+        // OnSelectedMetatileChanged, which is what reloads the draft cells' tile references.
+        SelectedMetatile = selectedId is { } id ? Metatiles.FirstOrDefault(m => m.Metatile.Id == id) : null;
+    }
+
     [ObservableProperty]
     private MetatileKind selectedKind = MetatileKind.FourBpp;
 

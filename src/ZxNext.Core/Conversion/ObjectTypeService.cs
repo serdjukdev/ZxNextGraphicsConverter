@@ -1,4 +1,4 @@
-using ZxNext.Core.Model;
+﻿using ZxNext.Core.Model;
 using ZxNext.Core.Project;
 
 namespace ZxNext.Core.Conversion;
@@ -61,6 +61,83 @@ public static class ObjectTypeService
         if (index < 0 || index >= project.ObjectTypes.Count - 1) return;
         project.ObjectTypes.RemoveAt(index);
         project.ObjectTypes.Insert(index + 1, type);
+    }
+
+    /// <summary>
+    /// Adds a named subtype to <paramref name="type"/>, owning the LOWEST FREE BIT of the user byte by
+    /// default (so filling a fresh table just walks 0, 1, 2, ...). Refused when the type already has
+    /// <see cref="ObjectType.MaxSubtypes"/> of them (one bit each, so eight is the ceiling) or when the
+    /// name is taken anywhere in the project: a subtype's exported label is <c>subobj_&lt;name&gt;</c>
+    /// with no type in it, so names have to be unique project-wide.
+    /// </summary>
+    public static (bool Success, ObjectSubtype? Subtype, string? Error) AddSubtype(ProjectState project, ObjectType type, string name)
+    {
+        var trimmed = name.Trim();
+        if (trimmed.Length == 0) return (false, null, "Name cannot be empty.");
+        if (type.Subtypes.Count >= ObjectType.MaxSubtypes)
+        {
+            return (false, null, $"'{type.Name}' already has {ObjectType.MaxSubtypes} subtypes, one per bit of the user byte. Delete one first.");
+        }
+        if (IsSubtypeNameTaken(project, trimmed, excludeSubtypeId: null) is { } clash)
+        {
+            return (false, null, clash);
+        }
+
+        var used = type.Subtypes.Select(st => st.BitIndex).ToHashSet();
+        var freeBit = Enumerable.Range(0, ObjectType.MaxSubtypes).First(bit => !used.Contains(bit));
+
+        var subtype = new ObjectSubtype { Name = trimmed, BitIndex = freeBit };
+        type.Subtypes.Add(subtype);
+        return (true, subtype, null);
+    }
+
+    public static (bool Success, string? Error) RenameSubtype(ProjectState project, ObjectSubtype subtype, string newName)
+    {
+        var trimmed = newName.Trim();
+        if (trimmed.Length == 0) return (false, "Name cannot be empty.");
+        if (IsSubtypeNameTaken(project, trimmed, excludeSubtypeId: subtype.Id) is { } clash) return (false, clash);
+
+        subtype.Name = trimmed;
+        return (true, null);
+    }
+
+    /// <summary>Moves a subtype onto another bit of the user byte. Refused when a sibling subtype of the same type already owns that bit: two subtypes sharing a bit could not be told apart in a placement's user byte.</summary>
+    public static (bool Success, string? Error) SetSubtypeBit(ObjectType type, ObjectSubtype subtype, int bitIndex)
+    {
+        if (bitIndex < 0 || bitIndex > 7) return (false, "A bit index must be 0-7.");
+        if (subtype.BitIndex == bitIndex) return (true, null);
+
+        if (type.Subtypes.FirstOrDefault(st => st.Id != subtype.Id && st.BitIndex == bitIndex) is { } owner)
+        {
+            return (false, $"Bit {bitIndex} already belongs to subtype '{owner.Name}'.");
+        }
+
+        subtype.BitIndex = bitIndex;
+        return (true, null);
+    }
+
+    /// <summary>
+    /// Removes a subtype. Deliberately does NOT touch any placement's user byte: that byte is raw game
+    /// data the user may also be using by hand (a platform's size in the low bits, say), so silently
+    /// clearing a bit across every map would be a worse surprise than leaving the bit set.
+    /// </summary>
+    public static void DeleteSubtype(ObjectType type, ObjectSubtype subtype) => type.Subtypes.Remove(subtype);
+
+    /// <summary>Null when the name is free; the reason it isn't otherwise. Project-wide, since the exported label has no type in it.</summary>
+    public static string? IsSubtypeNameTaken(ProjectState project, string candidate, Guid? excludeSubtypeId)
+    {
+        foreach (var type in project.ObjectTypes)
+        {
+            foreach (var existing in type.Subtypes)
+            {
+                if (existing.Id == excludeSubtypeId) continue;
+                if (string.Equals(existing.Name, candidate, StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"A subtype named '{candidate}' already exists (on type '{type.Name}'). Subtype names are unique across the whole project, since their exported label carries no type name.";
+                }
+            }
+        }
+        return null;
     }
 
     private static bool IsTaken(ProjectState project, string candidate, Guid? excludeTypeId) =>

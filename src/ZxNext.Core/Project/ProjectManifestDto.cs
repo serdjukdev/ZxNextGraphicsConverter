@@ -157,6 +157,16 @@ public class ObjectTypeDto
     public int? PaletteIndex { get; set; }
     public int? Width { get; set; }
     public int? Height { get; set; }
+
+    // Absent in a project saved before subtypes existed, which simply means the type has none.
+    public List<ObjectSubtypeDto>? Subtypes { get; set; }
+}
+
+public class ObjectSubtypeDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public int BitIndex { get; set; }
 }
 
 /// <summary>

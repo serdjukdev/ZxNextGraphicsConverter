@@ -23,6 +23,9 @@ public partial class ObjectTypesViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RenameTypeCommand))]
     [NotifyCanExecuteChangedFor(nameof(DeleteTypeCommand))]
+    // Without this the Add-subtype button would never re-evaluate its CanExecute and would sit disabled
+    // forever: a generated RelayCommand only re-checks when something explicitly tells it to.
+    [NotifyCanExecuteChangedFor(nameof(AddSubtypeCommand))]
     private ObjectType? selectedType;
 
     [ObservableProperty]
@@ -30,6 +33,24 @@ public partial class ObjectTypesViewModel : ObservableObject
 
     [ObservableProperty]
     private string renameText = "";
+
+    /// <summary>The selected type's subtypes, wrapped so the list can show the bit each one owns.</summary>
+    public ObservableCollection<ObjectSubtypeRow> Subtypes { get; } = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RenameSubtypeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteSubtypeCommand))]
+    private ObjectSubtypeRow? selectedSubtype;
+
+    [ObservableProperty]
+    private string subtypeName = "";
+
+    /// <summary>Which bit of the user byte the selected subtype owns. Writing it moves the subtype, unless a sibling already owns that bit.</summary>
+    [ObservableProperty]
+    private int selectedSubtypeBit;
+
+    /// <summary>0-7, for the bit picker.</summary>
+    public IReadOnlyList<int> BitChoices { get; } = Enumerable.Range(0, ObjectType.MaxSubtypes).ToList();
 
     /// <summary>
     /// The selected type's palette number, width and height, mirrored into the view model rather than
@@ -69,6 +90,7 @@ public partial class ObjectTypesViewModel : ObservableObject
     {
         RenameText = value?.Name ?? "";
         OnPropertyChanged(nameof(HasSelectedType));
+        RefreshSubtypes();
 
         _loadingSelection = true;
         SelectedPaletteIndex = value?.PaletteIndex ?? 0;
@@ -211,4 +233,118 @@ public partial class ObjectTypesViewModel : ObservableObject
     }
 
     private bool HasSelection() => SelectedType is not null;
+
+    private bool HasSubtypeSelection() => SelectedSubtype is not null;
+
+    private void RefreshSubtypes()
+    {
+        Subtypes.Clear();
+        if (SelectedType is null) return;
+        foreach (var subtype in SelectedType.Subtypes.OrderBy(st => st.BitIndex))
+        {
+            Subtypes.Add(new ObjectSubtypeRow(subtype));
+        }
+    }
+
+    partial void OnSelectedSubtypeChanged(ObjectSubtypeRow? value)
+    {
+        SubtypeName = value?.Model.Name ?? "";
+        _loadingSelection = true;
+        SelectedSubtypeBit = value?.Model.BitIndex ?? 0;
+        _loadingSelection = false;
+    }
+
+    /// <summary>Moving the selected subtype onto another bit. Refused (and reverted in the picker) when a sibling subtype of the same type already owns it.</summary>
+    partial void OnSelectedSubtypeBitChanged(int value)
+    {
+        if (_loadingSelection || SelectedType is null || SelectedSubtype is not { } row) return;
+        if (row.Model.BitIndex == value) return;
+
+        var (success, error) = ObjectTypeService.SetSubtypeBit(SelectedType, row.Model, value);
+        if (!success)
+        {
+            StatusText = error;
+            IsStatusError = true;
+            _loadingSelection = true;
+            SelectedSubtypeBit = row.Model.BitIndex;
+            _loadingSelection = false;
+            return;
+        }
+
+        HasChanges = true;
+        var movedId = row.Model.Id;
+        RefreshSubtypes();
+        SelectedSubtype = Subtypes.FirstOrDefault(r => r.Model.Id == movedId);
+        StatusText = $"'{row.Model.Name}' now owns bit {value} (value {row.Model.BitValue}).";
+        IsStatusError = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private void AddSubtype()
+    {
+        if (SelectedType is null) return;
+
+        var (success, subtype, error) = ObjectTypeService.AddSubtype(_project, SelectedType, SubtypeName);
+        if (!success)
+        {
+            StatusText = error;
+            IsStatusError = true;
+            return;
+        }
+
+        HasChanges = true;
+        RefreshSubtypes();
+        SelectedSubtype = Subtypes.FirstOrDefault(r => r.Model.Id == subtype!.Id);
+        SubtypeName = "";
+        StatusText = $"Added subtype '{subtype!.Name}' on bit {subtype.BitIndex} (value {subtype.BitValue}).";
+        IsStatusError = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSubtypeSelection))]
+    private void RenameSubtype()
+    {
+        if (SelectedSubtype is not { } row) return;
+
+        var (success, error) = ObjectTypeService.RenameSubtype(_project, row.Model, SubtypeName);
+        if (!success)
+        {
+            StatusText = error;
+            IsStatusError = true;
+            return;
+        }
+
+        HasChanges = true;
+        var renamedId = row.Model.Id;
+        RefreshSubtypes();
+        SelectedSubtype = Subtypes.FirstOrDefault(r => r.Model.Id == renamedId);
+        StatusText = $"Renamed subtype to '{row.Model.Name}'.";
+        IsStatusError = false;
+    }
+
+    /// <summary>
+    /// Deletes the selected subtype. Deliberately leaves every placed object's user byte alone: that byte
+    /// is raw game data the user may also be setting by hand, so clearing a bit across every map would be
+    /// a worse surprise than leaving it set (see ObjectTypeService.DeleteSubtype).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HasSubtypeSelection))]
+    private void DeleteSubtype()
+    {
+        if (SelectedType is null || SelectedSubtype is not { } row) return;
+
+        var deletedName = row.Model.Name;
+        ObjectTypeService.DeleteSubtype(SelectedType, row.Model);
+        HasChanges = true;
+        SelectedSubtype = null;
+        RefreshSubtypes();
+        StatusText = $"Deleted subtype '{deletedName}'. Any user byte already set on a map is left as it is.";
+        IsStatusError = false;
+    }
+}
+
+/// <summary>One row of the subtype list: the model plus the "name (bit N, value M)" text the list shows.</summary>
+public class ObjectSubtypeRow(ObjectSubtype model)
+{
+    public ObjectSubtype Model { get; } = model;
+
+    public string Display => $"{Model.Name}  (bit {Model.BitIndex}, value {Model.BitValue})";
 }

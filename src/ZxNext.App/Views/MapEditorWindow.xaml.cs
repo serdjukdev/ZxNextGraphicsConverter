@@ -984,7 +984,9 @@ public partial class MapEditorWindow : Window
     /// <summary>Shared by the Set User Byte tool's normal armed-click flow and the right-click one-shot popup — deliberately does NOT touch <see cref="MapEditorViewModel.IsSetUserByteToolActive"/> itself, so calling this from the right-click path never arms/leaves the toolbar button's batch mode active.</summary>
     private void OpenSetUserByteDialogFor(MapEditorViewModel vm, SpritePlacement target)
     {
-        var dialog = new UserByteWindow(target.UserByte) { Owner = this };
+        // The object's own type's subtypes drive the dialog's subtype picker; with no type (or a type
+        // with no subtypes) it just hides that part and stays the plain number/bits editor it was.
+        var dialog = new UserByteWindow(target.UserByte, vm.TypeOf(target)?.Subtypes) { Owner = this };
         if (dialog.ShowDialog() == true) vm.ApplyUserByte(target, dialog.Value);
     }
 
@@ -992,7 +994,7 @@ public partial class MapEditorWindow : Window
     private void OpenSetUserByteDialogForSelection(MapEditorViewModel vm)
     {
         if (vm.SelectedSprites.Count == 0) return;
-        var dialog = new UserByteWindow(vm.SelectedSprites[0].UserByte) { Owner = this };
+        var dialog = new UserByteWindow(vm.SelectedSprites[0].UserByte, vm.TypeOf(vm.SelectedSprites[0])?.Subtypes) { Owner = this };
         if (dialog.ShowDialog() == true) vm.ApplyUserByteToSelection(dialog.Value);
     }
 

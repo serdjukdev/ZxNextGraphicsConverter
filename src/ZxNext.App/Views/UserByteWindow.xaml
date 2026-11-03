@@ -1,4 +1,4 @@
-<Window x:Class="ZxNext.App.Views.UserByteWindow"
+﻿<Window x:Class="ZxNext.App.Views.UserByteWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -21,6 +21,12 @@
             <ToggleButton x:Name="Bit1" Content="2" Click="BitButton_OnClick" Margin="0,0,2,0" />
             <ToggleButton x:Name="Bit0" Content="1" Click="BitButton_OnClick" />
         </UniformGrid>
+
+        <StackPanel x:Name="SubtypePanel" Margin="0,14,0,0">
+            <TextBlock Text="Subtype (sets its own bit, clears the other subtype bits):" FontSize="11" Margin="0,0,0,4" />
+            <ListBox x:Name="SubtypeList" MaxHeight="130" SelectionChanged="SubtypeList_OnSelectionChanged" />
+            <TextBlock Text="Bits no subtype owns are left exactly as you set them above, so a type can carry a subtype AND a hand-entered parameter in the same byte." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,4,0,0" />
+        </StackPanel>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button Content="Cancel" Width="80" Margin="0,0,8,0" IsCancel="True" Click="Cancel_OnClick" />

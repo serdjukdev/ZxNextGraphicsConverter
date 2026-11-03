@@ -214,7 +214,8 @@ public static class ProjectService
                     Name = type.Name,
                     PaletteIndex = type.PaletteIndex,
                     Width = type.Width,
-                    Height = type.Height
+                    Height = type.Height,
+                    Subtypes = type.Subtypes.Select(st => new ObjectSubtypeDto { Id = st.Id, Name = st.Name, BitIndex = st.BitIndex }).ToList()
                 });
             }
 
@@ -407,7 +408,8 @@ public static class ProjectService
                 Name = t.Name,
                 PaletteIndex = t.PaletteIndex ?? 0,
                 Width = t.Width ?? ObjectType.DefaultSize,
-                Height = t.Height ?? ObjectType.DefaultSize
+                Height = t.Height ?? ObjectType.DefaultSize,
+                Subtypes = (t.Subtypes ?? []).Select(st => new ObjectSubtype { Id = st.Id, Name = st.Name, BitIndex = st.BitIndex }).ToList()
             });
         }
 

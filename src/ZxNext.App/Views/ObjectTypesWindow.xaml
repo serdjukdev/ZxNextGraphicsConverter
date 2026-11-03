@@ -6,7 +6,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008/design"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Object Types" Height="470" Width="360" WindowStartupLocation="CenterOwner">
+        Title="Object Types" Height="700" Width="380" WindowStartupLocation="CenterOwner">
     <Window.Resources>
         <Style x:Key="StatusTextStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#1A7A1A" />
@@ -21,6 +21,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="1*" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -70,7 +71,34 @@
             <TextBlock Text="These are the type's defaults: a single object can override any of them from its own right-click menu in the Map Editor. They only reach the binary while 'Extended object bytes' is on in Settings." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,4,0,0" />
         </StackPanel>
 
-        <Grid Grid.Row="3" Margin="0,8,0,0">
+        <StackPanel Grid.Row="3" Margin="0,10,0,0" IsEnabled="{Binding HasSelectedType}">
+            <TextBlock Text="Subtypes of the selected type (max 8, one bit of the object's user byte each)" FontSize="10" Foreground="Gray" TextWrapping="Wrap" />
+            <Border BorderBrush="#999" BorderThickness="1" Margin="0,4,0,0">
+                <ListBox Height="96" BorderThickness="0"
+                         ItemsSource="{Binding Subtypes}" SelectedItem="{Binding SelectedSubtype}" DisplayMemberPath="Display" />
+            </Border>
+            <Grid Margin="0,4,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0" Text="{Binding SubtypeName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,6,0"
+                         ToolTip="A subtype's name is unique across the whole project: its exported label is subobj_&lt;name&gt;, with no type name in it." />
+                <Button Grid.Column="1" Content="Add" Width="56" Margin="0,0,4,0" Command="{Binding AddSubtypeCommand}" />
+                <Button Grid.Column="2" Content="Rename" Width="62" Margin="0,0,4,0" Command="{Binding RenameSubtypeCommand}" />
+                <Button Grid.Column="3" Content="Delete" Width="56" Command="{Binding DeleteSubtypeCommand}" />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                <TextBlock Text="Bit of the selected subtype" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <ComboBox Width="56" ItemsSource="{Binding BitChoices}" SelectedItem="{Binding SelectedSubtypeBit}"
+                          ToolTip="A new subtype takes the lowest free bit. Move it here; a bit another subtype of this type already owns is refused." />
+            </StackPanel>
+            <TextBlock Text="An object gets at most ONE subtype: picking it sets that bit and clears the other subtype bits. Bits no subtype owns stay free for a number you type in yourself. Exported as subobj_&lt;name&gt;: equ &lt;bit value&gt;." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,4,0,0" />
+        </StackPanel>
+
+        <Grid Grid.Row="4" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -80,7 +108,7 @@
                     Style="{StaticResource PrimaryButtonStyle}" />
         </Grid>
 
-        <Grid Grid.Row="4" Margin="0,6,0,0">
+        <Grid Grid.Row="5" Margin="0,6,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -91,7 +119,7 @@
             <Button Grid.Column="2" Content="Delete" Width="70" Command="{Binding DeleteTypeCommand}" />
         </Grid>
 
-        <Grid Grid.Row="5" Margin="0,8,0,0">
+        <Grid Grid.Row="6" Margin="0,8,0,0">
             <TextBlock Text="{Binding StatusText}" Style="{StaticResource StatusTextStyle}" TextWrapping="Wrap" VerticalAlignment="Center" />
             <Button Content="Close" Width="80" HorizontalAlignment="Right" IsCancel="True" Click="Close_OnClick" />
         </Grid>

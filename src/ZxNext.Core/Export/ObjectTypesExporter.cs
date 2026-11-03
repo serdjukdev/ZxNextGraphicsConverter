@@ -44,6 +44,7 @@ public static class ObjectTypesExporter
         var sb = new StringBuilder();
         sb.Append("; object_types.asm -- project-wide object type IDs, shared by every map's *_objects.asm\n");
         sb.Append("; obj_<name>: equ <type index> -- a map's objects row writes this index as an object record's `type` byte (0xFF = no type assigned)\n");
+        sb.Append("; subobj_<name>: equ <bit value> -- one named subtype of a type: the BIT it owns in an object record's `userByte`, as a value (1,2,4,...), so `and subobj_x` tests it\n");
 
         // The project's single switch for the extended per-object bytes. Written either way, so the line
         // is always here to uncomment by hand; the checkbox only decides which of the two forms is written.
@@ -61,6 +62,27 @@ public static class ObjectTypesExporter
         {
             var label = AsmLabel.SanitizeUnique(project.ObjectTypes[i].Name, usedLabels);
             sb.Append("obj_").Append(label).Append(": equ ").Append(i).Append('\n');
+        }
+
+        // Subtypes, grouped under their type for readability but NOT prefixed with it: a subtype name is
+        // unique across the whole project (ObjectTypeService.AddSubtype enforces it), so the label is just
+        // subobj_<name>, and the value is the bit's VALUE rather than its index, so game code tests it with
+        // a plain AND against the object's userByte. Bits the type's subtypes do not claim stay free for a
+        // hand-entered parameter in the same byte.
+        if (project.ObjectTypes.Any(t => t.Subtypes.Count > 0))
+        {
+            sb.Append('\n');
+            var usedSubtypeLabels = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var type in project.ObjectTypes.Where(t => t.Subtypes.Count > 0))
+            {
+                sb.Append("; subtypes of ").Append(type.Name).Append(" (one bit of userByte each)\n");
+                foreach (var subtype in type.Subtypes.OrderBy(st => st.BitIndex))
+                {
+                    var subtypeLabel = AsmLabel.SanitizeUnique(subtype.Name, usedSubtypeLabels);
+                    sb.Append("subobj_").Append(subtypeLabel).Append(": equ ").Append(subtype.BitValue)
+                        .Append("   ; bit ").Append(subtype.BitIndex).Append('\n');
+                }
+            }
         }
 
         // Each type's own palette/size defaults, as constants, so game code can read what a type is

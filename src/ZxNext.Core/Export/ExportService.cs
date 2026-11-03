@@ -1,4 +1,4 @@
-using ZxNext.Core.Model;
+﻿using ZxNext.Core.Model;
 using ZxNext.Core.Project;
 
 namespace ZxNext.Core.Export;
@@ -107,7 +107,7 @@ public static class ExportService
             results.Add(eightBpp.Grid);
             if (eightBpp.Metatiles is not null) results.Add(eightBpp.Metatiles);
 
-            var (objectsOk, objectsResult, objectsError) = MapExporter.ExportObjects(map, project.Assets, project.ObjectTypes);
+            var (objectsOk, objectsResult, objectsError) = MapExporter.ExportObjects(map, project.Assets, project.ObjectTypes, project.ObjectDefinitions);
             if (!objectsOk) throw new InvalidOperationException(objectsError);
             results.Add(objectsResult!);
         }

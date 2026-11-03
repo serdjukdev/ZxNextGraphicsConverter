@@ -1,4 +1,4 @@
-using ZxNext.Core.Conversion;
+﻿using ZxNext.Core.Conversion;
 using ZxNext.Core.Editing;
 using ZxNext.Core.Model;
 
@@ -52,6 +52,14 @@ public class ProjectState
 
     /// <summary>Project-wide list of user-defined map-object categories (e.g. "portal", "character"). See <see cref="ObjectType"/> for why this is project-wide rather than per-map.</summary>
     public List<ObjectType> ObjectTypes { get; } = [];
+
+    /// <summary>
+    /// The project's named objects: sprite compositions the Map Editor places as whole units (see
+    /// <see cref="MapObjectDefinition"/>). Purely a picture and a size, never exported as data, and
+    /// entirely optional: a project with none behaves exactly as it did before they existed, with lone
+    /// sprites dropped on the map as markers.
+    /// </summary>
+    public List<MapObjectDefinition> ObjectDefinitions { get; } = [];
 
     /// <summary>Non-fatal notes produced while loading this project from an older/newer <c>.zxngc</c>
     /// (a format version from a newer build, an on-load palette migration that had to drop or rebuild

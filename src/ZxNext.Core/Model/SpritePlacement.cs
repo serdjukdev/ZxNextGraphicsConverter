@@ -18,6 +18,15 @@ public class SpritePlacement
     public byte UserByte { get; set; }
 
     /// <summary>
+    /// The <see cref="MapObjectDefinition"/> this placement was stamped from, or null for a plain single
+    /// sprite (every placement before object definitions existed, and any still made that way). Only
+    /// affects HOW IT IS DRAWN in the Map Editor, where a placement with a definition draws that
+    /// definition's whole sprite grid; everything exported comes from the placement's own fields, so
+    /// losing the definition (deleting it) costs nothing but the preview.
+    /// </summary>
+    public Guid? ObjectDefinitionId { get; set; }
+
+    /// <summary>
     /// Palette number 0-15 for THIS object only; null (the default) means "use the type's
     /// <see cref="ObjectType.PaletteIndex"/>". An object with no type at all exports 0.
     /// </summary>

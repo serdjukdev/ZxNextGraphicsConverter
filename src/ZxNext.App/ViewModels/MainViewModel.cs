@@ -1969,7 +1969,12 @@ public partial class MainViewModel : ObservableObject
             }
             catch (Exception ex)
             {
+                // A dialog, not just the status line: a failed open leaves an EMPTY app, and a one-line
+                // message at the bottom edge reads exactly like "the project really was empty".
                 PixelEditor.StatusText = $"Failed to open project at {path}: {ex.Message}";
+                MessageBox.Show(
+                    $"Could not open the project:\n\n{path}\n\n{ex.Message}\n\nThe file itself has not been changed.",
+                    "Failed to open project", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 

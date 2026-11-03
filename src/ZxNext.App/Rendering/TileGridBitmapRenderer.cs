@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Media.Imaging;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
@@ -411,6 +411,37 @@ public static class TileGridBitmapRenderer
     }
 
     /// <summary>Plain, non-blended copy — correct only when the destination region is guaranteed blank/non-overlapping beforehand (compositing non-overlapping grid cells). Also assumes the source fully fits within the target (no clamping) — the two current callers (tile-into-metatile, metatile-into-grid-layer) both guarantee this by construction.</summary>
+    /// <summary>
+    /// The whole picture of a named object (see ZxNext.Core.Model.MapObjectDefinition): every filled cell's
+    /// sprite blitted at its grid position plus its own pixel offset, in a bitmap exactly the size the
+    /// object measures. Null when the object has no sprites yet, so the caller can show nothing instead of
+    /// an empty box. Cells overlap freely (that is the point of the offsets), so this composites OVER.
+    /// </summary>
+    public static WriteableBitmap? RenderObjectDefinition(MapObjectDefinition definition, ProjectState project)
+    {
+        var (left, top, width, height) = definition.MeasureBounds();
+        if (width <= 0 || height <= 0) return null;
+        if (!definition.SpriteIds().Any()) return null;
+
+        var composite = new WriteableBitmap(width, height, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null);
+
+        for (var rowIndex = 0; rowIndex < definition.Rows.Count; rowIndex++)
+        {
+            var row = definition.Rows[rowIndex];
+            for (var col = 0; col < row.Cells.Count; col++)
+            {
+                if (row.Cells[col] is not { } id) continue;
+                if (project.Assets.FirstOrDefault(a => a.Id == id) is not { } asset) continue;
+
+                BlitOver(composite, NextBitmapRenderer.Render(asset, project),
+                    col * MapObjectDefinition.CellPixels + row.OffsetX - left,
+                    rowIndex * MapObjectDefinition.CellPixels + row.OffsetY - top);
+            }
+        }
+
+        return composite;
+    }
+
     private static void Blit(WriteableBitmap target, WriteableBitmap source, int destX, int destY)
     {
         var stride = source.PixelWidth * 4;

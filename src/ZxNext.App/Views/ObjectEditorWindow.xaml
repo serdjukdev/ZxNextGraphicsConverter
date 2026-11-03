@@ -1,0 +1,262 @@
+﻿<Window x:Class="ZxNext.App.Views.ObjectEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
+        d:DataContext="{d:DesignInstance Type=vm:ObjectEditorViewModel}"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008/design"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Object Editor" Width="980" Height="700" MinWidth="820" MinHeight="560"
+        WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <Style x:Key="EditorStatusTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#1A7A1A" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsStatusError}" Value="True">
+                    <Setter Property="Foreground" Value="Red" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,8" FontSize="10" Foreground="Gray" TextWrapping="Wrap"
+                   Text="An object is a named group of sprites: a 5-wide platform, a character of one sprite over two. Each ROW has its own length and its own offset, so the shape does not have to be a rectangle. The Map Editor places one as a single unit and draws its whole picture. The sprite layout is never exported; what the export takes from it is the object's size and its palette. Objects are optional: with none, the Map Editor behaves exactly as before and you place lone sprites." />
+
+        <!-- left: the library -->
+        <DockPanel Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
+            <TextBlock DockPanel.Dock="Top" Text="Objects" FontSize="11" Margin="0,0,0,4" />
+            <Button DockPanel.Dock="Bottom" Content="Add..." Height="26" Margin="0,6,0,0" Click="Add_OnClick"
+                    ToolTip="Create a new object: asks for a name. Rename and Delete live on the object's own right-click menu." />
+            <Border BorderBrush="#999" BorderThickness="1">
+                <ListBox x:Name="DefinitionList" ItemsSource="{Binding Definitions}" SelectedItem="{Binding SelectedDefinition}"
+                         BorderThickness="0"
+                         PreviewMouseLeftButtonDown="DefinitionList_OnPreviewMouseLeftButtonDown"
+                         PreviewMouseMove="DefinitionList_OnPreviewMouseMove"
+                         AllowDrop="True" Drop="DefinitionList_OnDrop"
+                         DragOver="DefinitionList_OnDragOver" DragLeave="DefinitionList_OnDragLeave">
+                    <ListBox.ItemContainerStyle>
+                        <!-- Without this the row's content is only as wide as its text, so a right-click
+                             next to a short name lands on the ListBox instead of the item and its menu
+                             never opens. -->
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Padding" Value="4,3" />
+                            <!-- The drop indicator during a reorder drag is this border, switched on for one
+                                 row at a time by the code-behind (see DefinitionList_OnDragOver). -->
+                            <Setter Property="BorderBrush" Value="#2ECC40" />
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <!-- The menu sits on a full-width element so a right-click anywhere on the row opens it. -->
+                            <Grid Background="Transparent">
+                                <Grid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Rename..." Click="RenameMenuItem_OnClick" />
+                                        <MenuItem Header="Delete" Click="DeleteMenuItem_OnClick" />
+                                    </ContextMenu>
+                                </Grid.ContextMenu>
+                                <TextBlock Text="{Binding Name}" ToolTip="Drag to reorder. Right-click for Rename and Delete." />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+        </DockPanel>
+
+        <!-- right: the selected object -->
+        <DockPanel Grid.Row="1" Grid.Column="1" IsEnabled="{Binding HasSelection}">
+            <StackPanel DockPanel.Dock="Top">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Type:" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <ComboBox Width="130" ItemsSource="{Binding Types}" SelectedItem="{Binding SelectedType}" DisplayMemberPath="Name"
+                              ToolTip="Every object placed from this gets this type. The empty row means no type." />
+                    <TextBlock Text="Exported size px:" FontSize="11" VerticalAlignment="Center" Margin="16,0,6,0" />
+                    <TextBox Width="44" Text="{Binding SizePixelsWidth, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"
+                             IsEnabled="{Binding ManualSize}" />
+                    <TextBlock Text="x" FontSize="11" VerticalAlignment="Center" Margin="5,0,5,0" />
+                    <TextBox Width="44" Text="{Binding SizePixelsHeight, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"
+                             IsEnabled="{Binding ManualSize}" />
+                    <CheckBox Content="from the picture" IsChecked="{Binding AutoSize}" VerticalAlignment="Center" Margin="8,0,0,0"
+                              ToolTip="Ticked: the exported width/height is what the sprites measure. Unticked: the two numbers are used instead, which is what a hitbox usually needs (a 32x32 picture of a one-sprite-wide character wants 16x32)." />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                    <TextBlock Text="Subtype:" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <ComboBox Width="110" ItemsSource="{Binding Subtypes}" SelectedItem="{Binding SelectedSubtype}" DisplayMemberPath="Name"
+                              ToolTip="Sets that subtype's bit in the user byte and clears the other subtypes' bits. Every other bit stays as it is. The empty row means no subtype." />
+                    <TextBlock Text="User byte:" FontSize="11" VerticalAlignment="Center" Margin="14,0,6,0" />
+                    <TextBox Width="44" Text="{Binding UserByteNumber, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"
+                             ToolTip="0-255. The bit buttons to the right and the subtype above edit this same byte." />
+                    <ItemsControl ItemsSource="{Binding UserByteBits}" Margin="8,0,0,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <!-- MSB on the left, like the dialog on the map -->
+                                <StackPanel Orientation="Horizontal" FlowDirection="RightToLeft" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel FlowDirection="LeftToRight" Margin="1,0">
+                                    <ToggleButton Width="32" Content="{Binding Label}" IsChecked="{Binding IsSet}" ToolTip="{Binding ToolTipText}" />
+                                    <TextBlock Text="{Binding SubtypeName}" FontSize="8" Foreground="Gray" TextTrimming="CharacterEllipsis"
+                                               MaxWidth="32" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding UserByteText}" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0" />
+                </StackPanel>
+
+                <TextBlock Text="{Binding SizeText}" FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,4,0,0" />
+                <TextBlock Text="{Binding PaletteText}" FontSize="10" Foreground="Gray" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding MixedPaletteWarning}" FontSize="10" Foreground="Red" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- the sprite palette, below everything -->
+            <DockPanel DockPanel.Dock="Bottom" Height="186" Margin="0,8,0,0">
+                <TextBlock DockPanel.Dock="Top" Text="Sprites: click one, then click a cell above. Right-click a cell to clear it." FontSize="11" Margin="0,0,0,4" />
+                <ScrollViewer DockPanel.Dock="Top" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,0,0,4">
+                    <ItemsControl ItemsSource="{Binding SpriteFolders}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <ToggleButton Content="{Binding Display}" IsChecked="{Binding IsSelected, Mode=OneWay}" Margin="0,0,4,0"
+                                              Padding="8,2" MinHeight="24"
+                                              ToolTip="Show this folder's sprites. Sub-folder sprites can be used in an object too: the layout is only a picture."
+                                              Command="{Binding DataContext.SelectSpriteFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              CommandParameter="{Binding}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                <Border BorderBrush="#999" BorderThickness="1">
+                    <ListBox ItemsSource="{Binding SpritePalette}" SelectedItem="{Binding SelectedPaletteSprite}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" BorderThickness="0">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Width="64" Margin="2" ToolTip="{Binding Name}">
+                                    <Image Source="{Binding Preview}" Width="44" Height="44" Stretch="Uniform"
+                                           RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                    <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </DockPanel>
+
+            <!-- the rows: each with its own +/- cells, its own offset, and its cells drawn shifted by it -->
+            <Border BorderBrush="#666" BorderThickness="1" Background="#222" Margin="0,4,0,0">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="6">
+                        <ItemsControl ItemsSource="{Binding Rows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2">
+                                        <!-- One bordered block, laid out as a table with fixed columns, so every
+                                             row's controls line up with every other row's and none of it can
+                                             grow into the cells beside it. -->
+                                        <Border Width="186" Margin="0,0,8,0" Padding="6,4" CornerRadius="3"
+                                                Background="#2E2E2E" BorderBrush="#555" BorderThickness="1" VerticalAlignment="Center">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="46" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Label}" Foreground="#EEE" FontSize="11"
+                                                           VerticalAlignment="Center" />
+                                                <StackPanel Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                                                    <Button Content="+" Width="28" Height="24" FontSize="14" Padding="0" ToolTip="One more cell in this row"
+                                                            Command="{Binding DataContext.AddCellCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}" />
+                                                    <Button Content="&#8211;" Width="28" Height="24" FontSize="14" Padding="0" Margin="4,0,0,0" ToolTip="One cell fewer in this row"
+                                                            Command="{Binding DataContext.RemoveCellCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}" />
+                                                    <Button Content="&#10005;" Width="28" Height="24" FontSize="11" Padding="0" Margin="8,0,0,0" ToolTip="Remove this whole row"
+                                                            Command="{Binding DataContext.RemoveRowCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}" />
+                                                </StackPanel>
+
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="dx" Foreground="#AAA" FontSize="11"
+                                                           VerticalAlignment="Center" Margin="0,4,0,0" />
+                                                <TextBox Grid.Row="1" Grid.Column="1" Width="44" Height="22" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                                         Text="{Binding OffsetX, UpdateSourceTrigger=PropertyChanged}"
+                                                         ToolTip="Pixels right, negative = left, of where the grid alone would put this row. -8 centres sprites under the row above." />
+                                                <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Margin="0,4,0,0">
+                                                    <TextBlock Text="dy" Foreground="#AAA" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                                    <TextBox Width="44" Height="22" Text="{Binding OffsetY, UpdateSourceTrigger=PropertyChanged}"
+                                                             ToolTip="Pixels down, negative = up, of where the grid alone would put this row." />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- the cells themselves, shifted by the row's own offset so the layout shows the real shape -->
+                                        <ItemsControl ItemsSource="{Binding Cells}" Margin="{Binding VisualMargin}" VerticalAlignment="Center">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Width="56" Height="56" Padding="0" Background="#EEE" BorderBrush="#777" BorderThickness="1"
+                                                            ToolTip="{Binding ToolTipText}"
+                                                            Command="{Binding DataContext.PaintCellCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            MouseRightButtonUp="Cell_OnMouseRightButtonUp">
+                                                        <Grid>
+                                                            <Image Source="{Binding Preview}" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                                        </Grid>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Button Content="+ row" Width="80" Height="26" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                Command="{Binding AddRowCommand}" ToolTip="One more row under the last one, as wide as the widest row" />
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </DockPanel>
+
+        <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding StatusText}" Style="{StaticResource EditorStatusTextStyle}"
+                   TextWrapping="Wrap" Margin="0,8,0,0" />
+
+        <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button Content="Close" Width="80" IsCancel="True" Click="Close_OnClick" />
+        </StackPanel>
+    </Grid>
+</Window>

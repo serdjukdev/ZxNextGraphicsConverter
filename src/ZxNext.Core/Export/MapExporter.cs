@@ -210,9 +210,15 @@ public static class MapExporter
     /// preceded by a comment naming the sprite and its placement, purely for human readability — the
     /// actual data is only the `db` line itself.
     /// </summary>
-    public static (bool Success, FolderExportResult? Result, string? Error) ExportObjects(MapAsset map, IReadOnlyList<GraphicsAsset> projectAssets, IReadOnlyList<ObjectType> objectTypes)
+    /// <param name="objectDefinitions">
+    /// The project's named objects, so a placement stamped from one takes ITS measured size and palette
+    /// (see <see cref="Model.MapObjectDefinition"/>) instead of a number typed on the type. Optional: with
+    /// none, or for a placement that is a lone sprite, nothing changes.
+    /// </param>
+    public static (bool Success, FolderExportResult? Result, string? Error) ExportObjects(MapAsset map, IReadOnlyList<GraphicsAsset> projectAssets, IReadOnlyList<ObjectType> objectTypes,
+        IReadOnlyList<MapObjectDefinition>? objectDefinitions = null)
     {
-        var (success, records, error) = BuildObjectRecords(map, projectAssets, objectTypes);
+        var (success, records, error) = BuildObjectRecords(map, projectAssets, objectTypes, objectDefinitions);
         if (!success)
         {
             return (false, null, error);
@@ -328,7 +334,8 @@ public static class MapExporter
         return (true, result, null);
     }
 
-    private static (bool Success, List<ObjectRecord>? Records, string? Error) BuildObjectRecords(MapAsset map, IReadOnlyList<GraphicsAsset> projectAssets, IReadOnlyList<ObjectType> objectTypes)
+    private static (bool Success, List<ObjectRecord>? Records, string? Error) BuildObjectRecords(MapAsset map, IReadOnlyList<GraphicsAsset> projectAssets, IReadOnlyList<ObjectType> objectTypes,
+        IReadOnlyList<MapObjectDefinition>? objectDefinitions)
     {
         var subfolderAssetsAllowed = AppSettingsStore.Load().SubfolderAssetsInEditor ?? false;
         var referencedCategories = new HashSet<AssetCategory>();
@@ -418,11 +425,19 @@ public static class MapExporter
                 ? objectTypes[ownTypeIdx]
                 : null;
 
-            var paletteIndex = placement.PaletteIndexOverride ?? type?.PaletteIndex ?? 0;
-            var width = placement.WidthOverride ?? type?.Width ?? asset.Width;
-            var height = placement.HeightOverride ?? type?.Height ?? asset.Height;
+            // A placement stamped from a named object takes that object's MEASURED size (its sprite grid,
+            // 16 pixels a cell) and the palette its sprites actually share, which beats a number typed on
+            // the type and can only be beaten by one pinned on this very placement.
+            var definition = placement.ObjectDefinitionId is { } definitionId
+                ? objectDefinitions?.FirstOrDefault(d => d.Id == definitionId)
+                : null;
+
+            var paletteIndex = placement.PaletteIndexOverride ?? DefinitionPaletteSlot(definition, projectAssets) ?? type?.PaletteIndex ?? 0;
+            var width = placement.WidthOverride ?? definition?.WidthPixels ?? type?.Width ?? asset.Width;
+            var height = placement.HeightOverride ?? definition?.HeightPixels ?? type?.Height ?? asset.Height;
             var paletteSource = placement.PaletteIndexOverride is not null
                 ? "this object"
+                : definition is not null && DefinitionPaletteSlot(definition, projectAssets) is not null ? "object " + definition.Name
                 : type is not null ? "type " + type.Name : "no type";
 
             records.Add(new ObjectRecord(spriteIndex, (short)placement.X, (short)placement.Y, asset.Name,
@@ -431,6 +446,19 @@ public static class MapExporter
         }
 
         return (true, records, null);
+    }
+
+    /// <summary>The 4bpp palette slot a named object renders with: the slot of its first filled cell, since one object is one palette on this hardware. Null for an empty object or 8bpp sprites (one flat palette, no slots). Mirrors ObjectDefinitionService.PaletteSlotOf, which the editor uses, without the Core-to-Core dependency an exporter has no reason to take.</summary>
+    private static int? DefinitionPaletteSlot(MapObjectDefinition? definition, IReadOnlyList<GraphicsAsset> projectAssets)
+    {
+        if (definition is null) return null;
+
+        foreach (var id in definition.SpriteIds())
+        {
+            if (projectAssets.FirstOrDefault(a => a.Id == id) is not { Category: AssetCategory.Sprite4Bpp } asset) continue;
+            return asset.PaletteSlotIndex;
+        }
+        return null;
     }
 
     private static string GenerateGridAsm(string rowKey, MapAsset map, byte[] remappedGrid)

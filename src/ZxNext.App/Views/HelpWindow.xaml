@@ -77,8 +77,8 @@
                         <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+Z: Undo" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="One shared undo stack for pixel painting and palette colour edits in the main window (a whole paint stroke: mouse-down to mouse-up: undoes as a single step, not one step per pixel). Cleared automatically after any operation that can remap a whole palette bank (re-quantize category/folder, Optimize bank, a delete that compacts slots): those aren't undoable, and always ask to confirm first." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Tools → Metatile Editor... / Map Editor..." />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens the two dedicated editor windows: see their own sections below." />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Tools → Metatile Editor... / Object Editor... / Map Editor..." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Opens the three dedicated editor windows: see their own sections below." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Thumbnail &amp; '[N]' prefix" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Every tile/sprite row shows a small thumbnail of its own actual pixels, and its real export index as a '[N]' prefix before the name: the exact number that ends up in the exported file. It is per FOLDER: a root-folder asset's '[N]' is what a map/metatile stores for it (and its s4_/s8_/... label); a sub-folder asset's '[N]' is its position within that sub-folder's own binary. Both update live: the thumbnail whenever that asset's pixels/palette change (including every OTHER tile/sprite sharing a palette slot/folder you just recoloured), the index whenever anything in that folder is added/removed/reordered." />
@@ -197,7 +197,38 @@
                     </StackPanel>
                 </Expander>
 
-                <!-- ================= 4. METATILE EDITOR ================= -->
+                <!-- ================= 4. OBJECT EDITOR ================= -->
+                <Expander Style="{StaticResource SectionExpanderStyle}">
+                    <Expander.Header>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Object Editor (Tools &#8594; Object Editor...)" />
+                    </Expander.Header>
+                    <StackPanel Style="{StaticResource SectionContentStyle}">
+                        <TextBlock Style="{StaticResource DescStyle}" Text="An object is a named group of SPRITES that the Map Editor can place as one unit and draw whole: a 5-wide platform, a character of one sprite over two. It exists so a map shows what is actually on it instead of a lone sprite standing in for something bigger. Objects are entirely optional: with none defined, the Map Editor behaves exactly as it always did and you place single sprites." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="What is and is not exported" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="The sprite layout is NEVER exported. Your own code decides which sprites a placed object really uses, from its type and user byte, exactly as before objects existed. What the export does take from an object is what its picture measures: a placement made from one writes that object's width, height and palette into its extended bytes (see the export section's 'Extended object bytes'), instead of numbers typed on the object type. Precedence is: values pinned on the placement itself, then its object, then its type, then the sprite's own size." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Rows, not a rectangle" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="An object is a list of rows, each with its own number of cells and its own pixel offset, because real sprite compositions are not rectangular: a character is one sprite on top and two below. Each row's block holds its number, '+' and '-' for its cell count, '&#10005;' to remove the row, and dx/dy in pixels; '+ row' at the bottom adds another, as wide as the widest row so far. The last row and a row's last cell cannot be removed. dx -8 is the usual value: it centres a row of sprites under the row above. Negative offsets never push a row off the left/top of the editor, the whole object is simply drawn from its own leftmost edge instead, so the cells always show the real shape." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Painting cells" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Click a sprite in the palette at the bottom, then click a cell. Right-click a cell to clear it. The same sprite can fill as many cells as you like, which is how a platform repeats its centre piece. Above the palette is a strip of folder buttons: a sprite category's root, then each of its sub-folders. Sub-folder sprites can be used in an object freely, unlike map placements, because the layout is only a picture and needs no global export index. Each folder lists its sprites in their real project order (the Project Tree's order, which is also the export's), not alphabetically." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Type, subtype and user byte" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="The type and the whole user byte every placement of this object starts with. The user byte is edited in place three ways at once, all on the same byte: the number, the eight bit buttons (each labelled with its value, and with the name of the subtype that owns it underneath, when one does), and the Subtype picker, which sets its own bit and clears the other subtypes' bits while leaving every other bit alone. That is what lets one byte carry a named variant and a hand-entered parameter together, like a platform's kind in the upper bits and its size in the lower ones." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Exported size px / 'from the picture'" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Ticked (the default): the exported width/height is whatever the sprites measure, offsets included. Unticked: the two numbers are used instead. That matters because the exported size is what a game treats as the object's box, which is often not the picture's extent: a 32x32 picture of a character whose body is one sprite wide wants 16x32." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="The object list" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="'Add...' asks for a name and creates the object; Rename and Delete are on an object's own right-click menu. Drag an object onto another to reorder the list (a green line shows where it will land). Deleting an object never touches a map: every placement made from it stays where it is and keeps its own sprite, type and user byte, since a placement stores those itself. It simply goes back to drawing as that single sprite." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Palette warning" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="One object is one palette on real hardware, so its palette is taken from its first filled cell and exported as the placement's palette byte. If a sprite from a different 4bpp palette slot is used in the same object, a red line names it: it would render with the wrong colours." />
+                    </StackPanel>
+                </Expander>
+
+                <!-- ================= 5. METATILE EDITOR ================= -->
                 <Expander Style="{StaticResource SectionExpanderStyle}">
                     <Expander.Header>
                         <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Metatile Editor (Tools → Metatile Editor...)" />

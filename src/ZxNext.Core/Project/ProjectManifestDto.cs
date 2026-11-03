@@ -20,6 +20,9 @@ public class ProjectManifestDto
     public List<MapTemplateDto> Templates { get; set; } = [];
     public List<MapDto> Maps { get; set; } = [];
     public List<ObjectTypeDto> ObjectTypes { get; set; } = [];
+
+    // Absent in a project saved before named objects existed, which just means the project has none.
+    public List<MapObjectDefinitionDto>? ObjectDefinitions { get; set; }
     public List<TileAnimationDto> TileAnimations { get; set; } = [];
 
     /// <summary>Null in project files saved before this field existed — <see cref="ProjectService.Load"/> infers it from whatever GridSize any already-saved metatile/map happens to use, if any.</summary>
@@ -145,6 +148,43 @@ public class SpritePlacementDto
     public int? PaletteIndexOverride { get; set; }
     public int? WidthOverride { get; set; }
     public int? HeightOverride { get; set; }
+    public Guid? ObjectDefinitionId { get; set; }
+}
+
+public class MapObjectDefinitionDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public Guid? TypeId { get; set; }
+    public byte UserByte { get; set; }
+    public int? WidthPixelsOverride { get; set; }
+    public int? HeightPixelsOverride { get; set; }
+
+    /// <summary>The current shape: rows, each with its own cells and offset.</summary>
+    public List<ObjectRowDto>? Rows { get; set; }
+
+    // Written by two earlier builds, still read so their projects open: a flat WidthCells x HeightCells
+    // rectangle of cells, where a cell was either a bare sprite GUID or an object with an offset (see
+    // ObjectCellDtoJsonConverter). ProjectService folds either into Rows on load and never writes them again.
+    public int WidthCells { get; set; } = 1;
+    public int HeightCells { get; set; } = 1;
+    public List<ObjectCellDto>? Cells { get; set; }
+}
+
+public class ObjectRowDto
+{
+    public List<Guid?> Cells { get; set; } = [];
+    public int OffsetX { get; set; }
+    public int OffsetY { get; set; }
+}
+
+/// <summary>Read in both the old (a bare sprite GUID) and the current shape, see <see cref="ObjectCellDtoJsonConverter"/>.</summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(ObjectCellDtoJsonConverter))]
+public class ObjectCellDto
+{
+    public Guid? SpriteAssetId { get; set; }
+    public int OffsetX { get; set; }
+    public int OffsetY { get; set; }
 }
 
 public class ObjectTypeDto

@@ -687,6 +687,19 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// The Object Editor: named sprite compositions the Map Editor can place as whole objects (see
+    /// ZxNext.Core.Model.MapObjectDefinition). Nothing here touches the Project Tree or an asset's pixels,
+    /// so unlike the Metatile Editor there is no post-close resync to do beyond the dirty flag.
+    /// </summary>
+    private void ObjectEditor_OnClick(object sender, RoutedEventArgs e)
+    {
+        var vm = new ObjectEditorViewModel(_viewModel.Project);
+        var dialog = new ObjectEditorWindow { DataContext = vm, Owner = this };
+        dialog.ShowDialog();
+        if (vm.HasChanges) _viewModel.HasUnsavedChanges = true;
+    }
+
     private void MapEditor_OnClick(object sender, RoutedEventArgs e)
     {
         var vm = new MapEditorViewModel(_viewModel.Project);

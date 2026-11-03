@@ -80,7 +80,8 @@ public static class MapResizeCalculator
                 UserByte = sprite.UserByte,
                 PaletteIndexOverride = sprite.PaletteIndexOverride,
                 WidthOverride = sprite.WidthOverride,
-                HeightOverride = sprite.HeightOverride
+                HeightOverride = sprite.HeightOverride,
+                ObjectDefinitionId = sprite.ObjectDefinitionId
             });
         }
 

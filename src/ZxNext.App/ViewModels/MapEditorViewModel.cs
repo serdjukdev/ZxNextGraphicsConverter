@@ -425,7 +425,8 @@ public partial class MapEditorViewModel : ObservableObject
         sprites.Select(s => new SpritePlacement
         {
             Id = s.Id, SpriteAssetId = s.SpriteAssetId, X = s.X, Y = s.Y, TypeId = s.TypeId, LinkedPlacementId = s.LinkedPlacementId, UserByte = s.UserByte,
-            PaletteIndexOverride = s.PaletteIndexOverride, WidthOverride = s.WidthOverride, HeightOverride = s.HeightOverride
+            PaletteIndexOverride = s.PaletteIndexOverride, WidthOverride = s.WidthOverride, HeightOverride = s.HeightOverride,
+            ObjectDefinitionId = s.ObjectDefinitionId
         }).ToList();
 
     [RelayCommand]
@@ -1309,6 +1310,7 @@ public partial class MapEditorViewModel : ObservableObject
         public int? PaletteIndexOverride { get; init; }
         public int? WidthOverride { get; init; }
         public int? HeightOverride { get; init; }
+        public Guid? ObjectDefinitionId { get; init; }
     }
 
     /// <summary>
@@ -1355,7 +1357,8 @@ public partial class MapEditorViewModel : ObservableObject
                 UserByte = s.UserByte,
                 PaletteIndexOverride = s.PaletteIndexOverride,
                 WidthOverride = s.WidthOverride,
-                HeightOverride = s.HeightOverride
+                HeightOverride = s.HeightOverride,
+                ObjectDefinitionId = s.ObjectDefinitionId
             }).ToList();
 
             _spriteClipboard = entries;
@@ -1416,7 +1419,8 @@ public partial class MapEditorViewModel : ObservableObject
                     UserByte = e.UserByte,
                     PaletteIndexOverride = e.PaletteIndexOverride,
                     WidthOverride = e.WidthOverride,
-                    HeightOverride = e.HeightOverride
+                    HeightOverride = e.HeightOverride,
+                    ObjectDefinitionId = e.ObjectDefinitionId
                 })
                 .Where(p => map.ContainsSpriteOrigin(p.X, p.Y))
                 .ToList();
@@ -1716,7 +1720,8 @@ public partial class MapEditorViewModel : ObservableObject
             var copies = copyable.Select(s => new SpritePlacement
             {
                 SpriteAssetId = s.SpriteAssetId, X = s.X + deltaX, Y = s.Y + deltaY, TypeId = s.TypeId, UserByte = s.UserByte,
-                PaletteIndexOverride = s.PaletteIndexOverride, WidthOverride = s.WidthOverride, HeightOverride = s.HeightOverride
+                PaletteIndexOverride = s.PaletteIndexOverride, WidthOverride = s.WidthOverride, HeightOverride = s.HeightOverride,
+                ObjectDefinitionId = s.ObjectDefinitionId
             }).ToList();
             map.SpriteLayer.AddRange(copies);
             RefreshSpriteCounts();

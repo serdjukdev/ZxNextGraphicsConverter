@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 
 namespace ZxNext.App.Views;
 
@@ -10,11 +10,13 @@ public partial class RenameAssetWindow : Window
     public string NewName => NameBox.Text.Trim();
 
     /// <summary><paramref name="isNameTaken"/> checks a candidate name against every OTHER asset in the project — names become ASM export labels and must be unique. <paramref name="nameTakenMessage"/> is the inline validation line shown when it returns true; the default wording suits this dialog's original caller (the Project Tree's tile/sprite rename), the Metatile Editor passes its own.</summary>
-    public RenameAssetWindow(string currentName, Func<string, bool> isNameTaken, string? nameTakenMessage = null)
+    /// <param name="confirmButtonText">What the confirm button says. Defaults to "Rename", which is wrong when the same dialog is collecting the name of something NEW, so those callers pass "Create".</param>
+    public RenameAssetWindow(string currentName, Func<string, bool> isNameTaken, string? nameTakenMessage = null, string? confirmButtonText = null)
     {
         InitializeComponent();
         _isNameTaken = isNameTaken;
         _nameTakenMessage = nameTakenMessage ?? "Another tile/sprite already uses this name.";
+        if (confirmButtonText is not null) RenameButton.Content = confirmButtonText;
         NameBox.Text = currentName;
         Loaded += (_, _) =>
         {

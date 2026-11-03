@@ -197,7 +197,8 @@ public static class ProjectService
                         UserByte = s.UserByte,
                         PaletteIndexOverride = s.PaletteIndexOverride,
                         WidthOverride = s.WidthOverride,
-                        HeightOverride = s.HeightOverride
+                        HeightOverride = s.HeightOverride,
+                        ObjectDefinitionId = s.ObjectDefinitionId
                     }).ToList(),
                     TilemapLayerVisible = map.TilemapLayerVisible,
                     TileLayer8BppVisible = map.TileLayer8BppVisible,
@@ -218,6 +219,17 @@ public static class ProjectService
                     Subtypes = type.Subtypes.Select(st => new ObjectSubtypeDto { Id = st.Id, Name = st.Name, BitIndex = st.BitIndex }).ToList()
                 });
             }
+
+            dto.ObjectDefinitions = project.ObjectDefinitions.Select(d => new MapObjectDefinitionDto
+            {
+                Id = d.Id,
+                Name = d.Name,
+                TypeId = d.TypeId,
+                UserByte = d.UserByte,
+                WidthPixelsOverride = d.WidthPixelsOverride,
+                HeightPixelsOverride = d.HeightPixelsOverride,
+                Rows = d.Rows.Select(r => new ObjectRowDto { Cells = r.Cells.ToList(), OffsetX = r.OffsetX, OffsetY = r.OffsetY }).ToList()
+            }).ToList();
 
             var jsonEntry = zip.CreateEntry("project.json", CompressionLevel.Fastest);
             using var jsonStream = jsonEntry.Open();
@@ -391,7 +403,8 @@ public static class ProjectService
                     UserByte = s.UserByte,
                     PaletteIndexOverride = s.PaletteIndexOverride,
                     WidthOverride = s.WidthOverride,
-                    HeightOverride = s.HeightOverride
+                    HeightOverride = s.HeightOverride,
+                    ObjectDefinitionId = s.ObjectDefinitionId
                 }).ToList(),
                 TilemapLayerVisible = mapDto.TilemapLayerVisible,
                 TileLayer8BppVisible = mapDto.TileLayer8BppVisible,
@@ -413,7 +426,22 @@ public static class ProjectService
             });
         }
 
-        // Projects saved before the project-wide metatile GridSize lock existed have no dto value —
+        foreach (var d in dto.ObjectDefinitions ?? [])
+        {
+            var definition = new MapObjectDefinition
+            {
+                Id = d.Id,
+                Name = d.Name,
+                TypeId = d.TypeId,
+                UserByte = d.UserByte,
+                WidthPixelsOverride = d.WidthPixelsOverride,
+                HeightPixelsOverride = d.HeightPixelsOverride,
+                Rows = ReadObjectRows(d)
+            };
+            project.ObjectDefinitions.Add(definition);
+        }
+
+        // Projects saved before the project-wide metatile GridSize lock existed have no dto value -
         // infer it from whichever GridSize is already used most among this project's own metatiles/maps
         // (there should never realistically be a genuine mix, but if hand-edited or from an even older
         // pre-lock build, this picks the majority rather than failing to load), leaving it null (still
@@ -450,6 +478,56 @@ public static class ProjectService
     /// exempt (see the matching exemption in <see cref="Export.MapExporter.BuildObjectRecords"/>) — always
     /// exportable regardless of that setting, so never dropped here either.
     /// </summary>
+    /// <summary>
+    /// An object definition's rows, from whichever shape the file was saved in. Current: a Rows list.
+    /// Earlier builds wrote a flat WidthCells x HeightCells rectangle of cells instead (with the cell
+    /// itself being either a bare sprite GUID or an object carrying a per-cell offset), so that is folded
+    /// into rows here: one row per grid row, each row taking the first cell's offset, since offsets moved
+    /// from the cell to the row. Always returns at least one row with at least one cell, which every
+    /// renderer and the editor rely on.
+    /// </summary>
+    private static List<ObjectRow> ReadObjectRows(MapObjectDefinitionDto dto)
+    {
+        if (dto.Rows is { Count: > 0 })
+        {
+            return dto.Rows
+                .Select(r => new ObjectRow
+                {
+                    Cells = r.Cells.Count > 0 ? r.Cells.ToList() : [null],
+                    OffsetX = Conversion.ObjectDefinitionService.ClampOffset(r.OffsetX),
+                    OffsetY = Conversion.ObjectDefinitionService.ClampOffset(r.OffsetY)
+                })
+                .Take(MapObjectDefinition.MaxRows)
+                .ToList();
+        }
+
+        var width = Math.Clamp(dto.WidthCells, 1, MapObjectDefinition.MaxCellsPerRow);
+        var height = Math.Clamp(dto.HeightCells, 1, MapObjectDefinition.MaxRows);
+        var cells = dto.Cells ?? [];
+        var rows = new List<ObjectRow>(height);
+
+        for (var row = 0; row < height; row++)
+        {
+            var rowCells = new List<Guid?>(width);
+            var offsetX = 0;
+            var offsetY = 0;
+            for (var col = 0; col < width; col++)
+            {
+                var index = row * width + col;
+                var cell = index < cells.Count ? cells[index] : new ObjectCellDto();
+                rowCells.Add(cell.SpriteAssetId);
+                if (col == 0)
+                {
+                    offsetX = Conversion.ObjectDefinitionService.ClampOffset(cell.OffsetX);
+                    offsetY = Conversion.ObjectDefinitionService.ClampOffset(cell.OffsetY);
+                }
+            }
+            rows.Add(new ObjectRow { Cells = rowCells, OffsetX = offsetX, OffsetY = offsetY });
+        }
+
+        return rows;
+    }
+
     private static void DropUnplaceableSpritePlacements(ProjectState project)
     {
         if (AppSettingsStore.Load().SubfolderAssetsInEditor ?? false) return;

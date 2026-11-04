@@ -31,10 +31,10 @@ public class ObjectDefinitionServiceTests
 
         var first = ObjectDefinitionService.Create(project, "platform");
         Assert.True(first.Success, first.Error);
-        Assert.Single(first.Definition!.Rows);
-        Assert.Single(first.Definition.Rows[0].Cells);
-        Assert.Null(first.Definition.Rows[0].Cells[0]);
-        Assert.Equal(0, first.Definition.Rows[0].OffsetX);
+        Assert.Single(first.Definition!.FirstFrame.Rows);
+        Assert.Single(first.Definition.FirstFrame.Rows[0].Cells);
+        Assert.Null(first.Definition.FirstFrame.Rows[0].Cells[0]);
+        Assert.Equal(0, first.Definition.FirstFrame.Rows[0].OffsetX);
 
         var duplicate = ObjectDefinitionService.Create(project, "PLATFORM");
         Assert.False(duplicate.Success);
@@ -48,23 +48,23 @@ public class ObjectDefinitionServiceTests
         var project = new ProjectState();
         var definition = ObjectDefinitionService.Create(project, "player").Definition!;
 
-        Assert.True(ObjectDefinitionService.AddRow(definition).Success);
-        Assert.True(ObjectDefinitionService.AddCell(definition, 1).Success);
-        Assert.Single(definition.Rows[0].Cells);
-        Assert.Equal(2, definition.Rows[1].Cells.Count);
+        Assert.True(ObjectDefinitionService.AddRow(definition.FirstFrame).Success);
+        Assert.True(ObjectDefinitionService.AddCell(definition.FirstFrame, 1).Success);
+        Assert.Single(definition.FirstFrame.Rows[0].Cells);
+        Assert.Equal(2, definition.FirstFrame.Rows[1].Cells.Count);
 
         // A new row copies the widest row's length, since a platform's next row almost always matches.
-        Assert.True(ObjectDefinitionService.AddRow(definition).Success);
-        Assert.Equal(2, definition.Rows[2].Cells.Count);
+        Assert.True(ObjectDefinitionService.AddRow(definition.FirstFrame).Success);
+        Assert.Equal(2, definition.FirstFrame.Rows[2].Cells.Count);
 
-        Assert.True(ObjectDefinitionService.RemoveCell(definition, 2).Success);
-        var lastCell = ObjectDefinitionService.RemoveCell(definition, 2);
+        Assert.True(ObjectDefinitionService.RemoveCell(definition.FirstFrame, 2).Success);
+        var lastCell = ObjectDefinitionService.RemoveCell(definition.FirstFrame, 2);
         Assert.False(lastCell.Success);
         Assert.Contains("at least one cell", lastCell.Error);
 
-        Assert.True(ObjectDefinitionService.RemoveRow(definition, 2).Success);
-        Assert.True(ObjectDefinitionService.RemoveRow(definition, 1).Success);
-        var lastRow = ObjectDefinitionService.RemoveRow(definition, 0);
+        Assert.True(ObjectDefinitionService.RemoveRow(definition.FirstFrame, 2).Success);
+        Assert.True(ObjectDefinitionService.RemoveRow(definition.FirstFrame, 1).Success);
+        var lastRow = ObjectDefinitionService.RemoveRow(definition.FirstFrame, 0);
         Assert.False(lastRow.Success);
         Assert.Contains("at least one row", lastRow.Error);
     }
@@ -77,12 +77,12 @@ public class ObjectDefinitionServiceTests
         project.Assets.Add(centre);
         var definition = ObjectDefinitionService.Create(project, "platform", rows: 1, cellsPerRow: 5).Definition!;
 
-        for (var col = 1; col <= 3; col++) ObjectDefinitionService.SetCell(definition, 0, col, centre.Id);
-        ObjectDefinitionService.SetCell(definition, 0, 9, centre.Id);   // out of range: ignored, not thrown
-        ObjectDefinitionService.SetCell(definition, 7, 0, centre.Id);   // no such row: likewise
+        for (var col = 1; col <= 3; col++) ObjectDefinitionService.SetCell(definition.FirstFrame, 0, col, centre.Id);
+        ObjectDefinitionService.SetCell(definition.FirstFrame, 0, 9, centre.Id);   // out of range: ignored, not thrown
+        ObjectDefinitionService.SetCell(definition.FirstFrame, 7, 0, centre.Id);   // no such row: likewise
 
-        Assert.Equal(3, definition.Rows[0].Cells.Count(id => id == centre.Id));
-        Assert.Equal(5, definition.Rows[0].Cells.Count);
+        Assert.Equal(3, definition.FirstFrame.Rows[0].Cells.Count(id => id == centre.Id));
+        Assert.Equal(5, definition.FirstFrame.Rows[0].Cells.Count);
     }
 
     /// <summary>
@@ -99,21 +99,21 @@ public class ObjectDefinitionServiceTests
         project.Assets.AddRange([head, leg]);
 
         var definition = ObjectDefinitionService.Create(project, "player").Definition!;
-        ObjectDefinitionService.SetCell(definition, 0, 0, head.Id);
-        ObjectDefinitionService.AddRow(definition);
-        ObjectDefinitionService.AddCell(definition, 1);
-        ObjectDefinitionService.SetCell(definition, 1, 0, leg.Id);
-        ObjectDefinitionService.SetCell(definition, 1, 1, leg.Id);
+        ObjectDefinitionService.SetCell(definition.FirstFrame, 0, 0, head.Id);
+        ObjectDefinitionService.AddRow(definition.FirstFrame);
+        ObjectDefinitionService.AddCell(definition.FirstFrame, 1);
+        ObjectDefinitionService.SetCell(definition.FirstFrame, 1, 0, leg.Id);
+        ObjectDefinitionService.SetCell(definition.FirstFrame, 1, 1, leg.Id);
 
         // Any whole pixel is kept as typed (hardware sprites are placed per pixel); only the range is clamped.
-        ObjectDefinitionService.SetRowOffset(definition, 1, -3, 0);
-        Assert.Equal(-3, definition.Rows[1].OffsetX);
-        ObjectDefinitionService.SetRowOffset(definition, 1, -8, 0);
-        Assert.Equal(-8, definition.Rows[1].OffsetX);
-        ObjectDefinitionService.SetRowOffset(definition, 0, 9999, 0);
-        Assert.Equal(MapObjectDefinition.MaxOffset, definition.Rows[0].OffsetX);
+        ObjectDefinitionService.SetRowOffset(definition.FirstFrame, 1, -3, 0);
+        Assert.Equal(-3, definition.FirstFrame.Rows[1].OffsetX);
+        ObjectDefinitionService.SetRowOffset(definition.FirstFrame, 1, -8, 0);
+        Assert.Equal(-8, definition.FirstFrame.Rows[1].OffsetX);
+        ObjectDefinitionService.SetRowOffset(definition.FirstFrame, 0, 9999, 0);
+        Assert.Equal(MapObjectDefinition.MaxOffset, definition.FirstFrame.Rows[0].OffsetX);
 
-        ObjectDefinitionService.SetRowOffset(definition, 0, 0, 0);
+        ObjectDefinitionService.SetRowOffset(definition.FirstFrame, 0, 0, 0);
         var (left, top, width, height) = definition.MeasureBounds();
         Assert.Equal(-8, left);   // the lower row starts half a cell left of the grid
         Assert.Equal(0, top);
@@ -130,8 +130,8 @@ public class ObjectDefinitionServiceTests
         var sprite = FakeSprite("body", 0);
         project.Assets.Add(sprite);
         var definition = ObjectDefinitionService.Create(project, "player", rows: 2, cellsPerRow: 1).Definition!;
-        ObjectDefinitionService.SetCell(definition, 0, 0, sprite.Id);
-        ObjectDefinitionService.SetCell(definition, 1, 0, sprite.Id);
+        ObjectDefinitionService.SetCell(definition.FirstFrame, 0, 0, sprite.Id);
+        ObjectDefinitionService.SetCell(definition.FirstFrame, 1, 0, sprite.Id);
 
         Assert.Equal(16, definition.WidthPixels);
         Assert.Equal(32, definition.HeightPixels);
@@ -157,14 +157,14 @@ public class ObjectDefinitionServiceTests
         var definition = ObjectDefinitionService.Create(project, "platform", rows: 1, cellsPerRow: 3).Definition!;
         Assert.Null(ObjectDefinitionService.PaletteSlotOf(project, definition)); // nothing placed yet
 
-        ObjectDefinitionService.SetCell(definition, 0, 0, inSlotOne.Id);
-        ObjectDefinitionService.SetCell(definition, 0, 1, alsoSlotOne.Id);
+        ObjectDefinitionService.SetCell(definition.FirstFrame, 0, 0, inSlotOne.Id);
+        ObjectDefinitionService.SetCell(definition.FirstFrame, 0, 1, alsoSlotOne.Id);
         Assert.Equal(1, ObjectDefinitionService.PaletteSlotOf(project, definition));
-        Assert.Empty(ObjectDefinitionService.FindMixedPaletteSprites(project, definition));
 
-        ObjectDefinitionService.SetCell(definition, 0, 2, straySlot.Id);
-        Assert.Equal(1, ObjectDefinitionService.PaletteSlotOf(project, definition)); // still the first cell's
-        Assert.Equal(["odd"], ObjectDefinitionService.FindMixedPaletteSprites(project, definition));
+        // A sprite from another slot is legal now: the animation tables carry a palette per sprite, so
+        // only the single byte a MAP PLACEMENT exports still comes from the first cell.
+        ObjectDefinitionService.SetCell(definition.FirstFrame, 0, 2, straySlot.Id);
+        Assert.Equal(1, ObjectDefinitionService.PaletteSlotOf(project, definition));
     }
 
     /// <summary>A placement stores its own sprite, type and user byte, so losing the definition costs only the Map Editor preview, never map or exported data.</summary>
@@ -175,7 +175,7 @@ public class ObjectDefinitionServiceTests
         var sprite = FakeSprite("hero", 2);
         project.Assets.Add(sprite);
         var definition = ObjectDefinitionService.Create(project, "platform", rows: 1, cellsPerRow: 2).Definition!;
-        ObjectDefinitionService.SetCell(definition, 0, 0, sprite.Id);
+        ObjectDefinitionService.SetCell(definition.FirstFrame, 0, 0, sprite.Id);
 
         var map = new MapAsset(8, 8)
         {
@@ -208,10 +208,10 @@ public class ObjectDefinitionServiceTests
 
         Assert.Null(ObjectDefinitionService.BaseSpriteOf(definition));
 
-        ObjectDefinitionService.SetCell(definition, 0, 1, b.Id);
+        ObjectDefinitionService.SetCell(definition.FirstFrame, 0, 1, b.Id);
         Assert.Equal(b.Id, ObjectDefinitionService.BaseSpriteOf(definition));   // the first FILLED cell
 
-        ObjectDefinitionService.SetCell(definition, 0, 0, a.Id);
+        ObjectDefinitionService.SetCell(definition.FirstFrame, 0, 0, a.Id);
         Assert.Equal(a.Id, ObjectDefinitionService.BaseSpriteOf(definition));
     }
 }

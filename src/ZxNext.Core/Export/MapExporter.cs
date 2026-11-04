@@ -196,11 +196,16 @@ public static class MapExporter
     /// <summary>Bytes 0-7: the original record, unchanged since before extended bytes existed.</summary>
     private const int BaseObjectRecordSize = 8;
 
-    /// <summary>Bytes 8-10: palette, width, height. Appending more later changes only this number and the IFDEF block that writes them.</summary>
-    private const int ExtendedObjectRecordSize = 11;
+    /// <summary>
+    /// Bytes 8-9: width, height. A palette byte used to sit in front of them, and no longer does: every
+    /// sprite of an object carries its own palette in that object's animation table (see
+    /// <see cref="ObjectAnimationExporter"/>), so a single palette per placement was both redundant and a
+    /// byte per object. Appending more later changes only this number and the IFDEF block that writes them.
+    /// </summary>
+    private const int ExtendedObjectRecordSize = 10;
 
     private readonly record struct ObjectRecord(byte SpriteIndex, short X, short Y, string SpriteName, byte Type, byte Connect, byte UserByte, string? TypeName, int? LinkTargetIndex, string? LinkTargetName,
-        byte PaletteByte, byte Width, byte Height, string PaletteSource);
+        byte Width, byte Height);
 
     /// <summary>
     /// One `db` line per object — deliberately NOT run through <see cref="AsmByteDataWriter"/>'s generic
@@ -211,7 +216,7 @@ public static class MapExporter
     /// actual data is only the `db` line itself.
     /// </summary>
     /// <param name="objectDefinitions">
-    /// The project's named objects, so a placement stamped from one takes ITS measured size and palette
+    /// The project's named objects, so a placement stamped from one takes ITS own measured size
     /// (see <see cref="Model.MapObjectDefinition"/>) instead of a number typed on the type. Optional: with
     /// none, or for a placement that is a lone sprite, nothing changes.
     /// </param>
@@ -236,13 +241,14 @@ public static class MapExporter
         sb.Append(";   byte 5   type         -- obj_<name> from object_types.asm (0xFF = no type)\n");
         sb.Append(";   byte 6   connect      -- index of the linked object in this list (0xFF = no link)\n");
         sb.Append(";   byte 7   userByte     -- per-object user byte 0-255, set in the Map Editor\n");
-        sb.Append("; Bytes 8-10 are the EXTENDED block, written inside IFDEF ").Append(ExtendedBytesDefine).Append(" right after each record:\n");
-        sb.Append(";   byte 8   palette      -- palette number 0-15 in the HIGH nibble (value = n * 16); the low nibble is 0, reserved\n");
-        sb.Append(";   byte 9   width        -- width in PIXELS (0-255)\n");
-        sb.Append(";   byte 10  height       -- height in PIXELS (0-255)\n");
+        sb.Append("; Bytes 8-9 are the EXTENDED block, written inside IFDEF ").Append(ExtendedBytesDefine).Append(" right after each record:\n");
+        sb.Append(";   byte 8   width        -- width in PIXELS (0-255)\n");
+        sb.Append(";   byte 9   height       -- height in PIXELS (0-255)\n");
+        sb.Append("; There is no palette byte here: each sprite of an object carries its own palette in the object's\n");
+        sb.Append("; animation table in object_anims.asm, which is where the drawing routine reads it from anyway.\n");
         sb.Append("; ").Append(ExtendedBytesDefine).Append(" is defined (or left commented out) in ONE place, the project-wide object_types.asm,\n");
         sb.Append("; so every map's records are the same length in any one build. <rowKey>_obj_size below is that length.\n");
-        sb.Append("; Palette/width/height come from the object's TYPE ('Manage Types...'), unless the object overrides them itself.\n");
+        sb.Append("; Width/height come from the object's TYPE, unless the placement pins its own or was stamped from a named object.\n");
         sb.Append("; Each db line has its own address label: <name>_<x>_<y>\n");
         sb.Append("; Per-type counts below cover every type from 'Manage Types...', even ones placing 0 objects on this map\n");
         sb.Append("; A <rowKey>_<type> address label marks the start of each type's contiguous block below (objects are\n");
@@ -323,9 +329,8 @@ public static class MapExporter
             // binary is decided by the one DEFINE line in object_types.asm, never by re-exporting. No
             // address label of their own -- they are the tail of the record the label above points at.
             sb.Append("    IFDEF ").Append(ExtendedBytesDefine).Append('\n');
-            sb.Append("    db ").Append(r.PaletteByte).Append(',').Append(r.Width).Append(',').Append(r.Height)
-                .Append("    ; palette ").Append(r.PaletteByte >> 4).Append(" (").Append(r.PaletteSource).Append("), ")
-                .Append(r.Width).Append('x').Append(r.Height).Append(" px").Append('\n');
+            sb.Append("    db ").Append(r.Width).Append(',').Append(r.Height)
+                .Append("    ; ").Append(r.Width).Append('x').Append(r.Height).Append(" px").Append('\n');
             sb.Append("    ENDIF").Append('\n');
         }
 
@@ -418,47 +423,29 @@ public static class MapExporter
                 linkTargetName = projectAssets.FirstOrDefault(a => a.Id == orderedPlacements[linkIdx].SpriteAssetId)?.Name;
             }
 
-            // Palette/size: the object's own override first, then its type's value, then a last-resort
-            // default for an object with no type at all (palette 0, and the sprite's own real pixel size,
-            // the only size this app actually knows about it).
+            // Size: the placement's own override first, then its type's value, then a last-resort default
+            // for an object with no type at all (the sprite's own real pixel size, the only size this app
+            // actually knows about it).
             var type = placement.TypeId is { } ownTypeId && typeIndexById.TryGetValue(ownTypeId, out var ownTypeIdx)
                 ? objectTypes[ownTypeIdx]
                 : null;
 
             // A placement stamped from a named object takes that object's MEASURED size (its sprite grid,
-            // 16 pixels a cell) and the palette its sprites actually share, which beats a number typed on
-            // the type and can only be beaten by one pinned on this very placement.
+            // 16 pixels a cell, or the size pinned by hand in the Object Editor for a hitbox), which beats a
+            // number typed on the type and can only be beaten by one pinned on this very placement.
             var definition = placement.ObjectDefinitionId is { } definitionId
                 ? objectDefinitions?.FirstOrDefault(d => d.Id == definitionId)
                 : null;
 
-            var paletteIndex = placement.PaletteIndexOverride ?? DefinitionPaletteSlot(definition, projectAssets) ?? type?.PaletteIndex ?? 0;
             var width = placement.WidthOverride ?? definition?.WidthPixels ?? type?.Width ?? asset.Width;
             var height = placement.HeightOverride ?? definition?.HeightPixels ?? type?.Height ?? asset.Height;
-            var paletteSource = placement.PaletteIndexOverride is not null
-                ? "this object"
-                : definition is not null && DefinitionPaletteSlot(definition, projectAssets) is not null ? "object " + definition.Name
-                : type is not null ? "type " + type.Name : "no type";
 
             records.Add(new ObjectRecord(spriteIndex, (short)placement.X, (short)placement.Y, asset.Name,
                 typeByte, connectByte, placement.UserByte, typeName, linkTargetIndex, linkTargetName,
-                (byte)(Math.Clamp(paletteIndex, 0, 15) << 4), (byte)Math.Clamp(width, 0, 255), (byte)Math.Clamp(height, 0, 255), paletteSource));
+                (byte)Math.Clamp(width, 0, 255), (byte)Math.Clamp(height, 0, 255)));
         }
 
         return (true, records, null);
-    }
-
-    /// <summary>The 4bpp palette slot a named object renders with: the slot of its first filled cell, since one object is one palette on this hardware. Null for an empty object or 8bpp sprites (one flat palette, no slots). Mirrors ObjectDefinitionService.PaletteSlotOf, which the editor uses, without the Core-to-Core dependency an exporter has no reason to take.</summary>
-    private static int? DefinitionPaletteSlot(MapObjectDefinition? definition, IReadOnlyList<GraphicsAsset> projectAssets)
-    {
-        if (definition is null) return null;
-
-        foreach (var id in definition.SpriteIds())
-        {
-            if (projectAssets.FirstOrDefault(a => a.Id == id) is not { Category: AssetCategory.Sprite4Bpp } asset) continue;
-            return asset.PaletteSlotIndex;
-        }
-        return null;
     }
 
     private static string GenerateGridAsm(string rowKey, MapAsset map, byte[] remappedGrid)

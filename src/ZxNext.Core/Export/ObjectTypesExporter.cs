@@ -48,8 +48,8 @@ public static class ObjectTypesExporter
 
         // The project's single switch for the extended per-object bytes. Written either way, so the line
         // is always here to uncomment by hand; the checkbox only decides which of the two forms is written.
-        sb.Append("; Extended object bytes (palette, width, height -- bytes 8-10 of every object record).\n");
-        sb.Append("; Defined = every map's objects file assembles 11-byte records; commented out = the original 8.\n");
+        sb.Append("; Extended object bytes (width, height -- bytes 8-9 of every object record).\n");
+        sb.Append("; Defined = every map's objects file assembles 10-byte records; commented out = the original 8.\n");
         sb.Append("; Toggle it with the Settings checkbox, or by hand right here -- no re-export needed either way.\n");
         if (extendedObjectBytes) sb.Append("    DEFINE ").Append(MapExporter.ExtendedBytesDefine).Append('\n');
         else sb.Append(";   DEFINE ").Append(MapExporter.ExtendedBytesDefine).Append('\n');
@@ -85,20 +85,19 @@ public static class ObjectTypesExporter
             }
         }
 
-        // Each type's own palette/size defaults, as constants, so game code can read what a type is
-        // supposed to look like without walking a map's object list. Inside the same IFDEF as the bytes
-        // they describe: with the extended bytes off they would be constants about data that isn't there.
+        // Each type's own size defaults, as constants, so game code can read how big a type is supposed
+        // to be without walking a map's object list. Inside the same IFDEF as the bytes they describe:
+        // with the extended bytes off they would be constants about data that isn't there.
         if (project.ObjectTypes.Count > 0)
         {
             sb.Append('\n');
             sb.Append("    IFDEF ").Append(MapExporter.ExtendedBytesDefine).Append('\n');
-            sb.Append("; Per-type defaults: _pal is the palette byte as exported (number in the high nibble), _w/_h are pixels.\n");
+            sb.Append("; Per-type defaults: _w/_h are the type's width/height in pixels.\n");
             sb.Append("; An individual object may override any of them -- its own record always carries the final values.\n");
             var usedDefaultLabels = new HashSet<string>(StringComparer.Ordinal);
             foreach (var type in project.ObjectTypes)
             {
                 var label = AsmLabel.SanitizeUnique(type.Name, usedDefaultLabels);
-                sb.Append("obj_").Append(label).Append("_pal: equ ").Append(Math.Clamp(type.PaletteIndex, 0, 15) << 4).Append('\n');
                 sb.Append("obj_").Append(label).Append("_w: equ ").Append(Math.Clamp(type.Width, 0, 255)).Append('\n');
                 sb.Append("obj_").Append(label).Append("_h: equ ").Append(Math.Clamp(type.Height, 0, 255)).Append('\n');
             }

@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using ZxNext.Core.Conversion;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
@@ -806,5 +806,169 @@ public class ProjectServiceTests : IDisposable
         Assert.Contains(map.SpriteLayer, p => p.SpriteAssetId == Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")); // root sprite
         Assert.Contains(map.SpriteLayer, p => p.SpriteAssetId == Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")); // sub-folder sprite, no longer dropped
         Assert.DoesNotContain(loaded.LoadWarnings, w => w.Contains("sub-folder sprite"));
+    }
+    /// <summary>
+    /// Objects hold animations of frames now, so this pins the whole shape through a save and a load: two
+    /// animations, several frames, each frame's own duration and its own rows with their own offsets. An
+    /// animation that came back with the wrong frame order or a lost duration would export a wrong table
+    /// without anything failing, which is why this is a round-trip test and not a model test.
+    /// </summary>
+    [Fact]
+    public void SaveThenLoad_RoundTripsObjectAnimationsFramesAndDurations()
+    {
+        var project = new ProjectState();
+        var head = new GraphicsAsset
+        {
+            Name = "head", Category = AssetCategory.Sprite4Bpp, Width = 16, Height = 16,
+            PackedPixelData = new byte[128], PaletteSlotIndex = 1,
+            FolderPath = AssetCategory.Sprite4Bpp.ToFolderPath()
+        };
+        var leg = new GraphicsAsset
+        {
+            Name = "leg", Category = AssetCategory.Sprite4Bpp, Width = 16, Height = 16,
+            PackedPixelData = new byte[128], PaletteSlotIndex = 1, SortIndex = 1,
+            FolderPath = AssetCategory.Sprite4Bpp.ToFolderPath()
+        };
+        project.Assets.AddRange([head, leg]);
+
+        var definition = ObjectDefinitionService.Create(project, "hero").Definition!;
+        var idle = definition.Animations[0];
+        ObjectDefinitionService.SetCell(idle.Frames[0], 0, 0, head.Id);
+        ObjectDefinitionService.SetFrameDuration(idle.Frames[0], 7);
+
+        var secondFrame = ObjectDefinitionService.AddFrame(idle, 0).Frame!;
+        ObjectDefinitionService.AddRow(secondFrame);
+        ObjectDefinitionService.SetCell(secondFrame, 1, 0, leg.Id);
+        ObjectDefinitionService.SetRowOffset(secondFrame, 1, -8, 4);
+        ObjectDefinitionService.SetFrameDuration(secondFrame, 3);
+
+        var run = ObjectDefinitionService.AddAnimation(definition, "run").Animation!;
+        ObjectDefinitionService.SetCell(run.Frames[0], 0, 0, leg.Id);
+
+        ProjectService.Save(project, _tempProjectFile);
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        var reloaded = Assert.Single(loaded.ObjectDefinitions);
+        Assert.Equal(["main", "run"], reloaded.Animations.Select(a => a.Name));
+
+        var reloadedIdle = reloaded.Animations[0];
+        Assert.Equal(2, reloadedIdle.Frames.Count);
+        Assert.Equal(7, reloadedIdle.Frames[0].DurationFrames);
+        Assert.Equal(head.Id, reloadedIdle.Frames[0].Rows[0].Cells[0]);
+        Assert.Equal(3, reloadedIdle.Frames[1].DurationFrames);
+        Assert.Equal(leg.Id, reloadedIdle.Frames[1].Rows[1].Cells[0]);
+        Assert.Equal(-8, reloadedIdle.Frames[1].Rows[1].OffsetX);
+        Assert.Equal(4, reloadedIdle.Frames[1].Rows[1].OffsetY);
+
+        Assert.Equal(leg.Id, reloaded.Animations[1].Frames[0].Rows[0].Cells[0]);
+        Assert.Empty(loaded.LoadWarnings);
+    }
+
+    /// <summary>
+    /// A project saved by the build that had objects but no animations: its definition carries a bare Rows
+    /// list. It has to open with that layout intact, folded into the one "main" animation of one frame, or
+    /// every object in an existing project loses its sprites (which is exactly what a type change to this
+    /// DTO did once before, see ObjectCellDtoJsonConverter).
+    /// </summary>
+    [Fact]
+    public void Load_ObjectDefinitionSavedBeforeAnimations_FoldsItsRowsIntoOneMainAnimation()
+    {
+        const string spriteId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+        var json = """
+        {
+          "FormatVersion": 1,
+          "SourceImages": [],
+          "Sprite4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Tile4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Sprite8BppFolderPalettes": {},
+          "Tile8BppFolderPalettes": {},
+          "Layer2_256x192FolderPalettes": {},
+          "Layer2_320x256FolderPalettes": {},
+          "Layer2_640x256x4FolderPalettes": {},
+          "Assets": [],
+          "ObjectDefinitions": [
+            {
+              "Id": "11111111-1111-1111-1111-111111111111",
+              "Name": "hero",
+              "UserByte": 5,
+              "Rows": [
+                { "Cells": ["SPRITE"], "OffsetX": 0, "OffsetY": 0 },
+                { "Cells": ["SPRITE", "SPRITE"], "OffsetX": -8, "OffsetY": 2 }
+              ]
+            }
+          ]
+        }
+        """.Replace("SPRITE", spriteId);
+
+        WriteProjectJson(json);
+
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        var definition = Assert.Single(loaded.ObjectDefinitions);
+        Assert.Equal(5, definition.UserByte);
+        var animation = Assert.Single(definition.Animations);
+        Assert.Equal("main", animation.Name);
+        var frame = Assert.Single(animation.Frames);
+        Assert.Equal(0, frame.DurationFrames);
+        Assert.Equal(2, frame.Rows.Count);
+        Assert.Equal(2, frame.Rows[1].Cells.Count);
+        Assert.Equal(Guid.Parse(spriteId), frame.Rows[1].Cells[1]);
+        Assert.Equal(-8, frame.Rows[1].OffsetX);
+        Assert.Equal(2, frame.Rows[1].OffsetY);
+    }
+
+    /// <summary>
+    /// The oldest shape of all: a flat WidthCells x HeightCells rectangle whose cells were bare sprite
+    /// GUIDs. Two file formats back, and still has to open.
+    /// </summary>
+    [Fact]
+    public void Load_ObjectDefinitionSavedAsAFlatCellRectangle_StillOpensWithItsSprites()
+    {
+        const string spriteId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+        var json = """
+        {
+          "FormatVersion": 1,
+          "SourceImages": [],
+          "Sprite4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Tile4BppBank": { "TransparentIndex": 0, "Slots": [] },
+          "Sprite8BppFolderPalettes": {},
+          "Tile8BppFolderPalettes": {},
+          "Layer2_256x192FolderPalettes": {},
+          "Layer2_320x256FolderPalettes": {},
+          "Layer2_640x256x4FolderPalettes": {},
+          "Assets": [],
+          "ObjectDefinitions": [
+            {
+              "Id": "22222222-2222-2222-2222-222222222222",
+              "Name": "platform",
+              "WidthCells": 3,
+              "HeightCells": 1,
+              "Cells": ["SPRITE", null, "SPRITE"]
+            }
+          ]
+        }
+        """.Replace("SPRITE", spriteId);
+
+        WriteProjectJson(json);
+
+        var loaded = ProjectService.Load(_tempProjectFile);
+
+        var definition = Assert.Single(loaded.ObjectDefinitions);
+        var frame = Assert.Single(Assert.Single(definition.Animations).Frames);
+        var row = Assert.Single(frame.Rows);
+        Assert.Equal(3, row.Cells.Count);
+        Assert.Equal(Guid.Parse(spriteId), row.Cells[0]);
+        Assert.Null(row.Cells[1]);
+        Assert.Equal(Guid.Parse(spriteId), row.Cells[2]);
+    }
+
+    /// <summary>A hand-built .zxngc holding nothing but its manifest: enough for anything that has no sidecar files of its own.</summary>
+    private void WriteProjectJson(string json)
+    {
+        using var stream = new FileStream(_tempProjectFile, FileMode.Create, FileAccess.Write);
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Create);
+        using var entryStream = zip.CreateEntry("project.json", CompressionLevel.Fastest).Open();
+        using var writer = new StreamWriter(entryStream);
+        writer.Write(json);
     }
 }

@@ -324,24 +324,26 @@ public class MapExporterTests
     }
 
     /// <summary>
-    /// The extended per-object bytes (8 palette, 9 width, 10 height). They are ALWAYS written, inside an
-    /// IFDEF, so a project can switch to 11-byte records by uncommenting one line instead of re-exporting.
-    /// Values come from the object's type unless the object pins its own.
+    /// The extended per-object bytes (8 width, 9 height). They are ALWAYS written, inside an IFDEF, so a
+    /// project can switch to 10-byte records by uncommenting one line instead of re-exporting. Values come
+    /// from the object's type unless the placement pins its own. There is deliberately NO palette byte:
+    /// every sprite of an object carries its own palette in the object's animation table, so one palette
+    /// per placement was both redundant and a byte per object.
     /// </summary>
     [Fact]
-    public void ExportObjects_WritesPaletteWidthHeightInsideAnIfdef_FromTheTypeUnlessTheObjectOverridesThem()
+    public void ExportObjects_WritesWidthHeightInsideAnIfdef_FromTheTypeUnlessTheObjectOverridesThem()
     {
         var sprite = FakeSprite("hero", sortIndex: 0);
         var assets = new List<GraphicsAsset> { sprite };
 
-        var enemyType = new ObjectType { Name = "enemy", PaletteIndex = 3, Width = 24, Height = 48 };
+        var enemyType = new ObjectType { Name = "enemy", Width = 24, Height = 48 };
         var objectTypes = new List<ObjectType> { enemyType };
 
         var fromType = new SpritePlacement { SpriteAssetId = sprite.Id, X = 0, Y = 0, TypeId = enemyType.Id };
         var pinned = new SpritePlacement
         {
             SpriteAssetId = sprite.Id, X = 8, Y = 8, TypeId = enemyType.Id,
-            PaletteIndexOverride = 10, WidthOverride = 64, HeightOverride = 7
+            WidthOverride = 64, HeightOverride = 7
         };
         var untyped = new SpritePlacement { SpriteAssetId = sprite.Id, X = 16, Y = 16 };
         var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [fromType, pinned, untyped]);
@@ -351,11 +353,13 @@ public class MapExporterTests
         Assert.True(success, error);
         var asm = result!.AsmText;
 
-        // Palette is the number in the HIGH nibble: 3 -> 48, 10 -> 160.
-        Assert.Contains("    db 48,24,48", asm);
-        Assert.Contains("    db 160,64,7", asm);
-        // No type at all: palette 0 and the sprite's own real pixel size.
-        Assert.Contains($"    db 0,{sprite.Width},{sprite.Height}", asm);
+        Assert.Contains("    db 24,48", asm);        // from the type
+        Assert.Contains("    db 64,7", asm);          // pinned on the placement
+        // No type at all: the sprite's own real pixel size.
+        Assert.Contains($"    db {sprite.Width},{sprite.Height}", asm);
+        // The block is two bytes: no palette byte in front of the size any more.
+        Assert.DoesNotContain("    db 48,24,48", asm);
+        Assert.DoesNotContain("    db 160,64,7", asm);
 
         // Every one of them sits inside its own conditional block (3 records), plus the one around the
         // record-size equ -- never appended to the plain record line.
@@ -364,9 +368,9 @@ public class MapExporterTests
         Assert.DoesNotContain("db 0,0,0,0,0,0,255,0,0", asm);
     }
 
-    /// <summary>The record size is a constant switched by the same define as the bytes, so game code never hardcodes 8 or 11.</summary>
+    /// <summary>The record size is a constant switched by the same define as the bytes, so game code never hardcodes 8 or 10.</summary>
     [Fact]
-    public void ExportObjects_WritesARecordSizeEqu_EightWithoutTheDefineAndElevenWithIt()
+    public void ExportObjects_WritesARecordSizeEqu_EightWithoutTheDefineAndTenWithIt()
     {
         var sprite = FakeSprite("hero", sortIndex: 0);
         var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [new SpritePlacement { SpriteAssetId = sprite.Id, X = 0, Y = 0 }]);
@@ -376,7 +380,7 @@ public class MapExporterTests
         Assert.True(success, error);
         var asm = result!.AsmText;
         Assert.Contains("    IFDEF " + MapExporter.ExtendedBytesDefine, asm);
-        Assert.Contains("level1_objects_obj_size: equ 11", asm);
+        Assert.Contains("level1_objects_obj_size: equ 10", asm);
         Assert.Contains("    ELSE", asm);
         Assert.Contains("level1_objects_obj_size: equ 8", asm);
         Assert.Contains("    ENDIF", asm);

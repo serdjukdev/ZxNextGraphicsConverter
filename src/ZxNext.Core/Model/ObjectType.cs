@@ -14,14 +14,9 @@ public class ObjectType
     public Guid Id { get; init; } = Guid.NewGuid();
     public required string Name { get; set; }
 
-    /// <summary>
-    /// Hardware palette number 0-15 for every object of this type, exported in the HIGH nibble of the
-    /// object's palette byte (the low nibble is always 0, reserved for whatever is added next). A single
-    /// placement can override it, see <see cref="SpritePlacement.PaletteIndexOverride"/>. Only written
-    /// inside the exported file's extended-bytes block, so a project that ignores this feature exports
-    /// byte-for-byte what it always did.
-    /// </summary>
-    public int PaletteIndex { get; set; }
+    // A type used to carry a palette number too. It is gone: every sprite of an object carries its own
+    // palette in the object's animation table (see Export.ObjectAnimationExporter), which is where the
+    // drawing routine reads it, so one number per type was a second, weaker source of the same fact.
 
     /// <summary>Width in PIXELS for every object of this type (0-255, one exported byte), overridable per placement. Defaults to 16, one hardware sprite.</summary>
     public int Width { get; set; } = DefaultSize;

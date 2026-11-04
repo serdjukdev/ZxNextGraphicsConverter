@@ -143,9 +143,9 @@ public class SpritePlacementDto
     public Guid? LinkedPlacementId { get; set; }
     public byte UserByte { get; set; }
 
-    // Null in a project saved before per-object palette/size existed, which is exactly what "inherit the
-    // type's value" means, so an old project needs no migration.
-    public int? PaletteIndexOverride { get; set; }
+    // Null in a project saved before per-object size existed, which is exactly what "inherit the type's
+    // value" means, so an old project needs no migration. A PaletteIndexOverride sat here too and no
+    // longer does: an older file still carrying one simply has that key ignored on load.
     public int? WidthOverride { get; set; }
     public int? HeightOverride { get; set; }
     public Guid? ObjectDefinitionId { get; set; }
@@ -160,15 +160,30 @@ public class MapObjectDefinitionDto
     public int? WidthPixelsOverride { get; set; }
     public int? HeightPixelsOverride { get; set; }
 
-    /// <summary>The current shape: rows, each with its own cells and offset.</summary>
-    public List<ObjectRowDto>? Rows { get; set; }
+    /// <summary>The current shape: named animations, each a list of frames, each frame a list of rows.</summary>
+    public List<ObjectAnimationDto>? Animations { get; set; }
 
-    // Written by two earlier builds, still read so their projects open: a flat WidthCells x HeightCells
-    // rectangle of cells, where a cell was either a bare sprite GUID or an object with an offset (see
-    // ObjectCellDtoJsonConverter). ProjectService folds either into Rows on load and never writes them again.
+    // Written by earlier builds, still read so their projects open (see ProjectService.ReadObjectAnimations):
+    // first a flat WidthCells x HeightCells rectangle of cells, where a cell was either a bare sprite GUID or
+    // an object with an offset (see ObjectCellDtoJsonConverter), then one list of rows with no frames above
+    // it. Either folds into a single "main" animation of one frame, and is never written again.
+    public List<ObjectRowDto>? Rows { get; set; }
     public int WidthCells { get; set; } = 1;
     public int HeightCells { get; set; } = 1;
     public List<ObjectCellDto>? Cells { get; set; }
+}
+
+public class ObjectAnimationDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public List<ObjectFrameDto> Frames { get; set; } = [];
+}
+
+public class ObjectFrameDto
+{
+    public int DurationFrames { get; set; }
+    public List<ObjectRowDto> Rows { get; set; } = [];
 }
 
 public class ObjectRowDto
@@ -192,9 +207,8 @@ public class ObjectTypeDto
     public Guid Id { get; set; }
     public string Name { get; set; } = "";
 
-    // Nullable only so a project saved before these existed falls back to the model's own defaults
-    // (palette 0, 16x16) instead of to 0x0.
-    public int? PaletteIndex { get; set; }
+    // Nullable only so a project saved before these existed falls back to the model's own default
+    // (16x16) instead of to 0x0. A PaletteIndex sat here too, and an older file's key is now ignored.
     public int? Width { get; set; }
     public int? Height { get; set; }
 

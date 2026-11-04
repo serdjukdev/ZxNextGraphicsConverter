@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace ZxNext.Core.Project;
@@ -18,6 +18,13 @@ namespace ZxNext.Core.Project;
 /// </summary>
 public class ObjectCellDtoJsonConverter : JsonConverter<ObjectCellDto>
 {
+    /// <summary>
+    /// Without this, System.Text.Json never calls a reference type's converter for a JSON null: it puts a
+    /// null straight into the list and the Null branch below is dead code. The oldest shape wrote an empty
+    /// cell as exactly that bare null, so reading one of those files crashed on the first empty cell.
+    /// </summary>
+    public override bool HandleNull => true;
+
     public override ObjectCellDto Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         switch (reader.TokenType)

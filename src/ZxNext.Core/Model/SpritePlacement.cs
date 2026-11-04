@@ -47,11 +47,8 @@ public class SpritePlacement
     /// </summary>
     public Guid? ObjectDefinitionId { get; set; }
 
-    /// <summary>
-    /// Palette number 0-15 for THIS object only; null (the default) means "use the type's
-    /// <see cref="ObjectType.PaletteIndex"/>". An object with no type at all exports 0.
-    /// </summary>
-    public int? PaletteIndexOverride { get; set; }
+    // A placement used to be able to pin its own palette number. Removed with the palette byte itself:
+    // the palette now lives on each sprite, in the object's animation table.
 
     /// <summary>Width in pixels for THIS object only; null means "use the type's <see cref="ObjectType.Width"/>". An object with no type at all exports its sprite's own pixel width.</summary>
     public int? WidthOverride { get; set; }

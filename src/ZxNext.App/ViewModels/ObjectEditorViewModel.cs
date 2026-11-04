@@ -270,20 +270,25 @@ public partial class ObjectEditorViewModel : ObservableObject
     }
 
     public string PaletteText => SelectedDefinition is { } d && ObjectDefinitionService.PaletteSlotOf(_project, d) is { } slot
-        ? $"Palette slot {slot}, taken from the sprites themselves (exported as this object's palette byte)"
+        ? $"Palette slot {slot}, read from the sprites themselves. Each sprite's own slot is what the animation table exports, so a frame may mix slots."
         : "";
 
-    /// <summary>Shown when the object mixes 4bpp palette slots: one object is one palette on hardware, so the odd sprites out would render with the wrong colours.</summary>
+    /// <summary>
+    /// Mixing palette slots in one object is LEGAL (each sprite carries its own palette in the exported
+    /// animation table), so the old warning about that is gone. What is still worth saying: a sub-folder
+    /// sprite's pattern number is local to its own binary, so a table built from one only works while that
+    /// bank is loaded.
+    /// </summary>
     public string MixedPaletteWarning
     {
         get
         {
             if (SelectedDefinition is not { } d) return "";
 
-            var mixed = ObjectDefinitionService.FindMixedPaletteSprites(_project, d);
-            return mixed.Count == 0
+            var fromBanks = ObjectDefinitionService.FindSubfolderSprites(_project, d);
+            return fromBanks.Count == 0
                 ? ""
-                : $"These sprites are in a different palette slot and would render with the wrong colours: {string.Join(", ", mixed)}.";
+                : $"These sprites live in a sub-folder, so their exported pattern number is local to that bank: {string.Join(", ", fromBanks)}. The animation table only works while that bank is loaded.";
         }
     }
 
@@ -398,11 +403,11 @@ public partial class ObjectEditorViewModel : ObservableObject
     private void RebuildRows()
     {
         Rows.Clear();
-        if (SelectedDefinition is not { } d) return;
+        if (CurrentFrame is not { } frame) return;
 
-        for (var rowIndex = 0; rowIndex < d.Rows.Count; rowIndex++)
+        for (var rowIndex = 0; rowIndex < frame.Rows.Count; rowIndex++)
         {
-            var row = d.Rows[rowIndex];
+            var row = frame.Rows[rowIndex];
             var rowVm = new ObjectRowViewModel(rowIndex, OnRowOffsetChanged);
             for (var col = 0; col < row.Cells.Count; col++)
             {
@@ -441,8 +446,11 @@ public partial class ObjectEditorViewModel : ObservableObject
         }
     }
 
-    private void RefreshComposite() =>
-        CompositePreview = SelectedDefinition is { } d ? TileGridBitmapRenderer.RenderObjectDefinition(d, _project) : null;
+    private void RefreshComposite()
+    {
+        CompositePreview = CurrentFrame is { } frame ? TileGridBitmapRenderer.RenderObjectFrame(frame, _project) : null;
+        if (SelectedFrame is { } selected) selected.Preview = CompositePreview;
+    }
 
     /// <summary>Pushes the definition's exported size into the two boxes and the auto tick. Guarded like the user-byte controls, since writing those boxes is also how the user edits it.</summary>
     private void SyncSizeControls()
@@ -488,6 +496,11 @@ public partial class ObjectEditorViewModel : ObservableObject
         SelectedType = value?.TypeId is { } typeId ? _project.ObjectTypes.FirstOrDefault(t => t.Id == typeId) : null;
         RefreshSubtypes();
         _loadingSelection = false;
+
+        // The animation list belongs to this object; selecting an animation then selects its first frame,
+        // which is what the row editor below actually edits.
+        SelectedAnimation = null;
+        RefreshAnimations();
 
         RebuildRows();
         RefreshComposite();
@@ -555,8 +568,10 @@ public partial class ObjectEditorViewModel : ObservableObject
     {
         if (_loadingSelection || SelectedDefinition is not { } d) return;
 
-        ObjectDefinitionService.SetRowOffset(d, rowVm.RowIndex, rowVm.OffsetX, rowVm.OffsetY);
-        if (ObjectDefinitionService.RowAt(d, rowVm.RowIndex) is not { } stored) return;
+        if (CurrentFrame is not { } frame) return;
+
+        ObjectDefinitionService.SetRowOffset(frame, rowVm.RowIndex, rowVm.OffsetX, rowVm.OffsetY);
+        if (ObjectDefinitionService.RowAt(frame, rowVm.RowIndex) is not { } stored) return;
 
         var wasLoading = _loadingSelection;
         _loadingSelection = true;
@@ -648,31 +663,31 @@ public partial class ObjectEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private void AddRow()
     {
-        if (SelectedDefinition is not { } d) return;
-        Report(ObjectDefinitionService.AddRow(d), $"Row added ({d.Rows.Count} rows now).");
+        if (CurrentFrame is not { } frame) return;
+        Report(ObjectDefinitionService.AddRow(frame), $"Row added ({frame.Rows.Count} rows now).");
     }
 
     [RelayCommand]
     private void RemoveRow(ObjectRowViewModel? row)
     {
-        if (row is null || SelectedDefinition is not { } d) return;
-        Report(ObjectDefinitionService.RemoveRow(d, row.RowIndex), $"Row {row.RowIndex} removed.");
+        if (row is null || CurrentFrame is not { } frame) return;
+        Report(ObjectDefinitionService.RemoveRow(frame, row.RowIndex), $"Row {row.RowIndex} removed.");
     }
 
     [RelayCommand]
     private void AddCell(ObjectRowViewModel? row)
     {
-        if (row is null || SelectedDefinition is not { } d) return;
-        var result = ObjectDefinitionService.AddCell(d, row.RowIndex);
-        Report(result, result.Success ? $"Row {row.RowIndex} is now {d.Rows[row.RowIndex].Cells.Count} cells wide." : "");
+        if (row is null || CurrentFrame is not { } frame) return;
+        var result = ObjectDefinitionService.AddCell(frame, row.RowIndex);
+        Report(result, result.Success ? $"Row {row.RowIndex} is now {frame.Rows[row.RowIndex].Cells.Count} cells wide." : "");
     }
 
     [RelayCommand]
     private void RemoveCell(ObjectRowViewModel? row)
     {
-        if (row is null || SelectedDefinition is not { } d) return;
-        var result = ObjectDefinitionService.RemoveCell(d, row.RowIndex);
-        Report(result, result.Success ? $"Row {row.RowIndex} is now {d.Rows[row.RowIndex].Cells.Count} cells wide." : "");
+        if (row is null || CurrentFrame is not { } frame) return;
+        var result = ObjectDefinitionService.RemoveCell(frame, row.RowIndex);
+        Report(result, result.Success ? $"Row {row.RowIndex} is now {frame.Rows[row.RowIndex].Cells.Count} cells wide." : "");
     }
 
     /// <summary>Shared tail of every layout change: refuse with the service's own message, or rebuild everything that depends on the layout.</summary>
@@ -698,7 +713,7 @@ public partial class ObjectEditorViewModel : ObservableObject
     [RelayCommand]
     private void PaintCell(ObjectCellViewModel? cell)
     {
-        if (cell is null || SelectedDefinition is not { } d) return;
+        if (cell is null || CurrentFrame is not { } frame) return;
         if (SelectedPaletteSprite is null)
         {
             StatusText = "Pick a sprite below first, then click a cell.";
@@ -706,7 +721,7 @@ public partial class ObjectEditorViewModel : ObservableObject
             return;
         }
 
-        ObjectDefinitionService.SetCell(d, cell.RowIndex, cell.Col, SelectedPaletteSprite.Asset.Id);
+        ObjectDefinitionService.SetCell(frame, cell.RowIndex, cell.Col, SelectedPaletteSprite.Asset.Id);
         cell.Sprite = SelectedPaletteSprite.Asset;
         HasChanges = true;
         RefreshComposite();
@@ -719,9 +734,9 @@ public partial class ObjectEditorViewModel : ObservableObject
     [RelayCommand]
     private void ClearCell(ObjectCellViewModel? cell)
     {
-        if (cell is null || SelectedDefinition is not { } d) return;
+        if (cell is null || CurrentFrame is not { } frame) return;
 
-        ObjectDefinitionService.SetCell(d, cell.RowIndex, cell.Col, null);
+        ObjectDefinitionService.SetCell(frame, cell.RowIndex, cell.Col, null);
         cell.Sprite = null;
         HasChanges = true;
         RefreshComposite();
@@ -771,5 +786,6 @@ public partial class ObjectEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(SizeText));
         OnPropertyChanged(nameof(PaletteText));
         OnPropertyChanged(nameof(MixedPaletteWarning));
+        OnPropertyChanged(nameof(FrameHeader));
     }
 }

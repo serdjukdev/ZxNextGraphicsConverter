@@ -195,7 +195,6 @@ public static class ProjectService
                         TypeId = s.TypeId,
                         LinkedPlacementId = s.LinkedPlacementId,
                         UserByte = s.UserByte,
-                        PaletteIndexOverride = s.PaletteIndexOverride,
                         WidthOverride = s.WidthOverride,
                         HeightOverride = s.HeightOverride,
                         ObjectDefinitionId = s.ObjectDefinitionId
@@ -213,7 +212,6 @@ public static class ProjectService
                 {
                     Id = type.Id,
                     Name = type.Name,
-                    PaletteIndex = type.PaletteIndex,
                     Width = type.Width,
                     Height = type.Height,
                     Subtypes = type.Subtypes.Select(st => new ObjectSubtypeDto { Id = st.Id, Name = st.Name, BitIndex = st.BitIndex }).ToList()
@@ -228,7 +226,16 @@ public static class ProjectService
                 UserByte = d.UserByte,
                 WidthPixelsOverride = d.WidthPixelsOverride,
                 HeightPixelsOverride = d.HeightPixelsOverride,
-                Rows = d.Rows.Select(r => new ObjectRowDto { Cells = r.Cells.ToList(), OffsetX = r.OffsetX, OffsetY = r.OffsetY }).ToList()
+                Animations = d.Animations.Select(a => new ObjectAnimationDto
+                {
+                    Id = a.Id,
+                    Name = a.Name,
+                    Frames = a.Frames.Select(f => new ObjectFrameDto
+                    {
+                        DurationFrames = f.DurationFrames,
+                        Rows = f.Rows.Select(r => new ObjectRowDto { Cells = r.Cells.ToList(), OffsetX = r.OffsetX, OffsetY = r.OffsetY }).ToList()
+                    }).ToList()
+                }).ToList()
             }).ToList();
 
             var jsonEntry = zip.CreateEntry("project.json", CompressionLevel.Fastest);
@@ -401,7 +408,6 @@ public static class ProjectService
                     TypeId = s.TypeId,
                     LinkedPlacementId = s.LinkedPlacementId,
                     UserByte = s.UserByte,
-                    PaletteIndexOverride = s.PaletteIndexOverride,
                     WidthOverride = s.WidthOverride,
                     HeightOverride = s.HeightOverride,
                     ObjectDefinitionId = s.ObjectDefinitionId
@@ -419,7 +425,6 @@ public static class ProjectService
             {
                 Id = t.Id,
                 Name = t.Name,
-                PaletteIndex = t.PaletteIndex ?? 0,
                 Width = t.Width ?? ObjectType.DefaultSize,
                 Height = t.Height ?? ObjectType.DefaultSize,
                 Subtypes = (t.Subtypes ?? []).Select(st => new ObjectSubtype { Id = st.Id, Name = st.Name, BitIndex = st.BitIndex }).ToList()
@@ -436,7 +441,7 @@ public static class ProjectService
                 UserByte = d.UserByte,
                 WidthPixelsOverride = d.WidthPixelsOverride,
                 HeightPixelsOverride = d.HeightPixelsOverride,
-                Rows = ReadObjectRows(d)
+                Animations = ReadObjectAnimations(d)
             };
             project.ObjectDefinitions.Add(definition);
         }
@@ -471,35 +476,61 @@ public static class ProjectService
     }
 
     /// <summary>
-    /// Sub-folder sprites are a separate "bank" the object/placement system can't address by default; an
-    /// earlier build still let them be dropped onto a map. Any such placement exports a meaningless
-    /// spriteIndex unless <see cref="AppSettings.SubfolderAssetsInEditor"/> is on, so remove them on load
-    /// when that setting is off (legacy-fix pass) and note it. Sprite4Bpp/Sprite8Bpp sub-folder sprites are
-    /// exempt (see the matching exemption in <see cref="Export.MapExporter.BuildObjectRecords"/>) — always
-    /// exportable regardless of that setting, so never dropped here either.
+    /// An object definition's animations, from whichever shape the file was saved in. Current: an
+    /// Animations list of frames of rows. Two earlier shapes are still read, because a project file is a
+    /// format other people's files are already in (see the compatibility note in ObjectCellDtoJsonConverter):
+    /// a bare Rows list with no frames above it, and before that a flat WidthCells x HeightCells rectangle
+    /// of cells. Either folds into one animation named "main" holding one frame. Always returns at least one
+    /// animation with one frame with one row, which every renderer and the editor rely on.
     /// </summary>
-    /// <summary>
-    /// An object definition's rows, from whichever shape the file was saved in. Current: a Rows list.
-    /// Earlier builds wrote a flat WidthCells x HeightCells rectangle of cells instead (with the cell
-    /// itself being either a bare sprite GUID or an object carrying a per-cell offset), so that is folded
-    /// into rows here: one row per grid row, each row taking the first cell's offset, since offsets moved
-    /// from the cell to the row. Always returns at least one row with at least one cell, which every
-    /// renderer and the editor rely on.
-    /// </summary>
-    private static List<ObjectRow> ReadObjectRows(MapObjectDefinitionDto dto)
+    private static List<ObjectAnimation> ReadObjectAnimations(MapObjectDefinitionDto dto)
     {
-        if (dto.Rows is { Count: > 0 })
+        if (dto.Animations is { Count: > 0 })
         {
-            return dto.Rows
-                .Select(r => new ObjectRow
+            var animations = dto.Animations
+                .Select(a => new ObjectAnimation
                 {
-                    Cells = r.Cells.Count > 0 ? r.Cells.ToList() : [null],
-                    OffsetX = Conversion.ObjectDefinitionService.ClampOffset(r.OffsetX),
-                    OffsetY = Conversion.ObjectDefinitionService.ClampOffset(r.OffsetY)
+                    Id = a.Id == Guid.Empty ? Guid.NewGuid() : a.Id,
+                    Name = string.IsNullOrWhiteSpace(a.Name) ? ObjectAnimation.DefaultName : a.Name,
+                    Frames = a.Frames.Count > 0
+                        ? a.Frames
+                            .Select(f => new ObjectFrame
+                            {
+                                DurationFrames = Math.Clamp(f.DurationFrames, 0, 255),
+                                Rows = ReadObjectRows(f.Rows)
+                            })
+                            .Take(MapObjectDefinition.MaxFrames)
+                            .ToList()
+                        : [new ObjectFrame()]
                 })
-                .Take(MapObjectDefinition.MaxRows)
+                .Take(MapObjectDefinition.MaxAnimations)
                 .ToList();
+            return animations;
         }
+
+        return [new ObjectAnimation { Name = ObjectAnimation.DefaultName, Frames = [new ObjectFrame { Rows = ReadLegacyRows(dto) }] }];
+    }
+
+    /// <summary>Rows from their own dto list, guarding every row against being empty.</summary>
+    private static List<ObjectRow> ReadObjectRows(List<ObjectRowDto> rows)
+    {
+        if (rows.Count == 0) return [new ObjectRow()];
+
+        return rows
+            .Select(r => new ObjectRow
+            {
+                Cells = r.Cells.Count > 0 ? r.Cells.ToList() : [null],
+                OffsetX = Conversion.ObjectDefinitionService.ClampOffset(r.OffsetX),
+                OffsetY = Conversion.ObjectDefinitionService.ClampOffset(r.OffsetY)
+            })
+            .Take(MapObjectDefinition.MaxRows)
+            .ToList();
+    }
+
+    /// <summary>The two pre-animation shapes: a bare Rows list, or the even older flat cell rectangle.</summary>
+    private static List<ObjectRow> ReadLegacyRows(MapObjectDefinitionDto dto)
+    {
+        if (dto.Rows is { Count: > 0 }) return ReadObjectRows(dto.Rows);
 
         var width = Math.Clamp(dto.WidthCells, 1, MapObjectDefinition.MaxCellsPerRow);
         var height = Math.Clamp(dto.HeightCells, 1, MapObjectDefinition.MaxRows);
@@ -514,7 +545,9 @@ public static class ProjectService
             for (var col = 0; col < width; col++)
             {
                 var index = row * width + col;
-                var cell = index < cells.Count ? cells[index] : new ObjectCellDto();
+                // Null-coalesced as well as handled in the converter: a load that throws takes the whole
+                // project down, so an empty cell is read as an empty cell however it got into the file.
+                var cell = (index < cells.Count ? cells[index] : null) ?? new ObjectCellDto();
                 rowCells.Add(cell.SpriteAssetId);
                 if (col == 0)
                 {
@@ -528,6 +561,14 @@ public static class ProjectService
         return rows;
     }
 
+    /// <summary>
+    /// Sub-folder sprites are a separate "bank" the object/placement system can't address by default; an
+    /// earlier build still let them be dropped onto a map. Any such placement exports a meaningless
+    /// spriteIndex unless <see cref="AppSettings.SubfolderAssetsInEditor"/> is on, so remove them on load
+    /// when that setting is off (legacy-fix pass) and note it. Sprite4Bpp/Sprite8Bpp sub-folder sprites are
+    /// exempt (see the matching exemption in <see cref="Export.MapExporter.BuildObjectRecords"/>), always
+    /// exportable regardless of that setting, so never dropped here either.
+    /// </summary>
     private static void DropUnplaceableSpritePlacements(ProjectState project)
     {
         if (AppSettingsStore.Load().SubfolderAssetsInEditor ?? false) return;

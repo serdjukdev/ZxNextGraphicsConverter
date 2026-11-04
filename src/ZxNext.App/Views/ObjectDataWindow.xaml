@@ -1,4 +1,4 @@
-<Window x:Class="ZxNext.App.Views.ObjectDataWindow"
+﻿<Window x:Class="ZxNext.App.Views.ObjectDataWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -13,21 +13,14 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Margin="0,0,6,0">
-                <TextBlock Text="Palette 0-15" FontSize="11" />
-                <TextBox x:Name="PaletteBox" />
-                <CheckBox x:Name="PaletteFromType" Content="from type" FontSize="10" Margin="0,3,0,0"
-                          Checked="FromType_OnChanged" Unchecked="FromType_OnChanged" />
-            </StackPanel>
-            <StackPanel Grid.Column="1" Margin="0,0,6,0">
                 <TextBlock Text="Width px" FontSize="11" />
                 <TextBox x:Name="WidthBox" />
                 <CheckBox x:Name="WidthFromType" Content="from type" FontSize="10" Margin="0,3,0,0"
                           Checked="FromType_OnChanged" Unchecked="FromType_OnChanged" />
             </StackPanel>
-            <StackPanel Grid.Column="2">
+            <StackPanel Grid.Column="1">
                 <TextBlock Text="Height px" FontSize="11" />
                 <TextBox x:Name="HeightBox" />
                 <CheckBox x:Name="HeightFromType" Content="from type" FontSize="10" Margin="0,3,0,0"

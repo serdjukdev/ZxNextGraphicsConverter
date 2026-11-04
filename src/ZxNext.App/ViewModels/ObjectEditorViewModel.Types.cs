@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ZxNext.Core.Conversion;
@@ -55,10 +55,7 @@ public partial class ObjectEditorViewModel
     [ObservableProperty]
     private ObjectSubtypeRowViewModel? selectedSubtypeRow;
 
-    /// <summary>The selected type's own palette/size defaults: what a placement with this type but NO object exports (an object of its own beats them, see MapExporter).</summary>
-    [ObservableProperty]
-    private int managedTypePalette;
-
+    /// <summary>The selected type's own size defaults: what a placement with this type but NO object exports (an object of its own beats them, see MapExporter).</summary>
     [ObservableProperty]
     private int managedTypeWidth = ObjectType.DefaultSize;
 
@@ -115,7 +112,6 @@ public partial class ObjectEditorViewModel
     {
         var wasLoading = _loadingSelection;
         _loadingSelection = true;
-        ManagedTypePalette = value?.Type.PaletteIndex ?? 0;
         ManagedTypeWidth = value?.Type.Width ?? ObjectType.DefaultSize;
         ManagedTypeHeight = value?.Type.Height ?? ObjectType.DefaultSize;
         _loadingSelection = wasLoading;
@@ -131,8 +127,6 @@ public partial class ObjectEditorViewModel
         _loadingSelection = wasLoading;
     }
 
-    partial void OnManagedTypePaletteChanged(int value) => ApplyManagedTypeDefaults();
-
     partial void OnManagedTypeWidthChanged(int value) => ApplyManagedTypeDefaults();
 
     partial void OnManagedTypeHeightChanged(int value) => ApplyManagedTypeDefaults();
@@ -141,7 +135,6 @@ public partial class ObjectEditorViewModel
     {
         if (_loadingSelection || SelectedManagedType is not { } row) return;
 
-        row.Type.PaletteIndex = Math.Clamp(ManagedTypePalette, 0, 15);
         row.Type.Width = Math.Clamp(ManagedTypeWidth, 0, 255);
         row.Type.Height = Math.Clamp(ManagedTypeHeight, 0, 255);
         HasChanges = true;

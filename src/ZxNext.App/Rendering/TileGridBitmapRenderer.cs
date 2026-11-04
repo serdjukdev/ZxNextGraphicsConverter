@@ -456,17 +456,21 @@ public static class TileGridBitmapRenderer
     /// object measures. Null when the object has no sprites yet, so the caller can show nothing instead of
     /// an empty box. Cells overlap freely (that is the point of the offsets), so this composites OVER.
     /// </summary>
-    public static WriteableBitmap? RenderObjectDefinition(MapObjectDefinition definition, ProjectState project)
+    public static WriteableBitmap? RenderObjectDefinition(MapObjectDefinition definition, ProjectState project) =>
+        RenderObjectFrame(definition.FirstFrame, project);
+
+    /// <summary>The picture of ONE frame, which is what the editor's frame strip and the map's own preview both need (a map draws an object's first frame).</summary>
+    public static WriteableBitmap? RenderObjectFrame(ObjectFrame frame, ProjectState project)
     {
-        var (left, top, width, height) = definition.MeasureBounds();
+        var (left, top, width, height) = frame.MeasureBounds();
         if (width <= 0 || height <= 0) return null;
-        if (!definition.SpriteIds().Any()) return null;
+        if (!frame.SpritesInReadingOrder().Any()) return null;
 
         var composite = new WriteableBitmap(width, height, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null);
 
-        for (var rowIndex = 0; rowIndex < definition.Rows.Count; rowIndex++)
+        for (var rowIndex = 0; rowIndex < frame.Rows.Count; rowIndex++)
         {
-            var row = definition.Rows[rowIndex];
+            var row = frame.Rows[rowIndex];
             for (var col = 0; col < row.Cells.Count; col++)
             {
                 if (row.Cells[col] is not { } id) continue;

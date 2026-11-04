@@ -113,6 +113,7 @@ public static class ExportService
         }
 
         if (ObjectTypesExporter.Export(project) is { } objectTypesResult) results.Add(objectTypesResult);
+        if (ObjectAnimationExporter.Export(project) is { } objectAnimsResult) results.Add(objectAnimsResult);
 
         return results;
     }

@@ -85,24 +85,12 @@ public static class ObjectTypesExporter
             }
         }
 
-        // Each type's own size defaults, as constants, so game code can read how big a type is supposed
-        // to be without walking a map's object list. Inside the same IFDEF as the bytes they describe:
-        // with the extended bytes off they would be constants about data that isn't there.
-        if (project.ObjectTypes.Count > 0)
-        {
-            sb.Append('\n');
-            sb.Append("    IFDEF ").Append(MapExporter.ExtendedBytesDefine).Append('\n');
-            sb.Append("; Per-type defaults: _w/_h are the type's width/height in pixels.\n");
-            sb.Append("; An individual object may override any of them -- its own record always carries the final values.\n");
-            var usedDefaultLabels = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var type in project.ObjectTypes)
-            {
-                var label = AsmLabel.SanitizeUnique(type.Name, usedDefaultLabels);
-                sb.Append("obj_").Append(label).Append("_w: equ ").Append(Math.Clamp(type.Width, 0, 255)).Append('\n');
-                sb.Append("obj_").Append(label).Append("_h: equ ").Append(Math.Clamp(type.Height, 0, 255)).Append('\n');
-            }
-            sb.Append("    ENDIF").Append('\n');
-        }
+        // A type's palette and its width/height USED TO be written here as obj_<name>_pal / _w / _h
+        // constants. They are gone, both of them for the same reason: a second, weaker copy of a fact that
+        // is already in the data. A sprite's palette travels with the sprite in its animation table, and
+        // every object record already carries its own final width and height, resolved from the placement,
+        // its object and its type (see ObjectPlacementSize). The constants could only ever disagree with
+        // that: a 48x8 platform whose type still said 16x16 exported both numbers, one of them wrong.
 
         return new FolderExportResult(RowKey, "", [], [], sb.ToString(), $"{RowKey}.asm", null, IsChunked: false,
             ExportSubdirHint: "");

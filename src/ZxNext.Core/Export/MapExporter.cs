@@ -437,8 +437,9 @@ public static class MapExporter
                 ? objectDefinitions?.FirstOrDefault(d => d.Id == definitionId)
                 : null;
 
-            var width = placement.WidthOverride ?? definition?.WidthPixels ?? type?.Width ?? asset.Width;
-            var height = placement.HeightOverride ?? definition?.HeightPixels ?? type?.Height ?? asset.Height;
+            // One shared rule, so the Object Data dialog shows exactly what is exported here (see
+            // ObjectPlacementSize, which exists because these two used to disagree).
+            var (width, height) = ObjectPlacementSize.Resolve(placement, asset, definition, type);
 
             records.Add(new ObjectRecord(spriteIndex, (short)placement.X, (short)placement.Y, asset.Name,
                 typeByte, connectByte, placement.UserByte, typeName, linkTargetIndex, linkTargetName,

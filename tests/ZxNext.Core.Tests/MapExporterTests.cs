@@ -368,6 +368,63 @@ public class MapExporterTests
         Assert.DoesNotContain("db 0,0,0,0,0,0,255,0,0", asm);
     }
 
+
+    /// <summary>
+    /// The size an object sized BY HAND in the Object Editor exports, which nothing covered before and which
+    /// is exactly where the app contradicted itself: a 48x8 platform whose type still says 16x16 must export
+    /// 48x8, and the "Object Data..." dialog must show the same number (it asks ObjectPlacementSize too).
+    /// </summary>
+    [Fact]
+    public void ExportObjects_PlacementStampedFromAnObject_ExportsTheObjectsOwnSize_NotItsTypes()
+    {
+        var sprite = FakeSprite("platform_mid", sortIndex: 0);
+        var platformType = new ObjectType { Name = "moving_platform" };   // default 16x16
+        var definition = new MapObjectDefinition
+        {
+            Name = "platform",
+            TypeId = platformType.Id,
+            WidthPixelsOverride = 48,
+            HeightPixelsOverride = 8
+        };
+        var placement = new SpritePlacement
+        {
+            SpriteAssetId = sprite.Id, X = 0, Y = 0,
+            TypeId = platformType.Id, ObjectDefinitionId = definition.Id
+        };
+        var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [placement]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, [sprite], [platformType], [definition]);
+
+        Assert.True(success, error);
+        Assert.Contains("    db 48,8", result!.AsmText);
+        Assert.DoesNotContain("    db 16,16", result.AsmText);
+
+        // The dialog's own question, answered by the same rule.
+        Assert.Equal((48, 8), ObjectPlacementSize.Inherited(sprite, definition, platformType));
+        Assert.Equal((48, 8), ObjectPlacementSize.Resolve(placement, sprite, definition, platformType));
+    }
+
+    /// <summary>All four sources of a placement's size, strongest first, in one test.</summary>
+    [Fact]
+    public void ObjectPlacementSize_ResolvesPinnedThenObjectThenTypeThenTheSpritesOwnSize()
+    {
+        var sprite = FakeSprite("hero", sortIndex: 0);                                  // 16x16
+        var type = new ObjectType { Name = "enemy", Width = 24, Height = 48 };
+        var measured = new MapObjectDefinition { Name = "small" };                      // no override: measured
+        var pinnedObject = new MapObjectDefinition { Name = "platform", WidthPixelsOverride = 48, HeightPixelsOverride = 8 };
+
+        var bare = new SpritePlacement { SpriteAssetId = sprite.Id };
+        Assert.Equal((16, 16), ObjectPlacementSize.Resolve(bare, sprite, null, null));
+        Assert.Equal((24, 48), ObjectPlacementSize.Resolve(bare, sprite, null, type));
+        Assert.Equal((48, 8), ObjectPlacementSize.Resolve(bare, sprite, pinnedObject, type));
+
+        // An object with nothing pinned measures its own picture, which beats the type as well.
+        Assert.Equal((16, 16), ObjectPlacementSize.Resolve(bare, sprite, measured, type));
+
+        var pinnedPlacement = new SpritePlacement { SpriteAssetId = sprite.Id, WidthOverride = 7, HeightOverride = 9 };
+        Assert.Equal((7, 9), ObjectPlacementSize.Resolve(pinnedPlacement, sprite, pinnedObject, type));
+    }
+
     /// <summary>The record size is a constant switched by the same define as the bytes, so game code never hardcodes 8 or 10.</summary>
     [Fact]
     public void ExportObjects_WritesARecordSizeEqu_EightWithoutTheDefineAndTenWithIt()

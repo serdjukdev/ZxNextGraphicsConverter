@@ -703,6 +703,26 @@ public partial class MapEditorViewModel : ObservableObject
     public ObjectType? TypeOf(SpritePlacement sprite) =>
         sprite.TypeId is { } id ? Project.ObjectTypes.FirstOrDefault(t => t.Id == id) : null;
 
+    /// <summary>The named object a placement was stamped from, or null for a lone sprite. Deleting the object leaves the placement, so this can also be null for one that HAD an object.</summary>
+    public MapObjectDefinition? DefinitionOf(SpritePlacement sprite) =>
+        sprite.ObjectDefinitionId is { } id ? Project.ObjectDefinitions.FirstOrDefault(d => d.Id == id) : null;
+
+    /// <summary>
+    /// The size this placement exports when it pins nothing of its own, plus a line saying where that came
+    /// from. Asked by the Object Data dialog so the number it shows for "from object/type" is the number the
+    /// export actually writes (see <see cref="ObjectPlacementSize"/>).
+    /// </summary>
+    public (int Width, int Height, string SourceText) InheritedSizeOf(SpritePlacement sprite)
+    {
+        var asset = Project.Assets.FirstOrDefault(a => a.Id == sprite.SpriteAssetId);
+        if (asset is null) return (ObjectType.DefaultSize, ObjectType.DefaultSize, "");
+
+        var definition = DefinitionOf(sprite);
+        var type = TypeOf(sprite);
+        var (width, height) = ObjectPlacementSize.Inherited(asset, definition, type);
+        return (width, height, ObjectPlacementSize.InheritedSourceText(asset, definition, type));
+    }
+
     /// <summary>Applies a raw byte to exactly one placement's <see cref="SpritePlacement.UserByte"/>, the Set User Byte tool's click target. Called by the View once the user confirms the value in the picker dialog.</summary>
     public void ApplyUserByte(SpritePlacement sprite, byte value)
     {

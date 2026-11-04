@@ -925,7 +925,7 @@ public partial class MapEditorWindow : Window
             if (vm.SelectedSprites.Count == 0) return;
 
             var first = vm.SelectedSprites[0];
-            var batchDialog = new ObjectDataWindow(vm.TypeOf(first), first.WidthOverride, first.HeightOverride,
+            var batchDialog = new ObjectDataWindow(vm.InheritedSizeOf(first), first.WidthOverride, first.HeightOverride,
                 vm.SelectedSprites.Count) { Owner = this };
             if (batchDialog.ShowDialog() == true)
             {
@@ -937,7 +937,7 @@ public partial class MapEditorWindow : Window
         if (_objectActionPopupTarget is not { } target) return;
         _objectActionPopupTarget = null;
 
-        var dialog = new ObjectDataWindow(vm.TypeOf(target), target.WidthOverride, target.HeightOverride) { Owner = this };
+        var dialog = new ObjectDataWindow(vm.InheritedSizeOf(target), target.WidthOverride, target.HeightOverride) { Owner = this };
         if (dialog.ShowDialog() == true)
         {
             vm.ApplyObjectData(target, dialog.WidthResult, dialog.HeightResult);

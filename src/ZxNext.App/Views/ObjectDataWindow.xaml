@@ -17,18 +17,18 @@
             <StackPanel Grid.Column="0" Margin="0,0,6,0">
                 <TextBlock Text="Width px" FontSize="11" />
                 <TextBox x:Name="WidthBox" />
-                <CheckBox x:Name="WidthFromType" Content="from type" FontSize="10" Margin="0,3,0,0"
+                <CheckBox x:Name="WidthFromType" Content="inherited" FontSize="10" Margin="0,3,0,0"
                           Checked="FromType_OnChanged" Unchecked="FromType_OnChanged" />
             </StackPanel>
             <StackPanel Grid.Column="1">
                 <TextBlock Text="Height px" FontSize="11" />
                 <TextBox x:Name="HeightBox" />
-                <CheckBox x:Name="HeightFromType" Content="from type" FontSize="10" Margin="0,3,0,0"
+                <CheckBox x:Name="HeightFromType" Content="inherited" FontSize="10" Margin="0,3,0,0"
                           Checked="FromType_OnChanged" Unchecked="FromType_OnChanged" />
             </StackPanel>
         </Grid>
 
-        <TextBlock Text="A field with 'from type' ticked follows its object type, so changing the type later changes this object too. Untick it to pin a value on this object alone. These reach the binary only while 'Extended object bytes' is on in Settings." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,10,0,0" />
+        <TextBlock Text="A field with 'inherited' ticked takes its value from the named object this was placed from, or from its object type, or from the sprite's own size, in that order: the box shows which number that is, and changing the object or type later changes this placement too. Untick it to pin a value on this placement alone. These reach the binary only while 'Extended object bytes' is on in Settings." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,10,0,0" />
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button Content="Cancel" Width="80" Margin="0,0,8,0" IsCancel="True" Click="Cancel_OnClick" />

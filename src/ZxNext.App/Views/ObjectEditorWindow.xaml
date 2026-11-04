@@ -190,7 +190,7 @@
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Type:" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
                     <ComboBox Width="130" ItemsSource="{Binding Types}" SelectedItem="{Binding SelectedType}" DisplayMemberPath="Name"
-                              ToolTip="Every object placed from this gets this type. The empty row means no type." />
+                              ToolTip="The type every NEW placement of this object starts with. Objects already on a map keep the type they were placed with, since a placement owns its own copy. The empty row means no type." />
                     <TextBlock Text="Exported size px:" FontSize="11" VerticalAlignment="Center" Margin="16,0,6,0" />
                     <TextBox Width="44" Text="{Binding SizePixelsWidth, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"
                              IsEnabled="{Binding ManualSize}" />
@@ -207,7 +207,7 @@
                               ToolTip="Sets that subtype's bit in the user byte and clears the other subtypes' bits. Every other bit stays as it is. The empty row means no subtype." />
                     <TextBlock Text="User byte:" FontSize="11" VerticalAlignment="Center" Margin="14,0,6,0" />
                     <TextBox Width="44" Text="{Binding UserByteNumber, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"
-                             ToolTip="0-255. The bit buttons to the right and the subtype above edit this same byte." />
+                             ToolTip="0-255, the value a NEW placement of this object starts with. The bit buttons to the right and the subtype above edit this same byte." />
                     <ItemsControl ItemsSource="{Binding UserByteBits}" Margin="8,0,0,0">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -227,6 +227,9 @@
                     </ItemsControl>
                     <TextBlock Text="{Binding UserByteText}" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0" />
                 </StackPanel>
+
+                <TextBlock Text="The type and user byte above are what a NEW placement of this object starts with. Objects already on a map keep their own copy, so that 'Set User Byte' on one of them is not undone from here; change one on the map with its right-click menu."
+                           FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,4,0,0" />
 
                 <TextBlock Text="{Binding SizeText}" FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,4,0,0" />
                 <TextBlock Text="{Binding PaletteText}" FontSize="10" Foreground="Gray" TextWrapping="Wrap" />

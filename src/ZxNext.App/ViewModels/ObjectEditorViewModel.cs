@@ -255,6 +255,17 @@ public partial class ObjectEditorViewModel : ObservableObject
 
     public bool HasSelection => SelectedDefinition is not null;
 
+    /// <summary>The project the Hitbox window needs to render the selected object's own art over.</summary>
+    public ProjectState Project => _project;
+
+    /// <summary>Called after the Hitbox window wrote a new box onto the selected object: its size IS the exported width/height, so the two size fields and the size line below them have to be re-read.</summary>
+    public void HitboxEdited()
+    {
+        HasChanges = true;
+        SyncSizeControls();
+        NotifyDerived();
+    }
+
     public string SizeText
     {
         get
@@ -263,9 +274,12 @@ public partial class ObjectEditorViewModel : ObservableObject
 
             var (_, _, measuredWidth, measuredHeight) = d.MeasureBounds();
             var measured = $"the picture measures {measuredWidth} x {measuredHeight} px";
-            return d.WidthPixelsOverride is null && d.HeightPixelsOverride is null
+            var box = d.WidthPixelsOverride is null && d.HeightPixelsOverride is null
                 ? $"{measured}, and that is what is exported as its width/height"
                 : $"{measured}, exported as {d.WidthPixels} x {d.HeightPixels} px (set by hand)";
+            return d.HitX == 0 && d.HitY == 0
+                ? $"{box}. Its collision box starts at the anchor sprite, so drawX/drawY export as 0."
+                : $"{box}. Its collision box sits {d.HitX},{d.HitY} px from the anchor sprite, so a placement exports drawX {-d.HitX}, drawY {-d.HitY}.";
         }
     }
 

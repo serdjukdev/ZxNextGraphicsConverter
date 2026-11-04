@@ -1,4 +1,4 @@
-using ZxNext.Core.Conversion;
+﻿using ZxNext.Core.Conversion;
 using ZxNext.Core.Export;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
@@ -8,9 +8,11 @@ namespace ZxNext.Core.Tests;
 
 /// <summary>
 /// The animation tables the game's own draw_unified routine reads. The format is the user's, confirmed byte
-/// for byte, so these tests pin the exact bytes: a 2-byte anchor record with no offset, 4-byte records after
-/// it, signed offsets measured from the anchor, each sprite's own pre-shifted palette, and the two mirror
-/// corrections computed as dx_min + dx_max / dy_min + dy_max.
+/// for byte, so these tests pin the exact bytes: a 2-byte frame header (duration, sprites, and nothing
+/// else), a 2-byte anchor record with no offset, 4-byte records after it, signed offsets measured from the
+/// anchor, and each sprite's own pre-shifted palette. Mirror and drawing corrections are deliberately NOT
+/// here: the engine derives the mirror one from the object's box, and where the picture sits relative to
+/// that box travels with each map placement (see MapExporterTests).
 /// </summary>
 public class ObjectAnimationExporterTests
 {
@@ -49,15 +51,14 @@ public class ObjectAnimationExporterTests
         Assert.Contains("    db 1          ; frames", asm);
         Assert.Contains("    dw a_platform_main_f0", asm);
         Assert.Contains("a_platform_main_f0:", asm);
-        Assert.Contains("    db 0,1,0,0     ; duration, sprites, mirror X, mirror Y", asm);
+        Assert.Contains("    db 0,1     ; duration, sprites", asm);
         Assert.Contains("    db 32,0          ; anchor: palette, pattern (hero)", asm);   // slot 2 -> 32
         Assert.Contains("obj_platform_main: equ a_platform_main", asm);
     }
 
     /// <summary>
     /// The case the whole feature exists for: a head over two legs, the lower row nudged 8 pixels left. The
-    /// anchor is the head (first in reading order), the legs are signed offsets from it, and the X mirror
-    /// correction is dx_min + dx_max = -8 + 8 = 0.
+    /// anchor is the head (first in reading order) and the legs are signed offsets from it, nothing more.
     /// </summary>
     [Fact]
     public void Export_ARowNudgedLeft_GivesSignedOffsetsFromTheAnchorAndTheMirrorCorrections()
@@ -79,8 +80,8 @@ public class ObjectAnimationExporterTests
 
         var asm = ObjectAnimationExporter.Export(project)!.AsmText;
 
-        // dx of the legs: -8 and +8 relative to the head; dy 16. mirror X = -8 + 8 = 0, mirror Y = 0 + 16 = 16.
-        Assert.Contains("    db 6,3,0,16     ; duration, sprites, mirror X, mirror Y", asm);
+        // dx of the legs: -8 and +8 relative to the head; dy 16.
+        Assert.Contains("    db 6,3     ; duration, sprites", asm);
         Assert.Contains("    db 16,0          ; anchor: palette, pattern (head)", asm);
         Assert.Contains("    db 248,16,16,1   ; dx, dy, palette, pattern (leg)", asm);  // -8 as a byte
         Assert.Contains("    db 8,16,16,1   ; dx, dy, palette, pattern (leg)", asm);
@@ -113,7 +114,7 @@ public class ObjectAnimationExporterTests
         Assert.Contains("    dw a_hero_main_f0", asm);
         Assert.Contains("    dw a_hero_main_f1", asm);
         Assert.Contains("a_hero_main_f1:", asm);
-        Assert.Contains("    db 4,1,0,0     ; duration, sprites, mirror X, mirror Y", asm);   // the copy kept the duration
+        Assert.Contains("    db 4,1     ; duration, sprites", asm);   // the copy kept the duration
         Assert.Contains("    db 48,1          ; anchor: palette, pattern (b)", asm);          // slot 3 -> 48
         Assert.Contains("a_hero_run:", asm);
         Assert.Contains("obj_hero_run: equ a_hero_run", asm);
@@ -137,6 +138,37 @@ public class ObjectAnimationExporterTests
         Assert.Contains("a_big_hero_main:", asm);
         Assert.Contains("a_big_hero_main_2:", asm);   // de-collided
         Assert.DoesNotContain("a_big hero", asm);
+    }
+
+    /// <summary>
+    /// A frame header is TWO bytes. The hitbox lives on the object and travels with each map placement, so
+    /// no art-versus-box arithmetic may leak back in here however far the box is from the picture.
+    /// </summary>
+    [Fact]
+    public void Export_AnObjectWithAHitboxFarFromItsArt_StillWritesATwoByteFrameHeader()
+    {
+        var project = new ProjectState();
+        var head = Sprite("head", paletteSlot: 0, sortIndex: 0);
+        var foot = Sprite("foot", paletteSlot: 0, sortIndex: 1);
+        project.Assets.AddRange([head, foot]);
+
+        var definition = ObjectDefinitionService.Create(project, "ng").Definition!;
+        var frame = definition.FirstFrame;
+        ObjectDefinitionService.SetCell(frame, 0, 0, head.Id);
+        ObjectDefinitionService.AddRow(frame);
+        ObjectDefinitionService.AddCell(frame, 1);
+        ObjectDefinitionService.SetCell(frame, 1, 0, foot.Id);
+        ObjectDefinitionService.SetCell(frame, 1, 1, foot.Id);
+        ObjectDefinitionService.SetRowOffset(frame, 1, -4, 0);
+        definition.WidthPixelsOverride = 16;   // a 16-px hitbox under art 32 px wide
+        definition.HitX = 9;
+        definition.HitY = -3;
+
+        var asm = ObjectAnimationExporter.Export(project)!.AsmText;
+
+        Assert.Contains("    db 0,3     ; duration, sprites", asm);
+        Assert.DoesNotContain("duration, sprites, off", asm);
+        Assert.DoesNotContain("duration, sprites, mirror", asm);
     }
 
     /// <summary>A sub-folder sprite's pattern number is local to its own binary, which is exactly what a map placement would export for it too.</summary>

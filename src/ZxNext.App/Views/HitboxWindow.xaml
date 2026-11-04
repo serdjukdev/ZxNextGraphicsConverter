@@ -1,0 +1,57 @@
+﻿<Window x:Class="ZxNext.App.Views.HitboxWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Hitbox" Width="900" Height="760" MinWidth="700" MinHeight="620"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Margin="0,0,0,8" FontSize="11" Foreground="#555" TextWrapping="Wrap"
+                   Text="The object's COLLISION BOX: the rectangle the game knows this object by. Drag the box to move it, drag a handle on a side or a corner to resize it, or type the four numbers below. Nothing here is measured or guessed, and nothing moves unless you move it. A map placement's X/Y is this box's own corner, and the picture is drawn at the offset shown below it, so the box may sit off the picture or be bigger than it." />
+
+        <Border Grid.Row="1" BorderBrush="#666" BorderThickness="1" Background="#1E1E1E">
+            <ScrollViewer x:Name="Viewport" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <Canvas x:Name="BoxCanvas" Background="#1E1E1E" ClipToBounds="False" />
+            </ScrollViewer>
+        </Border>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0" VerticalAlignment="Center">
+            <TextBlock Text="Box offset from the anchor sprite:" FontSize="13" VerticalAlignment="Center" Margin="0,0,10,0" />
+            <TextBlock Text="X" FontSize="14" VerticalAlignment="Center" Margin="0,0,5,0" />
+            <TextBox x:Name="HitXBox" Width="74" Height="30" FontSize="15" VerticalContentAlignment="Center"
+                     TextChanged="Numbers_OnTextChanged"
+                     ToolTip="Pixels right of the anchor sprite's top-left pixel, negative = left. -127..127." />
+            <TextBlock Text="Y" FontSize="14" VerticalAlignment="Center" Margin="12,0,5,0" />
+            <TextBox x:Name="HitYBox" Width="74" Height="30" FontSize="15" VerticalContentAlignment="Center"
+                     TextChanged="Numbers_OnTextChanged"
+                     ToolTip="Pixels below the anchor sprite's top-left pixel, negative = up. -127..127." />
+
+            <TextBlock Text="Box size:" FontSize="13" VerticalAlignment="Center" Margin="26,0,10,0" />
+            <TextBlock Text="W" FontSize="14" VerticalAlignment="Center" Margin="0,0,5,0" />
+            <TextBox x:Name="BoxWidthBox" Width="74" Height="30" FontSize="15" VerticalContentAlignment="Center"
+                     TextChanged="Numbers_OnTextChanged"
+                     ToolTip="The width byte this object exports, 1-255 px." />
+            <TextBlock Text="H" FontSize="14" VerticalAlignment="Center" Margin="12,0,5,0" />
+            <TextBox x:Name="BoxHeightBox" Width="74" Height="30" FontSize="15" VerticalContentAlignment="Center"
+                     TextChanged="Numbers_OnTextChanged"
+                     ToolTip="The height byte this object exports, 1-255 px." />
+
+            <Button Content="Whole picture" Height="30" Padding="12,0" Margin="26,0,0,0" FontSize="13"
+                    Click="WholePicture_OnClick"
+                    ToolTip="Back to the default: the box starts at the anchor sprite and is as big as the picture, and the size follows the picture again." />
+        </StackPanel>
+
+        <TextBlock x:Name="SummaryText" Grid.Row="3" Margin="0,8,0,0" FontSize="12" Foreground="#555" TextWrapping="Wrap" />
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Cancel" Width="90" Height="28" IsCancel="True" Click="Cancel_OnClick" />
+            <Button Content="OK" Width="90" Height="28" Margin="8,0,0,0" IsDefault="True" Click="Ok_OnClick" />
+        </StackPanel>
+    </Grid>
+</Window>

@@ -324,9 +324,10 @@ public class MapExporterTests
     }
 
     /// <summary>
-    /// The extended per-object bytes (8 width, 9 height). They are ALWAYS written, inside an IFDEF, so a
-    /// project can switch to 10-byte records by uncommenting one line instead of re-exporting. Values come
-    /// from the object's type unless the placement pins its own. There is deliberately NO palette byte:
+    /// The extended per-object bytes (8 width, 9 height, 10 drawX, 11 drawY). They are ALWAYS written,
+    /// inside an IFDEF, so a project can switch to 12-byte records by uncommenting one line instead of
+    /// re-exporting. Values come from the object's type unless the placement pins its own, and drawX/drawY
+    /// are 0 for everything that has no hand-drawn collision box. There is deliberately NO palette byte:
     /// every sprite of an object carries its own palette in the object's animation table, so one palette
     /// per placement was both redundant and a byte per object.
     /// </summary>
@@ -353,10 +354,10 @@ public class MapExporterTests
         Assert.True(success, error);
         var asm = result!.AsmText;
 
-        Assert.Contains("    db 24,48", asm);        // from the type
-        Assert.Contains("    db 64,7", asm);          // pinned on the placement
+        Assert.Contains("    db 24,48,0,0", asm);     // from the type, no box offset
+        Assert.Contains("    db 64,7,0,0", asm);       // pinned on the placement
         // No type at all: the sprite's own real pixel size.
-        Assert.Contains($"    db {sprite.Width},{sprite.Height}", asm);
+        Assert.Contains($"    db {sprite.Width},{sprite.Height},0,0", asm);
         // The block is two bytes: no palette byte in front of the size any more.
         Assert.DoesNotContain("    db 48,24,48", asm);
         Assert.DoesNotContain("    db 160,64,7", asm);
@@ -396,12 +397,62 @@ public class MapExporterTests
         var (success, result, error) = MapExporter.ExportObjects(map, [sprite], [platformType], [definition]);
 
         Assert.True(success, error);
-        Assert.Contains("    db 48,8", result!.AsmText);
-        Assert.DoesNotContain("    db 16,16", result.AsmText);
+        Assert.Contains("    db 48,8,0,0", result!.AsmText);
+        Assert.DoesNotContain("    db 16,16,0,0", result.AsmText);
 
         // The dialog's own question, answered by the same rule.
         Assert.Equal((48, 8), ObjectPlacementSize.Inherited(sprite, definition, platformType));
         Assert.Equal((48, 8), ObjectPlacementSize.Resolve(placement, sprite, definition, platformType));
+    }
+
+    /// <summary>
+    /// The hand-drawn collision box. The whole engine knows an object as X, Y, width, height and nothing
+    /// else, so the record's X/Y is the BOX's own corner (where the picture is, plus the box's offset) and
+    /// bytes 10-11 are minus that offset, which is how the drawing routine gets back to the picture with
+    /// one addition. A box 4 px right and 2 px up of a picture placed at (100,50) is at (104,48), drawn at
+    /// (-4,+2) from there.
+    /// </summary>
+    [Fact]
+    public void ExportObjects_AnObjectWithAHitbox_ExportsTheBoxsCornerAndDrawXDrawYBackToThePicture()
+    {
+        var sprite = FakeSprite("ng", sortIndex: 0);
+        var definition = new MapObjectDefinition
+        {
+            Name = "ng_3_r",
+            WidthPixelsOverride = 16,
+            HeightPixelsOverride = 32,
+            HitX = 4,
+            HitY = -2
+        };
+        var placement = new SpritePlacement { SpriteAssetId = sprite.Id, X = 100, Y = 50, ObjectDefinitionId = definition.Id };
+        var map = FakeMap("level1", 20, 20, gridSize: 1, sprites: [placement]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, [sprite], [], [definition]);
+
+        Assert.True(success, error);
+        var asm = result!.AsmText;
+
+        // X/Y of the record: the box's corner, not the picture's.
+        Assert.Contains("db 0,104,0,48,0,255,255,0", asm);
+        // width, height, then drawX = -4 and drawY = +2 as signed bytes.
+        Assert.Contains("    db 16,32,252,2", asm);
+    }
+
+    /// <summary>A box further from its picture than a signed byte reaches cannot be written at all, so the export says so instead of wrapping the byte and drawing the object somewhere else.</summary>
+    [Fact]
+    public void ExportObjects_AHitboxPastASignedByte_FailsWithItsOwnMessage()
+    {
+        var sprite = FakeSprite("ng", sortIndex: 0);
+        var definition = new MapObjectDefinition { Name = "ng_3_r", HitX = 200 };
+        var placement = new SpritePlacement { SpriteAssetId = sprite.Id, X = 0, Y = 0, ObjectDefinitionId = definition.Id };
+        var map = FakeMap("level1", 20, 20, gridSize: 1, sprites: [placement]);
+
+        var (success, result, error) = MapExporter.ExportObjects(map, [sprite], [], [definition]);
+
+        Assert.False(success);
+        Assert.Null(result);
+        Assert.Contains("ng_3_r", error);
+        Assert.Contains("collision box", error);
     }
 
     /// <summary>All four sources of a placement's size, strongest first, in one test.</summary>
@@ -425,9 +476,9 @@ public class MapExporterTests
         Assert.Equal((7, 9), ObjectPlacementSize.Resolve(pinnedPlacement, sprite, pinnedObject, type));
     }
 
-    /// <summary>The record size is a constant switched by the same define as the bytes, so game code never hardcodes 8 or 10.</summary>
+    /// <summary>The record size is a constant switched by the same define as the bytes, so game code never hardcodes 8 or 12.</summary>
     [Fact]
-    public void ExportObjects_WritesARecordSizeEqu_EightWithoutTheDefineAndTenWithIt()
+    public void ExportObjects_WritesARecordSizeEqu_EightWithoutTheDefineAndTwelveWithIt()
     {
         var sprite = FakeSprite("hero", sortIndex: 0);
         var map = FakeMap("level1", 4, 4, gridSize: 1, sprites: [new SpritePlacement { SpriteAssetId = sprite.Id, X = 0, Y = 0 }]);
@@ -437,7 +488,7 @@ public class MapExporterTests
         Assert.True(success, error);
         var asm = result!.AsmText;
         Assert.Contains("    IFDEF " + MapExporter.ExtendedBytesDefine, asm);
-        Assert.Contains("level1_objects_obj_size: equ 10", asm);
+        Assert.Contains("level1_objects_obj_size: equ 12", asm);
         Assert.Contains("    ELSE", asm);
         Assert.Contains("level1_objects_obj_size: equ 8", asm);
         Assert.Contains("    ENDIF", asm);

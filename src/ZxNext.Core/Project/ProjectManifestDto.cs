@@ -160,6 +160,11 @@ public class MapObjectDefinitionDto
     public int? WidthPixelsOverride { get; set; }
     public int? HeightPixelsOverride { get; set; }
 
+    // The collision box's own offset from the anchor sprite. Absent in a project saved before the box
+    // existed, where 0 (the default) means "box starts at the anchor" -- exactly what those objects did.
+    public int HitX { get; set; }
+    public int HitY { get; set; }
+
     /// <summary>The current shape: named animations, each a list of frames, each frame a list of rows.</summary>
     public List<ObjectAnimationDto>? Animations { get; set; }
 

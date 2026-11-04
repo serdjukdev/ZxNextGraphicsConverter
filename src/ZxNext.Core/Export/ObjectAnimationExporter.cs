@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using ZxNext.Core.Model;
 using ZxNext.Core.Project;
 
@@ -16,18 +16,22 @@ namespace ZxNext.Core.Export;
 /// a_&lt;object&gt;_&lt;animation&gt;_f0:
 ///     db  duration             ; game frames this phase is held; 0 = change every frame
 ///     db  sprites in frame     ; including the anchor
-///     db  X mirror correction  ; dx_min + dx_max, signed
-///     db  Y mirror correction  ; dy_min + dy_max, signed
-///     db  palette, pattern     ; THE ANCHOR: 2 bytes, no offset (its position IS the object's X/Y)
+///     db  palette, pattern     ; THE ANCHOR: 2 bytes, no offset of its own
 ///     db  dx, dy, palette, pattern   ; every following sprite: 4 bytes, dx/dy signed from the anchor
 /// </code>
 ///
 /// <para>
 /// Everything here is derived from the object's own layout. The anchor is the frame's first sprite in
 /// reading order; the palette byte is that sprite's own 4bpp slot, PRE-SHIFTED into the high nibble (the
-/// place a sprite's attribute byte carries it), so a frame may freely mix palettes; the mirror corrections
-/// use his own formula, which exists because the hardware's x-mirror negates dx without compensating for
-/// the group's width. The only value typed by hand is a frame's duration.
+/// place a sprite's attribute byte carries it), so a frame may freely mix palettes. The only value typed
+/// by hand is a frame's duration.
+/// </para>
+///
+/// <para>
+/// NO MIRROR OR DRAWING CORRECTIONS LIVE HERE. A frame is its two header bytes and its sprites, nothing
+/// else. The engine works the x-mirror correction out itself from the object's box, and where the picture
+/// sits relative to that box is a property of the OBJECT, not of a frame: it travels with each map
+/// placement as the drawX/drawY bytes of its record (see <see cref="MapExporter"/>).
 /// </para>
 ///
 /// <para>
@@ -49,15 +53,16 @@ public static class ObjectAnimationExporter
         var sb = new StringBuilder();
         sb.Append("; object_anims.asm -- one animation table per animation of every object (Object Editor)\n");
         sb.Append("; a_<object>_<animation>:        db frames, then one dw per frame\n");
-        sb.Append("; a_<object>_<animation>_f<n>:   db duration, sprites, X mirror correction, Y mirror correction\n");
+        sb.Append("; a_<object>_<animation>_f<n>:   db duration, sprites\n");
         sb.Append(";                                db palette, pattern            -- the anchor, 2 bytes, no offset\n");
         sb.Append(";                                db dx, dy, palette, pattern    -- each following sprite, 4 bytes\n");
-        sb.Append("; A frame is 6 + 4 * (sprites - 1) bytes. dx/dy are SIGNED, from the anchor's top-left pixel;\n");
-        sb.Append("; the anchor has no offset because the object's own X/Y on screen IS the anchor's position.\n");
+        sb.Append("; A frame is 4 + 4 * (sprites - 1) bytes. dx/dy are SIGNED, from the anchor's top-left pixel;\n");
+        sb.Append("; the anchor itself has no offset: the engine draws it where the object says, and every other sprite\n");
+        sb.Append("; hangs off it. There are NO mirror or drawing corrections in a frame: the engine works the x-mirror\n");
+        sb.Append("; correction out from the object's own box, and where the picture sits relative to that box travels\n");
+        sb.Append("; with the placement, as the drawX/drawY bytes of its record in map_objects.\n");
         sb.Append("; The palette byte is already shifted into bits 7:4, so it ORs straight into a sprite's attribute byte;\n");
         sb.Append("; it comes from each sprite's own slot, so one frame may mix palettes freely.\n");
-        sb.Append("; The mirror corrections are dx_min + dx_max and dy_min + dy_max of the frame (hardware mirroring\n");
-        sb.Append("; negates an offset without compensating for the group's width).\n");
         sb.Append("; obj_<object>_<animation>: equ <table address> -- reference an animation by name, never by address.\n");
         sb.Append('\n');
 
@@ -114,21 +119,16 @@ public static class ObjectAnimationExporter
         if (sprites.Count == 0)
         {
             // An empty frame still has to be a valid record, or every frame after it reads as garbage.
-            sb.Append("    db ").Append(Math.Clamp(frame.DurationFrames, 0, 255)).Append(",0,0,0     ; duration, sprites, mirror X, mirror Y -- this frame has no sprites yet\n");
+            sb.Append("    db ").Append(Math.Clamp(frame.DurationFrames, 0, 255))
+                .Append(",0     ; duration, sprites -- this frame has no sprites yet\n");
             return;
         }
 
         var anchor = sprites[0];
         var offsets = sprites.Select(s => (dx: s.X - anchor.X, dy: s.Y - anchor.Y)).ToList();
 
-        // His own formula: the hardware's x-mirror does dx' = -dx with no width compensation, so the group
-        // slides by its own extent unless the caller adds this back.
-        var mirrorX = offsets.Min(o => o.dx) + offsets.Max(o => o.dx);
-        var mirrorY = offsets.Min(o => o.dy) + offsets.Max(o => o.dy);
-
         sb.Append("    db ").Append(Math.Clamp(frame.DurationFrames, 0, 255)).Append(',').Append(sprites.Count)
-            .Append(',').Append(SignedByte(mirrorX)).Append(',').Append(SignedByte(mirrorY))
-            .Append("     ; duration, sprites, mirror X, mirror Y\n");
+            .Append("     ; duration, sprites\n");
 
         sb.Append("    db ").Append(PaletteByte(anchor.Asset)).Append(',').Append(PatternIndex(project, anchor.Asset))
             .Append("          ; anchor: palette, pattern (").Append(anchor.Asset.Name).Append(")\n");

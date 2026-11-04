@@ -50,6 +50,20 @@ public partial class ObjectEditorWindow : Window
         InitializeComponent();
     }
 
+    /// <summary>
+    /// The collision box, drawn over the object's own art in a window of its own: it needs room for a
+    /// mouse (drag the box, drag a handle), which the strip of number boxes here cannot give it. The box's
+    /// size IS this object's exported width/height, so the two size fields here are rewritten from it
+    /// afterwards.
+    /// </summary>
+    private void Hitbox_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ObjectEditorViewModel vm || vm.SelectedDefinition is not { } definition) return;
+
+        var dialog = new HitboxWindow(definition, vm.Project) { Owner = this };
+        if (dialog.ShowDialog() == true) vm.HitboxEdited();
+    }
+
     private void DefinitionList_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         _dragArmed = false;

@@ -33,7 +33,7 @@
         </Grid.ColumnDefinitions>
 
         <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,8" FontSize="10" Foreground="Gray" TextWrapping="Wrap"
-                   Text="An object is a named group of sprites: a 5-wide platform, a character of one sprite over two. Each ROW has its own length and its own offset, so the shape does not have to be a rectangle. An object holds named ANIMATIONS, each a list of frames, and a frame is one such layout plus how long it is held; a still object is simply a one-frame animation. The Map Editor places an object as a single unit and draws its first frame. Each animation exports a complete table into object_anims.asm: its sprites, their signed offsets from the first one, each sprite's own palette, and the mirror corrections." />
+                   Text="An object is a named group of sprites: a 5-wide platform, a character of one sprite over two. Each ROW has its own length and its own offset, so the shape does not have to be a rectangle. An object holds named ANIMATIONS, each a list of frames, and a frame is one such layout plus how long it is held; a still object is simply a one-frame animation. The Map Editor places an object as a single unit and draws its first frame. Each animation exports a complete table into object_anims.asm: its sprites, their signed offsets from the first one and each sprite's own palette, and nothing else. The Hitbox button draws the object's collision box over its art: that box is what the game knows the object by, so a map placement's X/Y is the box's corner and the record carries drawX/drawY back to the picture." />
 
         <!-- left: two tabs, the object library and the project's object types -->
         <DockPanel Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
@@ -199,6 +199,8 @@
                              IsEnabled="{Binding ManualSize}" />
                     <CheckBox Content="from the picture" IsChecked="{Binding AutoSize}" VerticalAlignment="Center" Margin="8,0,0,0"
                               ToolTip="Ticked: the exported width/height is what the sprites measure. Unticked: the two numbers are used instead, which is what a hitbox usually needs (a 32x32 picture of a one-sprite-wide character wants 16x32)." />
+                    <Button Content="Hitbox..." Height="24" Padding="12,0" Margin="14,0,0,0" Click="Hitbox_OnClick"
+                            ToolTip="Draw this object's collision box over its own art: drag the box, drag a handle on any side or corner, or type the numbers. The box IS the exported width/height, plus where the picture sits relative to it." />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0">

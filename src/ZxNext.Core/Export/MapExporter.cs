@@ -197,15 +197,18 @@ public static class MapExporter
     private const int BaseObjectRecordSize = 8;
 
     /// <summary>
-    /// Bytes 8-9: width, height. A palette byte used to sit in front of them, and no longer does: every
-    /// sprite of an object carries its own palette in that object's animation table (see
+    /// Bytes 8-11: width, height, drawX, drawY. A palette byte used to sit in front of them, and no longer
+    /// does: every sprite of an object carries its own palette in that object's animation table (see
     /// <see cref="ObjectAnimationExporter"/>), so a single palette per placement was both redundant and a
-    /// byte per object. Appending more later changes only this number and the IFDEF block that writes them.
+    /// byte per object. drawX/drawY arrived with the hand-drawn collision box (see
+    /// <see cref="Model.MapObjectDefinition.HitX"/>): the record's X/Y is the BOX, so the picture is drawn
+    /// one signed byte away from it. Appending more later changes only this number and the IFDEF block
+    /// that writes them.
     /// </summary>
-    private const int ExtendedObjectRecordSize = 10;
+    private const int ExtendedObjectRecordSize = 12;
 
     private readonly record struct ObjectRecord(byte SpriteIndex, short X, short Y, string SpriteName, byte Type, byte Connect, byte UserByte, string? TypeName, int? LinkTargetIndex, string? LinkTargetName,
-        byte Width, byte Height);
+        byte Width, byte Height, sbyte DrawX, sbyte DrawY);
 
     /// <summary>
     /// One `db` line per object — deliberately NOT run through <see cref="AsmByteDataWriter"/>'s generic
@@ -241,9 +244,16 @@ public static class MapExporter
         sb.Append(";   byte 5   type         -- obj_<name> from object_types.asm (0xFF = no type)\n");
         sb.Append(";   byte 6   connect      -- index of the linked object in this list (0xFF = no link)\n");
         sb.Append(";   byte 7   userByte     -- per-object user byte 0-255, set in the Map Editor\n");
-        sb.Append("; Bytes 8-9 are the EXTENDED block, written inside IFDEF ").Append(ExtendedBytesDefine).Append(" right after each record:\n");
-        sb.Append(";   byte 8   width        -- width in PIXELS (0-255)\n");
-        sb.Append(";   byte 9   height       -- height in PIXELS (0-255)\n");
+        sb.Append("; Bytes 8-11 are the EXTENDED block, written inside IFDEF ").Append(ExtendedBytesDefine).Append(" right after each record:\n");
+        sb.Append(";   byte 8   width        -- width of the BOX in PIXELS (0-255)\n");
+        sb.Append(";   byte 9   height       -- height of the BOX in PIXELS (0-255)\n");
+        sb.Append(";   byte 10  drawX        -- SIGNED: add to X to get where the PICTURE is drawn\n");
+        sb.Append(";   byte 11  drawY        -- SIGNED: add to Y to get where the PICTURE is drawn\n");
+        sb.Append("; X/Y above is the corner of the object's COLLISION BOX, not of its picture: the whole engine knows an\n");
+        sb.Append("; object as X, Y, width, height and nothing else. The box is drawn by hand in the Object Editor; where\n");
+        sb.Append("; the picture sits relative to it is exactly what drawX/drawY carry (they are minus the box offset), so\n");
+        sb.Append("; the drawing routine adds one byte and needs no arithmetic of its own. An object with no box of its own\n");
+        sb.Append("; has drawX = drawY = 0, which is the picture and the box in the same place.\n");
         sb.Append("; There is no palette byte here: each sprite of an object carries its own palette in the object's\n");
         sb.Append("; animation table in object_anims.asm, which is where the drawing routine reads it from anyway.\n");
         sb.Append("; ").Append(ExtendedBytesDefine).Append(" is defined (or left commented out) in ONE place, the project-wide object_types.asm,\n");
@@ -316,7 +326,7 @@ public static class MapExporter
             var yLo = le[0];
             var yHi = le[1];
 
-            sb.Append("; [").Append(i).Append("] ").Append(r.SpriteName).Append(" at (").Append(r.X).Append(',').Append(r.Y).Append(')');
+            sb.Append("; [").Append(i).Append("] ").Append(r.SpriteName).Append(" box at (").Append(r.X).Append(',').Append(r.Y).Append(')');
             if (r.TypeName is not null) sb.Append(", type ").Append(r.TypeName);
             if (r.LinkTargetIndex is { } targetIndex) sb.Append(", links to [").Append(targetIndex).Append("] ").Append(r.LinkTargetName);
             sb.Append('\n');
@@ -330,7 +340,9 @@ public static class MapExporter
             // address label of their own -- they are the tail of the record the label above points at.
             sb.Append("    IFDEF ").Append(ExtendedBytesDefine).Append('\n');
             sb.Append("    db ").Append(r.Width).Append(',').Append(r.Height)
-                .Append("    ; ").Append(r.Width).Append('x').Append(r.Height).Append(" px").Append('\n');
+                .Append(',').Append((byte)r.DrawX).Append(',').Append((byte)r.DrawY)
+                .Append("    ; ").Append(r.Width).Append('x').Append(r.Height).Append(" px box, picture at ")
+                .Append(r.DrawX >= 0 ? "+" : "").Append(r.DrawX).Append(',').Append(r.DrawY >= 0 ? "+" : "").Append(r.DrawY).Append('\n');
             sb.Append("    ENDIF").Append('\n');
         }
 
@@ -441,9 +453,24 @@ public static class MapExporter
             // ObjectPlacementSize, which exists because these two used to disagree).
             var (width, height) = ObjectPlacementSize.Resolve(placement, asset, definition, type);
 
-            records.Add(new ObjectRecord(spriteIndex, (short)placement.X, (short)placement.Y, asset.Name,
+            // The collision box's own offset from the picture, drawn by hand in the Object Editor. The
+            // exported X/Y is the BOX's corner, since that is the only thing the engine knows an object
+            // by, and drawX/drawY are how the drawing routine gets back to the picture: minus the offset.
+            // A lone sprite, or an object nobody drew a box on, has 0 here and exports exactly as before.
+            var hitX = definition?.HitX ?? 0;
+            var hitY = definition?.HitY ?? 0;
+            if (hitX is < -MapObjectDefinition.MaxHitOffset or > MapObjectDefinition.MaxHitOffset ||
+                hitY is < -MapObjectDefinition.MaxHitOffset or > MapObjectDefinition.MaxHitOffset)
+            {
+                return (false, null,
+                    $"Object '{definition!.Name}' has its collision box {hitX},{hitY} px from its picture, further than the " +
+                    $"-{MapObjectDefinition.MaxHitOffset}..{MapObjectDefinition.MaxHitOffset} px a map record's signed drawX/drawY byte holds. " +
+                    "Move the box back towards the picture in the Object Editor.");
+            }
+
+            records.Add(new ObjectRecord(spriteIndex, (short)(placement.X + hitX), (short)(placement.Y + hitY), asset.Name,
                 typeByte, connectByte, placement.UserByte, typeName, linkTargetIndex, linkTargetName,
-                (byte)Math.Clamp(width, 0, 255), (byte)Math.Clamp(height, 0, 255)));
+                (byte)Math.Clamp(width, 0, 255), (byte)Math.Clamp(height, 0, 255), (sbyte)-hitX, (sbyte)-hitY));
         }
 
         return (true, records, null);

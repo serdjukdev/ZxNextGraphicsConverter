@@ -193,6 +193,41 @@ public class MapObjectDefinition
     /// <summary>The height the export writes, same rule as <see cref="WidthPixels"/>.</summary>
     public int HeightPixels => HeightPixelsOverride ?? MeasureBounds().Height;
 
+    /// <summary>
+    /// Where the collision box starts, in pixels right of the ANCHOR sprite's top-left pixel (the first
+    /// sprite in reading order, the one the exported animation table gives no offset). Together with
+    /// <see cref="WidthPixels"/>/<see cref="HeightPixels"/> this is the whole box, and it is set BY HAND in
+    /// the Object Editor (drag its sides, or type the numbers): nothing here is measured or guessed.
+    ///
+    /// <para>
+    /// 0 means the box starts at the anchor, which is what every object did before a box existed, so an old
+    /// project does not move. It may be negative, which puts the box LEFT of the picture, and the box is
+    /// free to be bigger than the picture.
+    /// </para>
+    ///
+    /// <para>
+    /// What the export does with it: the game knows an object only by its box, so a placement's X/Y is the
+    /// box's own corner (picture position + hitbox offset), and the map record carries
+    /// <c>drawX = -HitX</c>, <c>drawY = -HitY</c> so the engine gets back to the picture by adding one byte
+    /// (see <c>MapExporter.ExportObjects</c>).
+    /// </para>
+    /// </summary>
+    public int HitX { get; set; }
+
+    /// <summary>Where the collision box starts in pixels BELOW the anchor sprite's top-left pixel, same rule as <see cref="HitX"/>.</summary>
+    public int HitY { get; set; }
+
+    /// <summary>The anchor's own position within the picture (<see cref="MeasureBounds"/>'s own origin), so the editor can draw the box over the art: the first sprite in reading order, which is where <see cref="HitX"/>/<see cref="HitY"/> are measured from.</summary>
+    public (int X, int Y) AnchorOffset()
+    {
+        var anchor = FirstFrame.SpritesInReadingOrder().Select(s => ((int X, int Y)?)(s.X, s.Y)).FirstOrDefault();
+        var (left, top, _, _) = MeasureBounds();
+        return anchor is { } a ? (a.X - left, a.Y - top) : (0, 0);
+    }
+
+    /// <summary>How far a hitbox may sit from the anchor, either way: the exported drawX/drawY is one SIGNED byte, so anything past this cannot be written at all.</summary>
+    public const int MaxHitOffset = 127;
+
     /// <summary>Every sprite the object's FIRST frame uses, in reading order, skipping empty cells: what the map draws and where its palette comes from.</summary>
     public IEnumerable<Guid> SpriteIds() => FirstFrame.SpritesInReadingOrder().Select(s => s.SpriteAssetId);
 

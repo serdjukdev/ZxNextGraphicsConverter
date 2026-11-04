@@ -226,6 +226,8 @@ public static class ProjectService
                 UserByte = d.UserByte,
                 WidthPixelsOverride = d.WidthPixelsOverride,
                 HeightPixelsOverride = d.HeightPixelsOverride,
+                HitX = d.HitX,
+                HitY = d.HitY,
                 Animations = d.Animations.Select(a => new ObjectAnimationDto
                 {
                     Id = a.Id,
@@ -441,6 +443,8 @@ public static class ProjectService
                 UserByte = d.UserByte,
                 WidthPixelsOverride = d.WidthPixelsOverride,
                 HeightPixelsOverride = d.HeightPixelsOverride,
+                HitX = d.HitX,
+                HitY = d.HitY,
                 Animations = ReadObjectAnimations(d)
             };
             project.ObjectDefinitions.Add(definition);

@@ -70,6 +70,9 @@
                         <CheckBox Content="Extended object bytes (palette, width, height)" IsChecked="{Binding ExtendedObjectBytes}" Margin="0,6,0,0" />
                         <TextBlock Text="Every map's _objects.asm always writes two extra bytes per object (byte 8 width in pixels, byte 9 height in pixels) inside an IFDEF OBJ_EXT block, and a matching &lt;map&gt;_obj_size constant. This checkbox only decides whether the single DEFINE OBJ_EXT line in the project-wide object_types.asm is active or commented out: off (default) assembles the original 8-byte records, on assembles 10-byte ones. Values come from each object's type on the Object Editor's Types tab, unless the placement or its named object says otherwise. Because the switch is one line in one file, you can flip it by hand in the exported source without re-exporting." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,2,0,0" />
 
+                        <CheckBox Content="Export all metatiles, not only the ones placed on the map (this project)" IsChecked="{Binding ExportAllMetatiles}" Margin="0,6,0,0" />
+                        <TextBlock Text="Off (default): each map layer's _metatiles file holds only the metatiles that layer places, numbered 0..N-1 in that order. On: it holds every metatile of the layer's kind (Tilemap or 8bpp Tile), and grid bytes are numbered among all of them, so unplaced metatiles are available at runtime. Saved in the project file, not app-wide." FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,2,0,0" />
+
                         <TextBlock Text="Default dither mode for new imports" FontWeight="Bold" FontSize="12" Margin="0,16,0,0" />
                         <ComboBox ItemsSource="{Binding AvailableDitherModes}" SelectedItem="{Binding DefaultDitherMode}" Width="160" HorizontalAlignment="Left" Margin="0,6,0,0" />
 

@@ -50,6 +50,9 @@ public class ProjectState
     /// </summary>
     public int? MetatileGridSize { get; set; }
 
+    /// <summary>Off: each map layer exports only the metatiles it places. On: every metatile of the layer's kind, numbered by project order.</summary>
+    public bool ExportAllMetatiles { get; set; }
+
     /// <summary>Project-wide list of user-defined map-object categories (e.g. "portal", "character"). See <see cref="ObjectType"/> for why this is project-wide rather than per-map.</summary>
     public List<ObjectType> ObjectTypes { get; } = [];
 

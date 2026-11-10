@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using ZxNext.Core.Export;
+using ZxNext.Core.Project;
 using ZxNext.Core.Quantization;
 using ZxNext.Core.Settings;
 
@@ -49,8 +50,16 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string mapEditorCellGridColorHex;
     [ObservableProperty] private double mapEditorCellGridOpacity;
 
-    public SettingsViewModel()
+    /// <summary>Per-project, not app-wide: stored in the project file, written back by <see cref="SaveToSettings"/>.</summary>
+    [ObservableProperty] private bool exportAllMetatiles;
+
+    private readonly ProjectState _project;
+
+    public SettingsViewModel(ProjectState project)
     {
+        _project = project;
+        exportAllMetatiles = project.ExportAllMetatiles;
+
         var s = AppSettingsStore.Load();
 
         graphicsDataSuffix = s.GraphicsDataSuffixOverride ?? ExportFileNaming.GraphicsDataSuffix;
@@ -123,6 +132,8 @@ public partial class SettingsViewModel : ObservableObject
         s.MapEditorCellGridOpacity = MapEditorCellGridOpacity;
 
         AppSettingsStore.Save(s);
+
+        _project.ExportAllMetatiles = ExportAllMetatiles;
     }
 
     private static string? NullIfDefault(string value, string defaultValue) =>

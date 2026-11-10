@@ -27,6 +27,9 @@ public class ProjectManifestDto
 
     /// <summary>Null in project files saved before this field existed — <see cref="ProjectService.Load"/> infers it from whatever GridSize any already-saved metatile/map happens to use, if any.</summary>
     public int? MetatileGridSize { get; set; }
+
+    /// <summary>Null (absent) means off.</summary>
+    public bool? ExportAllMetatiles { get; set; }
 }
 
 /// <summary>One Tile4Bpp sub-folder's animation target list: see <see cref="Model.TileAnimation"/>. Absent in projects saved before tile animation existed, which simply have no animations.</summary>

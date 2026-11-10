@@ -538,9 +538,11 @@ public partial class MainWindow : Window
     private void Settings_OnClick(object sender, RoutedEventArgs e)
     {
         var wasSubfolderAssetsInEditor = AppSettingsStore.Load().SubfolderAssetsInEditor ?? false;
-        var vm = new SettingsViewModel();
+        var wasExportAllMetatiles = _viewModel.Project.ExportAllMetatiles;
+        var vm = new SettingsViewModel(_viewModel.Project);
         var dialog = new SettingsWindow { DataContext = vm, Owner = this };
         if (dialog.ShowDialog() != true) return;
+        if (_viewModel.Project.ExportAllMetatiles != wasExportAllMetatiles) _viewModel.HasUnsavedChanges = true;
         var nowSubfolderAssetsInEditor = AppSettingsStore.Load().SubfolderAssetsInEditor ?? false;
         if (wasSubfolderAssetsInEditor && !nowSubfolderAssetsInEditor)
             DropSubfolderEditorPlacements(_viewModel.Project);

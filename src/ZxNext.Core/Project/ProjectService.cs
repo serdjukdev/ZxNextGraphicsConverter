@@ -36,7 +36,8 @@ public static class ProjectService
             FormatVersion = CurrentFormatVersion,
             Sprite4BppBank = ToDto(project.Sprite4BppBank),
             Tile4BppBank = ToDto(project.Tile4BppBank),
-            MetatileGridSize = project.MetatileGridSize
+            MetatileGridSize = project.MetatileGridSize,
+            ExportAllMetatiles = project.ExportAllMetatiles ? true : null
         };
 
         // Build into a temp file first, then swap it into place, so a failed/interrupted save
@@ -455,6 +456,8 @@ public static class ProjectService
         // (there should never realistically be a genuine mix, but if hand-edited or from an even older
         // pre-lock build, this picks the majority rather than failing to load), leaving it null (still
         // unlocked) only for a project with neither yet.
+        project.ExportAllMetatiles = dto.ExportAllMetatiles ?? false;
+
         project.MetatileGridSize = dto.MetatileGridSize ??
             project.Metatiles.Select(m => m.GridSize)
                 .Concat(project.Maps.Select(m => m.MetatileGridSize))

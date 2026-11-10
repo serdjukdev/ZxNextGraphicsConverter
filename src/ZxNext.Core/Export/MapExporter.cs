@@ -60,7 +60,8 @@ public static class MapExporter
 
     /// <summary>
     /// Grid bytes reference metatiles by a LOCAL index (0..N-1, N = how many distinct metatiles this
-    /// specific layer of this specific map actually uses) — NOT the metatile's project-wide SortIndex.
+    /// specific layer of this specific map actually uses, or every metatile of the kind when
+    /// <see cref="ProjectState.ExportAllMetatiles"/> is on) — NOT the metatile's project-wide SortIndex.
     /// The two grid layers of one map have entirely independent local index spaces (different
     /// MetatileKind, never compared to each other). Local indices are assigned in ascending
     /// project-wide-SortIndex order, purely for determinism — the exact numbering never needs to match
@@ -79,8 +80,17 @@ public static class MapExporter
         // Every cell always references a real metatile now — including a genuinely "empty-looking" one,
         // which references the Kind+GridSize's reserved blank metatile (see ReservedBlankAssetService) —
         // so there is no sentinel byte to filter out here anymore.
-        var usedSortIndices = layer.MetatileIndices
-            .Select(b => (int)b)
+        // ExportAllMetatiles: unplaced metatiles of this kind/size go in too, so the local index becomes
+        // the rank among all of them instead of among the placed ones.
+        var sortIndexSource = layer.MetatileIndices.Select(b => (int)b);
+        if (project.ExportAllMetatiles)
+        {
+            sortIndexSource = sortIndexSource.Concat(project.Metatiles
+                .Where(m => m.Kind == kind && m.GridSize == map.MetatileGridSize)
+                .Select(m => m.SortIndex));
+        }
+
+        var usedSortIndices = sortIndexSource
             .Distinct()
             .OrderBy(i => i)
             .ToList();

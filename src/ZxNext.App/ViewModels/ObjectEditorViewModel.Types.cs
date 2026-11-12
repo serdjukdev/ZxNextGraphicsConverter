@@ -224,8 +224,7 @@ public partial class ObjectEditorViewModel
         ObjectTypeService.Delete(_project, type);
         HasChanges = true;
         SelectedManagedType = null;
-        RefreshTypeRows();
-        if (SelectedDefinition is { } current) SelectedType = current.TypeId is { } id ? _project.ObjectTypes.FirstOrDefault(t => t.Id == id) : null;
+        RefreshTypeRows();   // ...which also re-selects the object's own type in the Objects tab's combo
         StatusText = $"Deleted type '{deletedName}'.";
         IsStatusError = false;
     }

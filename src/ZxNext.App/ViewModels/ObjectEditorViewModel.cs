@@ -398,18 +398,27 @@ public partial class ObjectEditorViewModel : ObservableObject
         RefreshSpritePalette();
     }
 
+    /// <summary>Rebuilds the Type combo's list, then re-selects the object's own type. Guarded: clearing the list makes the combo push null, which must not reach the object.</summary>
     private void RefreshTypes()
     {
+        var wasLoading = _loadingSelection;
+        _loadingSelection = true;
         Types.Clear();
         Types.Add(null); // "no type"
         foreach (var type in _project.ObjectTypes) Types.Add(type);
+        SelectedType = SelectedDefinition?.TypeId is { } id ? _project.ObjectTypes.FirstOrDefault(t => t.Id == id) : null;
+        _loadingSelection = wasLoading;
     }
 
+    /// <summary>Rebuilds the Subtype combo's list. Guarded for the same reason: a pushed null would clear the subtype bits of the user byte.</summary>
     private void RefreshSubtypes()
     {
+        var wasLoading = _loadingSelection;
+        _loadingSelection = true;
         Subtypes.Clear();
         Subtypes.Add(null); // the "none" row
         foreach (var subtype in SubtypesOfSelectedType.OrderBy(st => st.BitIndex)) Subtypes.Add(subtype);
+        _loadingSelection = wasLoading;
         SyncSelectedSubtypeFromUserByte();
         SyncUserByteControls();
     }

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: a click outside an open right-click menu went on into whatever lay under the cursor, and if that was another list, the whole window stopped responding to the mouse (clicks, wheel, checkboxes, buttons) except that one list, until the window title bar was clicked. In the Metatile Editor: right-click a metatile, then click a tile in the palette. The click that closes a right-click menu now only closes it, as in other Windows programs, in every window of the app.
+
 ## v0.7.0 (2026-11-12)
 
 **Compatibility, read before updating.** Projects saved by v0.6.0 open as they are, with nothing to rebuild: old objects become a one-frame animation named "main", and objects left off-map by the old resize bug are removed on open (the dialog says how many). Back the project up first anyway: once saved by v0.7.0 it should not be opened in v0.6.0 again, since the older build does not know objects, animations, hitboxes or subtypes and would drop them on its next save. The EXPORT changed in ways your Z80 code may notice:

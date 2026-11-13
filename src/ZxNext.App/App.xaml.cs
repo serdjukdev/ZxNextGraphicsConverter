@@ -25,6 +25,10 @@ public partial class App : Application
             args.Handled = true;
         };
 
+        EventManager.RegisterClassHandler(typeof(System.Windows.Controls.ContextMenu), System.Windows.Input.Mouse.LostMouseCaptureEvent,
+            new System.Windows.Input.MouseEventHandler(OnContextMenuLostMouse), handledEventsToo: true);
+        System.Windows.Input.InputManager.Current.PreProcessInput += DropMenuClosingClick;
+
         var services = new ServiceCollection();
         services.AddSingleton<IImageDecoder, WpfImageDecoder>();
         services.AddSingleton<ProjectTreeViewModel>();
@@ -54,6 +58,32 @@ public partial class App : Application
             mainWindow.EnsureProjectOnFirstRun();
         }
     }
+
+    /// <summary>Set when a context menu lets go of the mouse, cleared once the input that closed it has been processed.</summary>
+    private static bool _contextMenuJustClosed;
+
+    /// <summary>In: a context menu giving up the mouse anywhere in the app. A click outside the menu does this
+    /// right before the click itself is routed (its Closed event comes too late), so it marks that click to be dropped.</summary>
+    private static void OnContextMenuLostMouse(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        _contextMenuJustClosed = true;
+        Current.Dispatcher.BeginInvoke(() => _contextMenuJustClosed = false, System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// In: every input event, before routing. Drops the mouse press that closed a context menu, so a click
+    /// outside an open menu only closes it, as in any Windows program. Without this the press goes on into
+    /// whatever lies under the cursor (another list), its button-up is lost in the closing menu, and that
+    /// list keeps the mouse for good: the rest of the window stops getting clicks and wheel.
+    /// </summary>
+    private static void DropMenuClosingClick(object sender, System.Windows.Input.PreProcessInputEventArgs e)
+    {
+        if (!_contextMenuJustClosed) return;
+        if (e.StagingItem.Input is not System.Windows.Input.MouseButtonEventArgs { ButtonState: System.Windows.Input.MouseButtonState.Pressed }) return;
+        _contextMenuJustClosed = false;
+        e.Cancel();
+    }
+
 
     protected override void OnExit(ExitEventArgs e)
     {

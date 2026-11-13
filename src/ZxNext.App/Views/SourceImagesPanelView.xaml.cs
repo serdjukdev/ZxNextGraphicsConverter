@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -19,10 +19,26 @@ public partial class SourceImagesPanelView : UserControl
         InitializeComponent();
     }
 
+    /// <summary>A row was clicked (not its delete button): the owner shows that picture in the viewer.</summary>
+    public event Action<SourceImageViewModel>? PreviewRequested;
+
     private void Item_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         _dragStart = e.GetPosition(null);
-        _dragArmed = FindAncestorDataContext<SourceImageViewModel>(e.OriginalSource as DependencyObject) is not null;
+        var item = FindAncestorDataContext<SourceImageViewModel>(e.OriginalSource as DependencyObject);
+        _dragArmed = item is not null;
+        if (item is not null && !IsInsideButton(e.OriginalSource as DependencyObject)) PreviewRequested?.Invoke(item);
+    }
+
+    /// <summary>In: the clicked element. True if it sits inside a Button (the row's delete "x").</summary>
+    private static bool IsInsideButton(DependencyObject? source)
+    {
+        while (source is not null)
+        {
+            if (source is System.Windows.Controls.Primitives.ButtonBase) return true;
+            source = source is System.Windows.Media.Visual ? System.Windows.Media.VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+        }
+        return false;
     }
 
     private void Item_OnPreviewMouseMove(object sender, MouseEventArgs e)

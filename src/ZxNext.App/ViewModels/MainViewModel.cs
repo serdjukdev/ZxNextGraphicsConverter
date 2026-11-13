@@ -103,6 +103,11 @@ public partial class MainViewModel : ObservableObject
 
         SourceImages.SourceImageAdded += source => _project.SourceImages.Add(source);
         SourceImages.DeleteImageRequested += DeleteSourceImage;
+        // The previewed source image was removed: show the selected asset again.
+        SourceImages.Images.CollectionChanged += (_, _) =>
+        {
+            if (_previewedSourceId is { } id && SourceImages.Images.All(i => i.Model.Id != id)) RestoreAssetPreview();
+        };
         PaletteStrip.OptimizeBankRequested += async () => await OptimizeCurrentBankAsync();
 
         RefreshRecentProjects();
@@ -1810,7 +1815,7 @@ public partial class MainViewModel : ObservableObject
     {
         if (_selectedAsset is null) return;
         var rendered = NextBitmapRenderer.Render(_selectedAsset, _project);
-        ImageViewer.Bitmap = rendered;
+        if (!ImageViewer.IsSourcePreview) ImageViewer.Bitmap = rendered; // a source preview stays until the user goes back to the asset
         PixelEditor.Bitmap = rendered;
         // Same bitmap, no extra render cost — keeps the tree row's thumbnail in sync with pixel edits.
         if (Tree.FindLeafNode(_selectedAsset.Id) is { } node) node.Thumbnail = rendered;
@@ -2136,8 +2141,36 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>Id of the source image the viewer currently shows (see <see cref="ShowSourceImagePreview"/>), null while it shows the selected asset.</summary>
+    private Guid? _previewedSourceId;
+
+    /// <summary>In: a Source Images row that was clicked. Shows that whole picture in the viewer for a quick look; the selected asset, pixel editor and palette stay as they are.</summary>
+    public void ShowSourceImagePreview(SourceImageViewModel image)
+    {
+        if (image.Thumbnail is null) return;
+        _previewedSourceId = image.Model.Id;
+        var users = _project.Assets.Count(a => a.SourceImageId == image.Model.Id);
+        ImageViewer.Bitmap = image.Thumbnail;
+        ImageViewer.SelectedAssetName = $"Source image: {image.FileName} ({image.Width}x{image.Height})";
+        ImageViewer.UsageInfo = users == 0 ? "No asset is made from it." : $"{users} asset(s) made from it. Click an item in the project tree to see it again.";
+        ImageViewer.IsSourcePreview = true;
+    }
+
+    /// <summary>Puts the selected asset back into the viewer after a source preview (a click in the tree or the pixel editor). No-op otherwise; leaves the undo stack alone.</summary>
+    public void RestoreAssetPreview()
+    {
+        if (!ImageViewer.IsSourcePreview) return;
+        _previewedSourceId = null;
+        ImageViewer.IsSourcePreview = false;
+        ImageViewer.Bitmap = _selectedAsset is null ? null : PixelEditor.Bitmap;
+        ImageViewer.SelectedAssetName = _selectedAsset?.Name ?? "(no selection)";
+        ImageViewer.UsageInfo = _selectedAsset is null ? null : ComputeUsageInfo(_selectedAsset);
+    }
+
     private void ResetEditorsAfterProjectChange()
     {
+        _previewedSourceId = null;
+        ImageViewer.IsSourcePreview = false;
         _selectedAsset = null;
         _undoStack.Clear();
         ImageViewer.Bitmap = null;
@@ -2228,6 +2261,8 @@ public partial class MainViewModel : ObservableObject
 
     private void OnSelectionChanged()
     {
+        _previewedSourceId = null;
+        ImageViewer.IsSourcePreview = false;
         var node = Tree.SelectedNode;
         var asset = node?.AssetId is { } id ? _project.Assets.FirstOrDefault(a => a.Id == id) : null;
         _selectedAsset = asset;

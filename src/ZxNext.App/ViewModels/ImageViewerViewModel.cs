@@ -1,4 +1,4 @@
-using System.Windows.Media.Imaging;
+﻿using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace ZxNext.App.ViewModels;
@@ -15,4 +15,8 @@ public partial class ImageViewerViewModel : ObservableObject
     /// <summary>Read-only "where is this actually used" summary for a tile/sprite (e.g. "Used in: 3 metatiles, 2 maps" or "Not referenced by any metatile or map") — set by MainViewModel alongside SelectedAssetName. Deliberately informational only: this app has no way to know about game-code-only references (e.g. animation frames only ever placed at runtime, never on a map), so it's never used to gate or drive a delete decision, unlike the equivalent metatile "unused" check.</summary>
     [ObservableProperty]
     private string? usageInfo;
+
+    /// <summary>True while the viewer shows a source image (clicked in Source Images) instead of the selected asset: shown full-size, no eyedropper.</summary>
+    [ObservableProperty]
+    private bool isSourcePreview;
 }

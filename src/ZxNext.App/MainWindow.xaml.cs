@@ -52,6 +52,10 @@ public partial class MainWindow : Window
         PixelEditorViewControl.PaintStrokeEnded += _viewModel.EndPaintStroke;
         PixelEditorViewControl.PixelPicked += _viewModel.PickColorAt;
         ImageViewerViewControl.PixelPicked += _viewModel.PickColorAt;
+        // A click on a source image previews it in the viewer; a click in the tree or the pixel editor brings the asset back.
+        SourceImagesPanelViewControl.PreviewRequested += _viewModel.ShowSourceImagePreview;
+        ProjectTreeViewControl.PreviewMouseLeftButtonDown += (_, _) => _viewModel.RestoreAssetPreview();
+        PixelEditorViewControl.PreviewMouseLeftButtonDown += (_, _) => _viewModel.RestoreAssetPreview();
         _viewModel.PaletteStrip.SwatchDoubleClicked += OnPaletteSwatchDoubleClicked;
         _viewModel.ReQuantizeRequested += OnReQuantizeRequested;
         _viewModel.HelpRequested += OnHelpRequested;

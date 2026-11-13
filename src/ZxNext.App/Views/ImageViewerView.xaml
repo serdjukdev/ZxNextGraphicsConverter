@@ -1,4 +1,4 @@
-<UserControl x:Class="ZxNext.App.Views.ImageViewerView"
+﻿<UserControl x:Class="ZxNext.App.Views.ImageViewerView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
@@ -12,12 +12,26 @@
                        HorizontalAlignment="Center" FontSize="13" Margin="4" />
             <TextBlock DockPanel.Dock="Top" Text="{Binding UsageInfo}"
                        HorizontalAlignment="Center" FontSize="11" Foreground="#666" Margin="4,0,4,4" TextWrapping="Wrap" />
-            <Image x:Name="PixelImage" Source="{Binding Bitmap}" Stretch="Uniform" MaxWidth="256" MaxHeight="256"
+            <Image x:Name="PixelImage" Source="{Binding Bitmap}" Stretch="Uniform"
                    RenderOptions.BitmapScalingMode="NearestNeighbor"
                    MouseLeftButtonDown="PixelImage_OnMouseLeftButtonDown"
                    MouseMove="PixelImage_OnMouseMove"
                    MouseLeftButtonUp="PixelImage_OnMouseLeftButtonUp"
-                   LostMouseCapture="PixelImage_OnLostMouseCapture" />
+                   LostMouseCapture="PixelImage_OnLostMouseCapture">
+                <!-- An asset is shown at most 256 px; a source image (often large) gets the whole viewer. -->
+                <Image.Style>
+                    <Style TargetType="Image">
+                        <Setter Property="MaxWidth" Value="256" />
+                        <Setter Property="MaxHeight" Value="256" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSourcePreview}" Value="True">
+                                <Setter Property="MaxWidth" Value="Infinity" />
+                                <Setter Property="MaxHeight" Value="Infinity" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Image.Style>
+            </Image>
         </DockPanel>
     </Border>
 </UserControl>

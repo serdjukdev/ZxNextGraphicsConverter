@@ -639,7 +639,8 @@ public partial class MapEditorViewModel : ObservableObject
         if (value is not null) SelectedPaletteTemplate = null;
         RefreshPaintAttributes();
         // Fill tool with an area selected: picking a metatile fills the area with it (try one, then another).
-        if (value is not null && IsFillToolActive && GridSelection is not null) FillGridSelection(erase: false);
+        // Not for the eyedropper: taking a metatile off the map only picks it.
+        if (value is not null && !_isEyedropping && IsFillToolActive && GridSelection is not null) FillGridSelection(erase: false);
     }
 
     partial void OnSelectedPaletteTemplateChanged(MapTemplateListItemViewModel? value)
@@ -1176,6 +1177,79 @@ public partial class MapEditorViewModel : ObservableObject
         if (isTileMode) SetCellAttribute(layer, index, forceErase ? (byte)0 : ResolvePaintAttributeByte());
 
         RenderPreviewRegion(new Int32Rect(col * cellPixelSize, row * cellPixelSize, cellPixelSize, cellPixelSize));
+    }
+
+    /// <summary>True while <see cref="PickAt"/> sets the palette selection, so that pick never triggers the Fill tool's refill.</summary>
+    private bool _isEyedropping;
+
+    /// <summary>
+    /// Alt+click eyedropper. In: map pixel. Grid layer: selects the metatile in that cell in the palette
+    /// (switching to the Metatiles tab), and on a 1x1 Tilemap also copies the cell's mirror/rotate/palette
+    /// into "Paint with". Sprite layer: selects the object (or plain sprite) the clicked placement was made
+    /// from. The active tool stays as it is.
+    /// </summary>
+    public void PickAt(int pixelX, int pixelY)
+    {
+        if (SelectedMap is null || pixelX < 0 || pixelY < 0) return;
+        var map = SelectedMap.Map;
+
+        if (ActiveLayer == MapLayerKind.Sprites)
+        {
+            if (FindSpriteAt(pixelX, pixelY) is not { } hit) return;
+            if (hit.ObjectDefinitionId is { } definitionId && ObjectPalette.FirstOrDefault(o => o.Definition.Id == definitionId) is { } pickedObject)
+            {
+                IsObjectPaletteActive = true;
+                SelectedPaletteSprite = null;
+                SelectedPaletteObject = pickedObject;
+                StatusText = $"Picked object '{pickedObject.Name}'.";
+                IsStatusError = false;
+            }
+            else if (SpritePalette.FirstOrDefault(sp => sp.Asset.Id == hit.SpriteAssetId) is { } pickedSprite)
+            {
+                IsObjectPaletteActive = false;
+                SelectedPaletteObject = null;
+                SelectedPaletteSprite = pickedSprite;
+                StatusText = $"Picked sprite '{pickedSprite.Name}'.";
+                IsStatusError = false;
+            }
+            else
+            {
+                StatusText = "That object's sprite is not in the palette (a sub-folder sprite hidden by Settings).";
+                IsStatusError = true;
+            }
+            return;
+        }
+
+        var cellPixelSize = map.MetatileGridSize * 8;
+        var col = pixelX / cellPixelSize;
+        var row = pixelY / cellPixelSize;
+        if (col >= map.Width || row >= map.Height) return;
+
+        var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
+        var index = row * map.Width + col;
+        if (MetatilePalette.FirstOrDefault(m => m.Metatile.SortIndex == layer.MetatileIndices[index]) is not { } picked) return;
+
+        ShowTemplatePalette = false;
+        _isEyedropping = true;
+        try
+        {
+            SelectedPaletteMetatile = picked;
+        }
+        finally
+        {
+            _isEyedropping = false;
+        }
+
+        if (ActiveLayer == MapLayerKind.Tilemap && map.MetatileGridSize == 1 && PaintAttributes is { } attributes)
+        {
+            var (mirrorX, mirrorY, rotate, paletteSlot) = CellAttributePacking.Unpack(layer.CellAttributes[index]);
+            attributes.MirrorX = mirrorX;
+            attributes.MirrorY = mirrorY;
+            attributes.Rotate = rotate;
+            attributes.PaletteSlotOverride = paletteSlot;
+        }
+        StatusText = $"Picked '{picked.Name}'.";
+        IsStatusError = false;
     }
 
     /// <summary>

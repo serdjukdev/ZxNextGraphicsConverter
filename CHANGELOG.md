@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added: an eyedropper in the Map Editor. Alt+click, with any tool, picks what is under the cursor into the palette and changes nothing on the map: a cell's metatile on a grid layer (with its mirror/rotate/palette into "Paint with" on a 1x1 Tilemap), or the object or plain sprite a placement was made from on the Sprite layer. With Fill and a selected area, picking does not refill it.
+- Added: clicking a row in the Source Images panel shows that whole picture in the big preview on the right, as large as the preview allows, with its name, size and how many assets come from it, for a quick look at a big sheet. A click in the project tree or the pixel editor brings the selected asset back; nothing else changes.
+
 - Added: Escape closes any window, not only the dialogs that already had a Cancel or Close button: the Metatile Editor, the Map Editor and Help now close on it too. The main window and the progress window of a running job do not, and Escape still only closes an open dropdown, popup or drag first.
 
 - Changed: the Map Editor has TOOLS now, Brush, Fill and Select, as three buttons under the palette. Exactly one is on at a time and picking one switches the previous one off (Link, Set Type and Set User Byte belong to the same group). Brush paints cell by cell as before and has no selection any more: Alt+drag no longer selects, use the Select tool, where a plain drag selects or moves and Shift at release copies. Ctrl+V switches to Select by itself, so a pasted block can be dragged into place straight away.

@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using ZxNext.App.ViewModels;
@@ -45,7 +45,7 @@ public partial class ImageViewerView : UserControl
 
     private void TryPickAt(Point pos)
     {
-        if (DataContext is not ImageViewerViewModel vm || vm.Bitmap is null) return;
+        if (DataContext is not ImageViewerViewModel vm || vm.Bitmap is null || vm.IsSourcePreview) return; // a source preview is not an asset: nothing to pick
         if (PixelImage.ActualWidth <= 0 || PixelImage.ActualHeight <= 0) return;
 
         var x = (int)(pos.X / PixelImage.ActualWidth * vm.Bitmap.PixelWidth);

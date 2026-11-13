@@ -82,6 +82,7 @@ public static class ShortcutReference
         new("Map Editor", "Ctrl+V", "Paste", "Pastes the last Ctrl+C'd selection under the cursor, snapped to the tile grid, and selects it immediately (switching to the Select tool) so it can be dragged into place. Works across maps: switch to a different map, then Ctrl+V, to copy a piece from one map to another: no remapping needed, since metatiles/tiles/sprites are project-wide. A pasted sprite's link (if any) is not carried over, same as a same-map copy."),
         new("Map Editor", "Delete", "Delete selection", "Clears the current selection's contents: grid cells become empty, selected sprites are removed."),
         new("Map Editor", "Ctrl+click/drag", "Force-erase", "With the Brush, erases on the active layer, including mid-drag. With Fill, fills with blank."),
+        new("Map Editor", "Alt+click", "Eyedropper", "Picks the metatile (or object/sprite on the Sprite layer) under the cursor into the palette, with any tool; on a 1x1 Tilemap also its mirror/rotate/palette."),
         new("Map Editor", "Shift (placing a sprite)", "Snap to grid", "Snaps the new sprite's position to the faint 8x8 tile grid."),
         new("Map Editor", "Select tool: drag", "Select / move", "Drag on empty space to draw a new selection; drag from inside the current selection to move it."),
         new("Map Editor", "Select tool: Shift at release", "Copy selection", "Dragging from inside a selection copies instead of moving when Shift is held as you let go."),

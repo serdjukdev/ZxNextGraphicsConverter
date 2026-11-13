@@ -321,6 +321,14 @@ public partial class MapEditorWindow : Window
             return;
         }
 
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
+        {
+            // Eyedropper, with any tool: picks what is under the cursor into the palette, changes nothing on the map.
+            vm.PickAt(pixelX, pixelY);
+            e.Handled = true;
+            return;
+        }
+
         if (vm.IsFillToolActive)
         {
             // Decided on release: a drag that left the start cell becomes a rectangle fill, anything else a

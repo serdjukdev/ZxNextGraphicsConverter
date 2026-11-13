@@ -29,6 +29,9 @@ public partial class MapEditorWindow : Window
 
     private SelectDragMode _selectDragMode;
     private Point _dragStartPixel;
+
+    /// <summary>Fill tool: where the left button went down, until it is released (null otherwise).</summary>
+    private Point? _fillPressPixel;
     private Point _dragCurrentPixel;
 
     /// <summary>Which object the Set Type popup is currently open for — set right before opening <see cref="SetTypePopup"/>, read by <see cref="SetTypePopupItem_OnClick"/> once the user picks a type from it.</summary>
@@ -256,6 +259,21 @@ public partial class MapEditorWindow : Window
         vm.SaveSelectionAsTemplate(dialog.TemplateName);
     }
 
+    /// <summary>Template right-click "Rename...": asks for the new name, refusing one another template already has.</summary>
+    private void RenameTemplateMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MapEditorViewModel vm || sender is not MenuItem { DataContext: MapTemplateListItemViewModel item }) return;
+        var dialog = new RenameAssetWindow(item.Name, candidate => vm.IsTemplateNameTaken(candidate, item.Template),
+            "Another template already uses this name.") { Owner = this, Title = "Rename template" };
+        if (dialog.ShowDialog() == true) vm.RenameTemplate(item.Template, dialog.NewName);
+    }
+
+    /// <summary>Template right-click "Delete".</summary>
+    private void DeleteTemplateMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MapEditorViewModel vm && sender is MenuItem { DataContext: MapTemplateListItemViewModel item }) vm.DeleteTemplate(item.Template);
+    }
+
     private void ResizeMap_OnClick(object sender, RoutedEventArgs e)
     {
         if (DataContext is not MapEditorViewModel vm || vm.SelectedMap is null) return;
@@ -303,7 +321,16 @@ public partial class MapEditorWindow : Window
             return;
         }
 
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
+        if (vm.IsFillToolActive)
+        {
+            // Decided on release: a drag that left the start cell becomes a rectangle fill, anything else a
+            // connected-area fill (see MapCanvasHost_OnMouseMove / FinishFillGesture).
+            _fillPressPixel = new Point(pixelX, pixelY);
+            MapCanvasHost.CaptureMouse();
+            return;
+        }
+
+        if (vm.IsSelectToolActive)
         {
             StartSelectDrag(vm, pixelX, pixelY);
             MapCanvasHost.CaptureMouse();
@@ -381,6 +408,19 @@ public partial class MapEditorWindow : Window
         _lastCursorPixel = new Point(pixelX, pixelY);
         UpdateCursorPositionText(vm, pixelX, pixelY);
 
+        // Fill tool: once the press leaves its start cell it turns into a marquee for a rectangle fill.
+        if (_fillPressPixel is { } press && _selectDragMode == SelectDragMode.None && e.LeftButton == MouseButtonState.Pressed
+            && vm.SelectedMap is not null)
+        {
+            var cellSize = GetCellPixelSize(vm);
+            if (FloorDivCell(pixelX, cellSize) != FloorDivCell((int)press.X, cellSize) || FloorDivCell(pixelY, cellSize) != FloorDivCell((int)press.Y, cellSize))
+            {
+                vm.ClearSelection();
+                _selectDragMode = SelectDragMode.Marquee;
+                _dragStartPixel = press;
+            }
+        }
+
         if (_selectDragMode != SelectDragMode.None)
         {
             if (e.LeftButton == MouseButtonState.Pressed)
@@ -391,7 +431,7 @@ public partial class MapEditorWindow : Window
             return;
         }
 
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
+        if (vm.IsSelectToolActive)
         {
             HoverOverlay.Children.Clear(); // hovering with Alt held (not yet dragging) would start a selection, not paint/erase — no paint/erase preview to show
             return;
@@ -694,6 +734,20 @@ public partial class MapEditorWindow : Window
             return;
         }
 
+        // Fill tool: just the clicked cell, red while Ctrl (fill with blank) is held.
+        if (vm.IsFillToolActive)
+        {
+            var map = vm.SelectedMap.Map;
+            var cellPixelSize = map.MetatileGridSize * 8;
+            var col = pixelX / cellPixelSize;
+            var row = pixelY / cellPixelSize;
+            if (pixelX < 0 || pixelY < 0 || col >= map.Width || row >= map.Height) return;
+            var erase = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+            DrawHighlightRect(col * cellPixelSize, row * cellPixelSize, cellPixelSize, cellPixelSize,
+                erase ? Brushes.Red : Brushes.DodgerBlue, erase ? Color.FromArgb(64, 255, 0, 0) : Color.FromArgb(80, 30, 144, 255));
+            return;
+        }
+
         // Template stamp ghost: the footprint that will be written on click, same "shown whenever ready,
         // Ctrl bypasses to the erase preview instead" shape as the sprite-placement preview above.
         if (vm.IsGridLayerActive && vm.SelectedPaletteTemplate is not null && !Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
@@ -789,12 +843,36 @@ public partial class MapEditorWindow : Window
             return;
         }
 
+        if (_fillPressPixel is not null && DataContext is MapEditorViewModel fillVm)
+        {
+            FinishFillGesture(fillVm);
+            return;
+        }
+
         EndDrawing();
+    }
+
+    /// <summary>Fill tool release. A drag commits its rectangle as the selection and fills it; a click fills the connected area under the press. Ctrl fills with blank.</summary>
+    private void FinishFillGesture(MapEditorViewModel vm)
+    {
+        if (_fillPressPixel is not { } press) return;
+        _fillPressPixel = null;
+        var erase = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+        if (_selectDragMode == SelectDragMode.Marquee)
+        {
+            EndSelectDrag(vm);
+            vm.FillGridSelection(erase);
+        }
+        else
+        {
+            vm.FloodFillAt((int)press.X, (int)press.Y, erase);
+        }
+        MapCanvasHost.ReleaseMouseCapture();
     }
 
     private void MapCanvasHost_OnLostMouseCapture(object sender, MouseEventArgs e)
     {
-        if (_isDrawing || _selectDragMode != SelectDragMode.None) EndDrawing();
+        if (_isDrawing || _selectDragMode != SelectDragMode.None || _fillPressPixel is not null) EndDrawing();
     }
 
     /// <summary>
@@ -1076,6 +1154,7 @@ public partial class MapEditorWindow : Window
 
     private void EndDrawing()
     {
+        _fillPressPixel = null; // capture lost mid fill gesture: drop it, fill nothing
         if (_selectDragMode != SelectDragMode.None)
         {
             MapCanvasHost.ReleaseMouseCapture();

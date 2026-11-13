@@ -254,7 +254,13 @@ public partial class MapEditorViewModel : ObservableObject
     {
         get
         {
-            if (HasSelection) return "Selection active — Alt-drag inside it to move (Alt+Shift to copy). Delete key or the button below clears its contents.";
+            if (IsFillToolActive) return HasSelection
+                ? "Fill: picking another metatile refills the selection. Click inside it to fill the connected area there, drag for a new area. Ctrl fills with blank."
+                : "Fill: click to fill the connected area of the same tile, or drag to fill a rectangle. Ctrl fills with blank.";
+            if (IsSelectToolActive) return HasSelection
+                ? "Select: drag inside the selection to move it (hold Shift when letting go to copy), drag elsewhere for a new one."
+                : "Select: drag on the canvas to select an area.";
+            if (HasSelection) return "Selection active: the Delete key or the button below clears its contents.";
             if (IsPaintReady) return IsGridLayerActive ? "Ready — click or drag on the canvas to paint." : "Ready — click on the canvas to place it.";
             return IsGridLayerActive ? "Pick something below, then click or drag on the canvas." : "Pick something below, then click on the canvas.";
         }
@@ -329,6 +335,63 @@ public partial class MapEditorViewModel : ObservableObject
     /// <summary>True while the Set User Byte tool is armed (Sprites layer only) — every canvas click on an object opens a small dialog to edit its raw <see cref="SpritePlacement.UserByte"/> (0-255, exported as the object's 8th byte). Same "stays armed for the next object" behavior as Set Type, for the same batch-tagging reason. See <see cref="ToggleSetUserByteTool"/>/<see cref="ApplyUserByte"/>.</summary>
     [ObservableProperty]
     private bool isSetUserByteToolActive;
+
+    /// <summary>Fill tool (grid layers only): a click fills the connected area of same cells, see <see cref="FloodFillAt"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanvasHintText))]
+    [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
+    private bool isFillToolActive;
+
+    /// <summary>Select tool: drag for a marquee, or move the selection when the drag starts inside it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanvasHintText))]
+    [NotifyPropertyChangedFor(nameof(CanvasHintForeground))]
+    private bool isSelectToolActive;
+
+    /// <summary>Brush is the default tool: on whenever no other tool is.</summary>
+    public bool IsBrushToolActive => !IsFillToolActive && !IsSelectToolActive && !IsLinkToolActive && !IsSetTypeToolActive && !IsSetUserByteToolActive;
+
+    // Tools are exclusive: turning one on turns every other one off.
+    partial void OnIsLinkToolActiveChanged(bool value) => OnToolChanged(value, nameof(IsLinkToolActive));
+    partial void OnIsSetTypeToolActiveChanged(bool value) => OnToolChanged(value, nameof(IsSetTypeToolActive));
+    partial void OnIsSetUserByteToolActiveChanged(bool value) => OnToolChanged(value, nameof(IsSetUserByteToolActive));
+    partial void OnIsFillToolActiveChanged(bool value) => OnToolChanged(value, nameof(IsFillToolActive));
+    partial void OnIsSelectToolActiveChanged(bool value) => OnToolChanged(value, nameof(IsSelectToolActive));
+
+    /// <summary>In: which tool flag changed and its new value. Switches the others off when one goes on.</summary>
+    private void OnToolChanged(bool value, string tool)
+    {
+        if (value)
+        {
+            if (tool != nameof(IsLinkToolActive)) CancelLinkTool();
+            if (tool != nameof(IsSetTypeToolActive)) IsSetTypeToolActive = false;
+            if (tool != nameof(IsSetUserByteToolActive)) IsSetUserByteToolActive = false;
+            if (tool != nameof(IsFillToolActive)) IsFillToolActive = false;
+            if (tool != nameof(IsSelectToolActive)) IsSelectToolActive = false;
+        }
+        OnPropertyChanged(nameof(IsBrushToolActive));
+    }
+
+    /// <summary>Back to the default Brush: switches every other tool off and drops the selection (Brush paints cell by cell, it has none).</summary>
+    [RelayCommand]
+    private void SelectBrushTool()
+    {
+        ClearSelection();
+        CancelLinkTool();
+        IsSetTypeToolActive = false;
+        IsSetUserByteToolActive = false;
+        IsFillToolActive = false;
+        IsSelectToolActive = false;
+    }
+
+    [RelayCommand]
+    private void SelectFillTool()
+    {
+        if (IsGridLayerActive) IsFillToolActive = true;
+    }
+
+    [RelayCommand]
+    private void SelectSelectTool() => IsSelectToolActive = true;
 
     public MapEditorViewModel(ProjectState project)
     {
@@ -565,6 +628,7 @@ public partial class MapEditorViewModel : ObservableObject
         CancelLinkTool(); // the Link tool only makes sense on the Sprites layer
         CancelSetTypeTool(); // ditto for Set Type
         CancelSetUserByteTool(); // ditto for Set User Byte
+        if (!IsGridLayerActive) IsFillToolActive = false; // Fill only works on a grid layer
         RefreshMetatilePalette();
         RefreshTemplatePalette();
         RefreshPaintAttributes();
@@ -574,6 +638,8 @@ public partial class MapEditorViewModel : ObservableObject
     {
         if (value is not null) SelectedPaletteTemplate = null;
         RefreshPaintAttributes();
+        // Fill tool with an area selected: picking a metatile fills the area with it (try one, then another).
+        if (value is not null && IsFillToolActive && GridSelection is not null) FillGridSelection(erase: false);
     }
 
     partial void OnSelectedPaletteTemplateChanged(MapTemplateListItemViewModel? value)
@@ -1112,6 +1178,88 @@ public partial class MapEditorViewModel : ObservableObject
         RenderPreviewRegion(new Int32Rect(col * cellPixelSize, row * cellPixelSize, cellPixelSize, cellPixelSize));
     }
 
+    /// <summary>
+    /// Fill tool click. In: map pixel, erase (Ctrl held: fill with the blank metatile). Fills every cell
+    /// 4-connected to the clicked one that holds the same metatile (and, on a 1x1 Tilemap, the same
+    /// mirror/rotate/palette byte), with the selected metatile and the "Paint with" attributes. With a
+    /// selection, only inside it; a click outside it drops the selection first. One undo step.
+    /// </summary>
+    public void FloodFillAt(int pixelX, int pixelY, bool erase)
+    {
+        if (SelectedMap is null || !IsGridLayerActive || pixelX < 0 || pixelY < 0) return;
+        var map = SelectedMap.Map;
+        var cellPixelSize = map.MetatileGridSize * 8;
+        var startCol = pixelX / cellPixelSize;
+        var startRow = pixelY / cellPixelSize;
+        if (startCol >= map.Width || startRow >= map.Height) return;
+
+        // A click outside the selection drops it and fills on the whole map.
+        if (GridSelection is { } selection && !selection.Contains(startCol, startRow)) ClearSelection();
+        var bounds = GridSelection ?? new CellRect(0, 0, map.Width - 1, map.Height - 1);
+
+        byte newValue;
+        if (erase)
+        {
+            newValue = BlankValueFor(ActiveLayer == MapLayerKind.Tilemap ? MetatileKind.FourBpp : MetatileKind.EightBpp, map.MetatileGridSize);
+        }
+        else
+        {
+            if (SelectedPaletteMetatile is null)
+            {
+                StatusText = "Fill paints with a metatile: pick one in the Metatiles palette first.";
+                IsStatusError = true;
+                return;
+            }
+            newValue = (byte)SelectedPaletteMetatile.Metatile.SortIndex;
+        }
+
+        var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
+        var isTileMode = ActiveLayer == MapLayerKind.Tilemap && map.MetatileGridSize == 1;
+        var newAttr = isTileMode && !erase ? ResolvePaintAttributeByte() : (byte)0;
+
+        var startIndex = startRow * map.Width + startCol;
+        var oldValue = layer.MetatileIndices[startIndex];
+        var oldAttr = isTileMode ? layer.CellAttributes[startIndex] : (byte)0;
+        if (oldValue == newValue && oldAttr == newAttr) return; // already that: nothing to fill
+
+        var visited = new bool[map.Width * map.Height];
+        var pending = new Stack<int>();
+        pending.Push(startIndex);
+        visited[startIndex] = true;
+        int minCol = startCol, maxCol = startCol, minRow = startRow, maxRow = startRow;
+
+        BeginStroke();
+        while (pending.Count > 0)
+        {
+            var index = pending.Pop();
+            var col = index % map.Width;
+            var row = index / map.Width;
+            SetGridCell(layer, index, newValue);
+            if (isTileMode) SetCellAttribute(layer, index, newAttr);
+            minCol = Math.Min(minCol, col); maxCol = Math.Max(maxCol, col);
+            minRow = Math.Min(minRow, row); maxRow = Math.Max(maxRow, row);
+
+            TryQueue(col - 1, row);
+            TryQueue(col + 1, row);
+            TryQueue(col, row - 1);
+            TryQueue(col, row + 1);
+        }
+        RenderPreviewRegion(new Int32Rect(minCol * cellPixelSize, minRow * cellPixelSize,
+            (maxCol - minCol + 1) * cellPixelSize, (maxRow - minRow + 1) * cellPixelSize));
+        EndStroke();
+
+        void TryQueue(int col, int row)
+        {
+            if (!bounds.Contains(col, row)) return;
+            var index = row * map.Width + col;
+            if (visited[index]) return;
+            if (layer.MetatileIndices[index] != oldValue) return;
+            if (isTileMode && layer.CellAttributes[index] != oldAttr) return;
+            visited[index] = true;
+            pending.Push(index);
+        }
+    }
+
     /// <summary>The packed <see cref="CellAttributePacking"/> byte to paint a GridSize=1 Tilemap cell with — whatever the "Paint with" panel currently has dialed in, or the neutral/default byte (0) if it isn't active for some reason. Shared by <see cref="PaintOrEraseAt"/> and <see cref="FillSelection"/>.</summary>
     private byte ResolvePaintAttributeByte() =>
         PaintAttributes is { } attrs
@@ -1529,12 +1677,14 @@ public partial class MapEditorViewModel : ObservableObject
     /// naturally bindable from XAML). Auto-switches <see cref="ActiveLayer"/> to match whichever layer the
     /// clipboard came from first, since the destination map's currently-active layer may not match — then
     /// pastes anchored under the cursor (snapped to the tile grid) and selects the pasted result
-    /// immediately, so it can be Alt-dragged into place exactly like any other selection. A no-op (with a
+    /// immediately, so it can be dragged into place with the Select tool (switched on for it). A no-op (with a
     /// status message) when the clipboard is empty.
     /// </summary>
     public void PasteClipboardAt(int pixelX, int pixelY)
     {
         if (SelectedMap is null) return;
+        // The pasted block comes in selected, to be dragged into place: that is the Select tool's job.
+        if (_spriteClipboard is { Count: > 0 } || _gridClipboard is not null) IsSelectToolActive = true;
 
         if (_spriteClipboard is { Count: > 0 } spriteClipboard)
         {
@@ -1620,14 +1770,20 @@ public partial class MapEditorViewModel : ObservableObject
 
     /// <summary>Stamps the selected palette metatile across every cell of the current grid selection — one undo step, reusing the same BeginStroke/SetGridCell/EndStroke machinery a paint stroke uses.</summary>
     [RelayCommand]
-    private void FillSelection()
+    private void FillSelection() => FillGridSelection(erase: false);
+
+    /// <summary>In: erase (fill with the blank metatile instead of the picked one). Fills the whole selected rectangle, one undo step.</summary>
+    public void FillGridSelection(bool erase)
     {
-        if (!CanFillSelection || SelectedMap is null || GridSelection is not { } rect) return;
+        if (!IsGridLayerActive || SelectedMap is null || GridSelection is not { } rect) return;
+        if (!erase && SelectedPaletteMetatile is null) return;
         var map = SelectedMap.Map;
         var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
-        var newValue = (byte)SelectedPaletteMetatile!.Metatile.SortIndex;
+        var newValue = erase
+            ? BlankValueFor(ActiveLayer == MapLayerKind.Tilemap ? MetatileKind.FourBpp : MetatileKind.EightBpp, map.MetatileGridSize)
+            : (byte)SelectedPaletteMetatile!.Metatile.SortIndex;
         var isTileMode = ActiveLayer == MapLayerKind.Tilemap && map.MetatileGridSize == 1;
-        var newAttr = isTileMode ? ResolvePaintAttributeByte() : (byte)0;
+        var newAttr = isTileMode && !erase ? ResolvePaintAttributeByte() : (byte)0;
         var cellPixelSize = map.MetatileGridSize * 8;
 
         BeginStroke();
@@ -1667,18 +1823,33 @@ public partial class MapEditorViewModel : ObservableObject
         IsStatusError = false;
     }
 
-    /// <summary>No cascade (see <see cref="MapTemplateService.Delete"/>): a plain Yes/No confirmation is enough, same shape as <see cref="DeleteMap"/>.</summary>
-    [RelayCommand]
-    private void DeleteSelectedTemplate()
-    {
-        if (SelectedPaletteTemplate is null) return;
-        var template = SelectedPaletteTemplate.Template;
+    /// <summary>In: candidate name, the template being renamed. True if another template already has that name (case-insensitive).</summary>
+    public bool IsTemplateNameTaken(string candidate, MapTemplate except) =>
+        _project.Templates.Any(t => t != except && string.Equals(t.Name, candidate.Trim(), StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>Template right-click "Rename...". Not undoable, like Save/Delete Template (project-wide list).</summary>
+    public void RenameTemplate(MapTemplate template, string newName)
+    {
+        newName = newName.Trim();
+        if (newName.Length == 0 || newName == template.Name) return;
+        var oldName = template.Name;
+        template.Name = newName;
+        var selectedId = SelectedPaletteTemplate?.Template;
+        RefreshTemplatePalette();
+        if (selectedId is not null) SelectedPaletteTemplate = TemplatePalette.FirstOrDefault(t => t.Template == selectedId);
+        HasChanges = true;
+        StatusText = $"Renamed template '{oldName}' to '{newName}'.";
+        IsStatusError = false;
+    }
+
+    /// <summary>Template right-click "Delete". No cascade (see <see cref="MapTemplateService.Delete"/>): a plain Yes/No confirmation is enough, same shape as <see cref="DeleteMap"/>.</summary>
+    public void DeleteTemplate(MapTemplate template)
+    {
         var confirm = MessageBox.Show($"Delete template '{template.Name}'? This cannot be undone.", "Delete template", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes) return;
 
         MapTemplateService.Delete(_project, template);
-        SelectedPaletteTemplate = null;
+        if (SelectedPaletteTemplate?.Template == template) SelectedPaletteTemplate = null;
         RefreshTemplatePalette();
         HasChanges = true;
         StatusText = $"Deleted template '{template.Name}'.";

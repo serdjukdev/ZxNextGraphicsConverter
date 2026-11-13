@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Windows.Input;
 
 namespace ZxNext.App;
@@ -45,7 +45,7 @@ public record ShortcutEntry(string Area, string Gesture, string ShortDescription
 /// <summary>
 /// Every shortcut/gesture in the app, grouped by Area, for the Settings screen's Shortcuts tab. The
 /// Gesture text for entries backed by a real KeyBinding (see <see cref="Shortcuts"/>) is guaranteed
-/// accurate — it's the same value the binding itself uses. Mouse+modifier gestures (Ctrl+click, Alt+drag,
+/// accurate: it's the same value the binding itself uses. Mouse+modifier gestures (Ctrl+click, Shift+drag,
 /// etc.) are NOT real KeyBindings — they're Keyboard.Modifiers checks scattered across many MouseDown
 /// handlers — so their entries here are hand-maintained text mirroring HelpWindow.xaml, same as Help
 /// itself always has been; there's no single mechanism tying either of them to the actual mouse-handling
@@ -78,12 +78,13 @@ public static class ShortcutReference
         new("Map Editor", "Ctrl+Z", "Undo", "A local undo stack for this window: paint/erase strokes, Fill/Delete Selection, Move/Copy, Link, type assignment, and Resize/Trim each undo as one step."),
         new("Map Editor", "Ctrl+Y", "Redo", "Reapplies the last undone step. A new edit after an Undo clears whatever Redo history existed — same as every other editor."),
         new("Map Editor", "Ctrl+C", "Copy selection", "Copies the current grid-cell or sprite selection to the clipboard."),
-        new("Map Editor", "Ctrl+V", "Paste", "Pastes the last Ctrl+C'd selection under the cursor, snapped to the tile grid, and selects it immediately so it can be Alt-dragged into place. Works across maps: switch to a different map, then Ctrl+V, to copy a piece from one map to another — no remapping needed, since metatiles/tiles/sprites are project-wide. A pasted sprite's link (if any) is not carried over, same as a same-map copy."),
+        new("Map Editor", "Ctrl+V", "Paste", "Pastes the last Ctrl+C'd selection under the cursor, snapped to the tile grid, and selects it immediately (switching to the Select tool) so it can be dragged into place. Works across maps: switch to a different map, then Ctrl+V, to copy a piece from one map to another: no remapping needed, since metatiles/tiles/sprites are project-wide. A pasted sprite's link (if any) is not carried over, same as a same-map copy."),
         new("Map Editor", "Delete", "Delete selection", "Clears the current selection's contents: grid cells become empty, selected sprites are removed."),
-        new("Map Editor", "Ctrl+click/drag", "Force-erase", "Erases on the active layer no matter what else you're doing, including mid-drag."),
+        new("Map Editor", "Ctrl+click/drag", "Force-erase", "With the Brush, erases on the active layer, including mid-drag. With Fill, fills with blank."),
         new("Map Editor", "Shift (placing a sprite)", "Snap to grid", "Snaps the new sprite's position to the faint 8x8 tile grid."),
-        new("Map Editor", "Alt+drag", "Select / move", "Drag on empty space to draw a new selection; drag from inside the current selection to move it."),
-        new("Map Editor", "Alt+Shift+drag", "Copy selection", "Same as Alt+drag from inside a selection, but copies instead of moving."),
+        new("Map Editor", "Select tool: drag", "Select / move", "Drag on empty space to draw a new selection; drag from inside the current selection to move it."),
+        new("Map Editor", "Select tool: Shift at release", "Copy selection", "Dragging from inside a selection copies instead of moving when Shift is held as you let go."),
+        new("Map Editor", "Fill tool: click / drag", "Fill", "Click fills the connected area of the same metatile with the picked one; drag fills the rectangle you drag out. Picking another metatile refills the selected area."),
         new("Map Editor", "Mouse wheel / middle-drag", "Zoom / pan", "Zooms 25%-800% anchored under the cursor, or pans the view.")
     ];
 }

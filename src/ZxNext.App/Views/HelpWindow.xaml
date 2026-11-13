@@ -299,23 +299,23 @@
                         <TextBlock Style="{StaticResource TermStyle}" Text="Reopening the editor / switching maps" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="The editor reopens on whichever map you last had selected. Each individual map also remembers its own scroll position, zoom, and active layer as you leave it (switching to another map, or closing the window) and restores them the next time you come back to that particular map." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Plain click/drag on the canvas" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Paints with whichever metatile/sprite is selected in the palette. Sprite placement is click-only (no drag-stamping)." />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Tools: Brush / Fill / Select" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Three buttons under the palette pick what a left click on the canvas does. Exactly one tool is on at a time (it is drawn highlighted), and picking one switches the previous one off; Link, Set Type and Set User Byte on the Sprite layer belong to the same group. Brush is the default." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Brush" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Click or drag to paint with whichever metatile, template or object is picked in the palette. Sprite and template placement is click-only (no drag-stamping). Brush paints cell by cell and has no selection: switching to it, or painting with it, drops any selection." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Fill (grid layers only)" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Click a cell: every cell connected to it (left, right, up, down) holding the same metatile is filled with the picked one, like a paint bucket; on a 1x1 map's Tilemap layer the mirror/rotate/palette byte must match too, and the 'Paint with' panel's values are written. Drag instead: the rectangle you drag out is selected and filled when you let go. While an area is selected, picking another metatile in the palette refills it at once, so you can try several. A click inside the selection fills the connected area only inside it; a click outside drops the selection and fills on the whole map. Ctrl fills with blank instead. Each fill is one undo step." />
+
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Select" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Drag on empty space (or outside the current selection) to draw a new selection box (cell-rectangle on a grid layer, or every sprite whose box touches yours on the Sprite layer). Drag from INSIDE the current selection instead to move it; hold Shift when you let go to copy instead of moving. Whatever you drag past the map's edge is dropped, not pushed back in: grid cells beyond the edge are lost, and an object whose top-left corner ends up outside the map is deleted, with the status line saying how many. One Ctrl+Z undoes the whole move, deletions included." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+click/drag" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Force-erases on the active layer: works no matter what else you're doing, including mid-drag." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="With the Brush, force-erases on the active layer, including mid-drag. With Fill, fills with blank." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Shift (placing a sprite)" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Snaps the new sprite's position to the faint 8x8 tile grid: a green preview box follows the cursor while held." />
-
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Alt+drag: select / move" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Painting is fully suppressed. Drag on empty space (or outside the current selection) to draw a new selection box (cell-rectangle on a grid layer, or every sprite whose box touches yours on the Sprite layer). Drag from INSIDE the current selection instead to move it. Whatever you drag past the map's edge is dropped, not pushed back in: grid cells beyond the edge are lost, and an object whose top-left corner ends up outside the map is deleted, with the status line saying how many. One Ctrl+Z undoes the whole move, deletions included." />
-
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Alt+Shift+drag (from inside a selection)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Copies instead of moving: decided at the moment you release the mouse, so you can change your mind mid-drag." />
-
-                        <TextBlock Style="{StaticResource TermStyle}" Text="Any plain click" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Always clears whatever selection existed first, then paints/erases normally." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Delete key / 'Delete Selection' button" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Clears the current selection's contents: grid cells become empty, selected sprites are removed." />
@@ -327,13 +327,13 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="Switches the side palette between individual metatiles and saved Templates, on a grid layer only. A Template only ever appears while its own Kind (Tilemap or 8bpp) and the open map's metatile size match, so it can never be picked for the wrong layer." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Save as Template...' button" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Enabled whenever there is an active grid selection. Opens a small dialog to name the block, then stores it as a new Template: graphics only, no map objects. Stored project-wide, so the same Template can be stamped onto any map that shares its Kind and metatile size. Not undoable (same as deleting a map)." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Enabled whenever there is an active grid selection (make one with the Select tool). Opens a small dialog to name the block, then stores it as a new Template: graphics only, no map objects. Stored project-wide, so the same Template can be stamped onto any map that shares its Kind and metatile size. Not undoable (same as deleting a map)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Placing a Template (stamp)" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Pick a Template in the palette: a translucent blue footprint the size of the Template follows the cursor over the canvas. Click to write the whole block at that position as one undo step, same as a normal paint stroke. Click-only, like sprite placement: dragging does not repeat-stamp it. A Template that does not fully fit at the clicked position is clipped silently at the map's edge rather than refused." />
 
-                        <TextBlock Style="{StaticResource TermStyle}" Text="'Delete Template' button" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Deletes the Template currently selected in the Templates palette, after a confirmation. Not undoable. Has no effect on cells already stamped from it elsewhere, since stamping copies the block's bytes rather than keeping a live reference." />
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Right-click a Template: Rename... / Delete" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Rename asks for a new name, which no other Template may already have. Delete removes the Template after a confirmation. Neither is undoable. Deleting has no effect on cells already stamped from it elsewhere, since stamping copies the block's bytes rather than keeping a live reference." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="'Paint with' panel (Tilemap layer, GridSize=1 only)" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Mirror X / Mirror Y / Rotate checkboxes plus a palette-slot picker for whichever tile is selected in the palette below: painting/Fill Selection uses this combination instead of the tile's plain default orientation. Resets to unmirrored/native-palette every time the palette selection changes: it never silently carries over from a previously picked tile. Which tile gets painted (the metatile index) and its attribute (mirror/rotate/palette) are stored completely separately, so using this never creates a new metatile and can never run into the 255-per-Kind metatile cap. Not shown for 2x2/4x4 maps (their metatiles carry their own baked-in per-cell attributes, set in the Metatile Editor) or the 8bpp layer (no attribute concept)." />
@@ -384,7 +384,7 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="Shows a small menu: Set User Byte (the number, its 8 bits, and the object type's named subtypes) / Link / Set Type / Object Data...: for whichever object you right-clicked, without needing to arm anything from the toolbar first. Only offered when no tool is currently armed (an armed tool already owns left-click for this). See the three entries above for what each one does." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Right-click with an active selection (Sprite layer)" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="If you have a sprite selection (Alt+drag a box first), right-clicking ANYWHERE on the canvas opens the same menu in batch mode instead of targeting a single object: Set Type / Set User Byte / Object Data... apply the pick to EVERY object in the selection at once, as one Undo step, overwriting whatever type/byte/object data each one already had. 'Link' is left out of this menu, since a link is always between exactly two objects, never a whole group." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="If you have a sprite selection (drag a box with the Select tool first), right-clicking ANYWHERE on the canvas opens the same menu in batch mode instead of targeting a single object: Set Type / Set User Byte / Object Data... apply the pick to EVERY object in the selection at once, as one Undo step, overwriting whatever type/byte/object data each one already had. 'Link' is left out of this menu, since a link is always between exactly two objects, never a whole group." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Right-click a cell (Tilemap layer, GridSize=1 only)" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Opens a small dialog pre-filled with that ONE cell's current Mirror X/Y, Rotate, and palette slot (with a live preview of that cell). Not offered on an untouched/blank cell, or for 2x2/4x4 maps or the 8bpp layer (no attribute concept there). With no active grid selection, OK writes just this cell's attribute in place (never changes which tile is there, and never affects any other cell), Cancel discards." />
@@ -396,7 +396,7 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="A local undo/redo stack for this window: paint/erase strokes, Fill/Delete Selection, Move/Copy, Link, type assignment, and Resize/Trim each undo (and redo) as one step. A new edit after an Undo clears whatever Redo history existed, same as every other editor." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+C: Copy / Ctrl+V: Paste" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Copies the current grid-cell or sprite selection; Ctrl+V pastes it under the cursor (snapped to the tile grid) and selects the pasted result immediately, so it can be Alt-dragged into place. Works across maps: copy, switch to a different map in the list on the left, then paste — no remapping needed, since metatiles/tiles/sprites are shared project-wide. Pasting auto-switches to whichever layer was copied from. A pasted sprite's link (if it had one) is not carried over, same as a same-map Alt+Shift+drag copy. Pasting a group of objects near an edge or onto a smaller map skips whichever ones would land outside the map (the status line says how many); grid cells are clipped at the edge the same way." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Copies the current grid-cell or sprite selection; Ctrl+V pastes it under the cursor (snapped to the tile grid) and selects the pasted result immediately, switching to the Select tool, so it can be dragged into place. Works across maps: copy, switch to a different map in the list on the left, then paste: no remapping needed, since metatiles/tiles/sprites are shared project-wide. Pasting auto-switches to whichever layer was copied from. A pasted sprite's link (if it had one) is not carried over, same as a same-map Shift+drag copy. Pasting a group of objects near an edge or onto a smaller map skips whichever ones would land outside the map (the status line says how many); grid cells are clipped at the edge the same way." />
                     </StackPanel>
                 </Expander>
 

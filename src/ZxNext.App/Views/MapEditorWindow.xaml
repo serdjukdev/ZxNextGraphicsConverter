@@ -48,6 +48,15 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <!-- Canvas tool button: Tag carries "is this tool on"; the on one is drawn highlighted. -->
+        <Style x:Key="ToolButtonStyle" TargetType="Button" BasedOn="{StaticResource FlatButtonStyle}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="True">
+                    <Setter Property="Background" Value="#FFEBB84B" />
+                    <Setter Property="BorderBrush" Value="#FFC9962F" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
     <Grid x:Name="RootSplitGrid" Margin="12">
         <Grid.ColumnDefinitions>
@@ -177,6 +186,10 @@
                         <ToggleButton Content="Templates" IsChecked="{Binding ShowTemplatePalette, Mode=OneWay}" Click="ShowTemplatesPalette_OnClick" Margin="2,0,0,0" />
                     </UniformGrid>
 
+                    <TextBlock DockPanel.Dock="Top" FontSize="11" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4"
+                               Visibility="{Binding ShowTemplatePalette, Converter={StaticResource BoolToVis}}"
+                               Text="New template: select an area on the map with the Select tool, then press 'Save as Template...' below. Right-click a template to rename or delete it." />
+
                     <ListBox ItemsSource="{Binding MetatilePalette}" SelectedItem="{Binding SelectedPaletteMetatile}"
                              Visibility="{Binding ShowMetatilePalette, Converter={StaticResource BoolToVis}}"
                              BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -214,14 +227,23 @@
                         </ListBox.ItemsPanel>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Margin="2" Background="Transparent">
-                                    <StackPanel.ToolTip>
-                                        <Image Source="{Binding Preview}" Width="160" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                                    </StackPanel.ToolTip>
-                                    <Image Source="{Binding Preview}" MaxWidth="96" MaxHeight="96" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" HorizontalAlignment="Center" />
-                                    <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="100" HorizontalAlignment="Center" />
-                                    <TextBlock Text="{Binding SizeLabel}" FontSize="8" Foreground="Gray" HorizontalAlignment="Center" />
-                                </StackPanel>
+                                <Grid Background="Transparent">
+                                    <!-- Template actions live on the item's right-click menu; new ones come from "Save as Template...". -->
+                                    <Grid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Rename..." Click="RenameTemplateMenuItem_OnClick" />
+                                            <MenuItem Header="Delete" Click="DeleteTemplateMenuItem_OnClick" />
+                                        </ContextMenu>
+                                    </Grid.ContextMenu>
+                                    <StackPanel Margin="2" Background="Transparent">
+                                        <StackPanel.ToolTip>
+                                            <Image Source="{Binding Preview}" Width="160" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                        </StackPanel.ToolTip>
+                                        <Image Source="{Binding Preview}" MaxWidth="96" MaxHeight="96" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" HorizontalAlignment="Center" />
+                                        <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="100" HorizontalAlignment="Center" />
+                                        <TextBlock Text="{Binding SizeLabel}" FontSize="8" Foreground="Gray" HorizontalAlignment="Center" />
+                                    </StackPanel>
+                                </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -296,17 +318,29 @@
             <!-- Two buttons per row, stretched to the pane width so nothing spills under the canvas
                  splitter (was: three fixed-width buttons on the last row, and Redo fell off the edge).
                  Left column has a right margin, right column doesn't; every row has a bottom margin. -->
-            <UniformGrid Grid.Row="6" Columns="2" Margin="0,8,0,0">
+            <StackPanel Grid.Row="6" Margin="0,8,0,0">
+            <!-- Canvas tools: exactly one is on; picking one switches the previous one off. -->
+            <UniformGrid Columns="3" Margin="0,0,0,6">
+                <Button Content="Brush" Command="{Binding SelectBrushToolCommand}" Tag="{Binding IsBrushToolActive}"
+                        Style="{StaticResource ToolButtonStyle}" Margin="0,0,6,0"
+                        ToolTip="Click or drag to paint with the picked metatile, template or object. Ctrl erases. Brush has no selection: use Select or Fill for areas." />
+                <Button Content="Fill" Command="{Binding SelectFillToolCommand}" Tag="{Binding IsFillToolActive}" IsEnabled="{Binding IsGridLayerActive}"
+                        Style="{StaticResource ToolButtonStyle}" Margin="0,0,6,0"
+                        ToolTip="Click to fill the connected area of the same tile with the picked metatile; drag to fill a rectangle. While an area is selected, picking another metatile refills it. Ctrl fills with blank." />
+                <Button Content="Select" Command="{Binding SelectSelectToolCommand}" Tag="{Binding IsSelectToolActive}"
+                        Style="{StaticResource ToolButtonStyle}" Margin="0"
+                        ToolTip="Drag to select an area; drag inside the selection to move it (Shift when letting go copies)." />
+            </UniformGrid>
+            <UniformGrid Columns="2">
                 <Button Content="Fill Selection" Command="{Binding FillSelectionCommand}" IsEnabled="{Binding CanFillSelection}"
                         Style="{StaticResource FlatButtonStyle}" Margin="0,0,6,6" />
                 <Button Content="Delete Selection" Command="{Binding DeleteSelectionCommand}" IsEnabled="{Binding HasSelection}"
                         Style="{StaticResource FlatButtonStyle}" Margin="0,0,0,6" />
                 <Button Content="Save as Template..." Click="SaveAsTemplate_OnClick" IsEnabled="{Binding CanSaveSelectionAsTemplate}"
-                        Style="{StaticResource FlatButtonStyle}" Margin="0,0,6,6" />
-                <Button Content="Delete Template" Command="{Binding DeleteSelectedTemplateCommand}" IsEnabled="{Binding HasSelectedTemplate}"
-                        Style="{StaticResource FlatButtonStyle}" Margin="0,0,0,6" />
+                        Style="{StaticResource FlatButtonStyle}" Margin="0,0,6,6" ToolTipService.ShowOnDisabled="True"
+                        ToolTip="Saves the selected area as a template. Select an area on a grid layer with the Select tool first." />
                 <Button Command="{Binding ToggleLinkToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}"
-                        Content="{Binding LinkButtonText}" Margin="0,0,6,6"
+                        Content="{Binding LinkButtonText}" Margin="0,0,0,6"
                         ToolTip="Link two objects: click one, then click the other.">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource FlatButtonStyle}">
@@ -320,7 +354,7 @@
                     </Button.Style>
                 </Button>
                 <Button Content="Set Type" Command="{Binding ToggleSetTypeToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}"
-                        Margin="0,0,0,6" ToolTip="Click objects one after another to pick a type for each from a popup. To set one type on many objects at once, Alt-drag a selection first, then right-click inside it instead.">
+                        Margin="0,0,6,6" ToolTip="Click objects one after another to pick a type for each from a popup. To set one type on many objects at once, select them with the Select tool first, then right-click inside the selection instead.">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource FlatButtonStyle}">
                             <Style.Triggers>
@@ -333,7 +367,7 @@
                     </Button.Style>
                 </Button>
                 <Button Content="Set User Byte" Command="{Binding ToggleSetUserByteToolCommand}" IsEnabled="{Binding IsSpritesLayerActive}"
-                        Margin="0,0,6,6" ToolTip="Click objects one after another to edit each one's raw user byte. To set one value on many objects at once, Alt-drag a selection first, then right-click inside it instead.">
+                        Margin="0,0,0,6" ToolTip="Click objects one after another to edit each one's raw user byte. To set one value on many objects at once, select them with the Select tool first, then right-click inside the selection instead.">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource FlatButtonStyle}">
                             <Style.Triggers>
@@ -345,10 +379,10 @@
                         </Style>
                     </Button.Style>
                 </Button>
-                <Border />
                 <Button Content="Undo (Ctrl+Z)" Command="{Binding UndoCommand}" Style="{StaticResource FlatButtonStyle}" Margin="0,0,6,0" />
                 <Button Content="Redo (Ctrl+Y)" Command="{Binding RedoCommand}" Style="{StaticResource FlatButtonStyle}" Margin="0" />
             </UniformGrid>
+            </StackPanel>
         </Grid>
 
         <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="#CCC"
@@ -364,10 +398,10 @@
                 <TextBlock Grid.Column="0" FontWeight="Bold" VerticalAlignment="Center" TextWrapping="Wrap">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
-                            <Setter Property="Text" Value="Canvas — click to place. Ctrl=erase, Shift=snap to grid, Alt=select/move (Alt+Shift=copy). Wheel=zoom, middle-drag=pan." />
+                            <Setter Property="Text" Value="Canvas: click to place. Ctrl=erase, Shift=snap to grid. Wheel=zoom, middle-drag=pan." />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsGridLayerActive}" Value="True">
-                                    <Setter Property="Text" Value="Canvas — click or drag to paint. Ctrl=erase, Alt=select/move (Alt+Shift=copy). Wheel=zoom, middle-drag=pan." />
+                                    <Setter Property="Text" Value="Canvas: click or drag to paint. Ctrl=erase. Wheel=zoom, middle-drag=pan." />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>

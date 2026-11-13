@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added: keys for the Map Editor tools: B Brush, G Fill, M Select, also written on their buttons. They do nothing while you type in a text box; G does nothing on the Sprite layer, where Fill does not apply.
+
 - Added: an eyedropper in the Map Editor. Alt+click, with any tool, picks what is under the cursor into the palette and changes nothing on the map: a cell's metatile on a grid layer (with its mirror/rotate/palette into "Paint with" on a 1x1 Tilemap), or the object or plain sprite a placement was made from on the Sprite layer. With Fill and a selected area, picking does not refill it.
 - Added: clicking a row in the Source Images panel shows that whole picture in the big preview on the right, as large as the preview allows, with its name, size and how many assets come from it, for a quick look at a big sheet. A click in the project tree or the pixel editor brings the selected asset back; nothing else changes.
 

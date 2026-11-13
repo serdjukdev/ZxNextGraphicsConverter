@@ -79,8 +79,17 @@ public partial class MapEditorWindow : Window
     /// </summary>
     private void MapEditorWindow_OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Shortcuts.PasteKey || Keyboard.Modifiers != Shortcuts.PasteModifiers) return;
         if (DataContext is not MapEditorViewModel vm) return;
+
+        // Tool keys B / G / M: plain letters, so never while a text box has the keyboard.
+        if (Keyboard.Modifiers == ModifierKeys.None && Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+        {
+            if (e.Key == Shortcuts.BrushToolKey) { vm.SelectBrushToolCommand.Execute(null); e.Handled = true; return; }
+            if (e.Key == Shortcuts.FillToolKey) { vm.SelectFillToolCommand.Execute(null); e.Handled = true; return; }
+            if (e.Key == Shortcuts.SelectToolKey) { vm.SelectSelectToolCommand.Execute(null); e.Handled = true; return; }
+        }
+
+        if (e.Key != Shortcuts.PasteKey || Keyboard.Modifiers != Shortcuts.PasteModifiers) return;
 
         vm.PasteClipboardAt((int)_lastCursorPixel.X, (int)_lastCursorPixel.Y);
         e.Handled = true;

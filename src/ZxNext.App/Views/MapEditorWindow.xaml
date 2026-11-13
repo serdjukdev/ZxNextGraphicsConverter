@@ -321,13 +321,13 @@
             <StackPanel Grid.Row="6" Margin="0,8,0,0">
             <!-- Canvas tools: exactly one is on; picking one switches the previous one off. -->
             <UniformGrid Columns="3" Margin="0,0,0,6">
-                <Button Content="Brush" Command="{Binding SelectBrushToolCommand}" Tag="{Binding IsBrushToolActive}"
+                <Button Content="Brush (B)" Command="{Binding SelectBrushToolCommand}" Tag="{Binding IsBrushToolActive}"
                         Style="{StaticResource ToolButtonStyle}" Margin="0,0,6,0"
                         ToolTip="Click or drag to paint with the picked metatile, template or object. Ctrl erases. Brush has no selection: use Select or Fill for areas." />
-                <Button Content="Fill" Command="{Binding SelectFillToolCommand}" Tag="{Binding IsFillToolActive}" IsEnabled="{Binding IsGridLayerActive}"
+                <Button Content="Fill (G)" Command="{Binding SelectFillToolCommand}" Tag="{Binding IsFillToolActive}" IsEnabled="{Binding IsGridLayerActive}"
                         Style="{StaticResource ToolButtonStyle}" Margin="0,0,6,0"
                         ToolTip="Click to fill the connected area of the same tile with the picked metatile; drag to fill a rectangle. While an area is selected, picking another metatile refills it. Ctrl fills with blank." />
-                <Button Content="Select" Command="{Binding SelectSelectToolCommand}" Tag="{Binding IsSelectToolActive}"
+                <Button Content="Select (M)" Command="{Binding SelectSelectToolCommand}" Tag="{Binding IsSelectToolActive}"
                         Style="{StaticResource ToolButtonStyle}" Margin="0"
                         ToolTip="Drag to select an area; drag inside the selection to move it (Shift when letting go copies)." />
             </UniformGrid>

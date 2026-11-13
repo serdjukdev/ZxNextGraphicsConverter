@@ -303,7 +303,7 @@
                         <TextBlock Style="{StaticResource DescStyle}" Text="The editor reopens on whichever map you last had selected. Each individual map also remembers its own scroll position, zoom, and active layer as you leave it (switching to another map, or closing the window) and restores them the next time you come back to that particular map." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Tools: Brush / Fill / Select" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Three buttons under the palette pick what a left click on the canvas does. Exactly one tool is on at a time (it is drawn highlighted), and picking one switches the previous one off; Link, Set Type and Set User Byte on the Sprite layer belong to the same group. Brush is the default." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Three buttons under the palette pick what a left click on the canvas does. Exactly one tool is on at a time (it is drawn highlighted), and picking one switches the previous one off; Link, Set Type and Set User Byte on the Sprite layer belong to the same group. Brush is the default. Keys: B Brush, G Fill, M Select (ignored while typing in a text box)." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Brush" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Click or drag to paint with whichever metatile, template or object is picked in the palette. Sprite and template placement is click-only (no drag-stamping). Brush paints cell by cell and has no selection: switching to it, or painting with it, drops any selection." />

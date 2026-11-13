@@ -59,6 +59,9 @@
                         <TextBlock Style="{StaticResource TermStyle}" Text="File → Recent Projects" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="The last projects you opened or saved, most recent first." />
 
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Escape: close a window" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Closes any window other than the main one, the same as its Cancel or Close button (a dialog's Cancel discards its changes). Not while a dropdown, a popup or a drag is in progress: Escape closes that instead. The progress window of a running job ignores it." />
+
                         <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+S: File → Save Project" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Saves in place. If the project has no location yet (shouldn't normally happen), use Save Project As... first." />
 

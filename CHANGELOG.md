@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added: Escape closes any window, not only the dialogs that already had a Cancel or Close button: the Metatile Editor, the Map Editor and Help now close on it too. The main window and the progress window of a running job do not, and Escape still only closes an open dropdown, popup or drag first.
+
 - Changed: the Map Editor has TOOLS now, Brush, Fill and Select, as three buttons under the palette. Exactly one is on at a time and picking one switches the previous one off (Link, Set Type and Set User Byte belong to the same group). Brush paints cell by cell as before and has no selection any more: Alt+drag no longer selects, use the Select tool, where a plain drag selects or moves and Shift at release copies. Ctrl+V switches to Select by itself, so a pasted block can be dragged into place straight away.
 - Added: Fill works like a paint bucket. Click a cell and every connected cell holding the same metatile gets the picked one; drag and the rectangle you drag out is selected and filled when you let go. While an area is selected, picking another metatile refills it at once, so you can try several. With a selection, a click fills only inside it; a click outside drops the selection. Ctrl fills with blank. One undo step per fill. The old "Fill Selection" button is still there.
 - Changed: Templates are renamed and deleted from their own right-click menu (Rename..., Delete); the "Delete Template" button is gone. The Templates tab says how to make one: select an area with the Select tool, then "Save as Template...".

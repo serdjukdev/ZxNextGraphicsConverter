@@ -58,6 +58,7 @@ public static class ShortcutReference
         new("Main Window", "Ctrl+S", "Save project", "Saves in place. If the project has no location yet, use Save Project As... first."),
         new("Main Window", "Ctrl+Z", "Undo", "One shared undo stack for pixel painting and palette colour edits (a whole paint stroke is one undo step). Cleared after any non-undoable operation (re-quantize category/folder, Optimize bank, a compacting delete)."),
         new("Main Window", "F1", "Help", "Opens the Shortcuts & Controls window (or brings it forward if already open)."),
+        new("All Windows", "Escape", "Close window", "Closes any window other than the main one, like its Cancel/Close button. Not while a dropdown, popup or drag is in progress; the progress window of a running job ignores it."),
 
         new("Project Tree", "Delete", "Delete selected", "Deletes the selected tile/sprite, the whole checked multi-selection, or a user-created 8bpp sub-folder and everything in it. Always confirms first."),
         new("Project Tree", "Ctrl+R", "Re-quantize", "Opens the Re-quantize dialog (choose a dithering mode) and re-converts the selected tile/sprite from its original source region."),

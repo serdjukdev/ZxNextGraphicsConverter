@@ -28,6 +28,7 @@ public partial class App : Application
         EventManager.RegisterClassHandler(typeof(System.Windows.Controls.ContextMenu), System.Windows.Input.Mouse.LostMouseCaptureEvent,
             new System.Windows.Input.MouseEventHandler(OnContextMenuLostMouse), handledEventsToo: true);
         System.Windows.Input.InputManager.Current.PreProcessInput += DropMenuClosingClick;
+        EventManager.RegisterClassHandler(typeof(Window), UIElement.KeyDownEvent, new System.Windows.Input.KeyEventHandler(CloseOnEscape));
 
         var services = new ServiceCollection();
         services.AddSingleton<IImageDecoder, WpfImageDecoder>();
@@ -57,6 +58,32 @@ public partial class App : Application
             // with no file location and no metatile size around for the user to import/slice into.
             mainWindow.EnsureProjectOnFirstRun();
         }
+    }
+
+    /// <summary>
+    /// In: an unhandled key press in any window. Escape closes the window. Skipped: the main window, the
+    /// busy window (a running job), a window with its own Cancel/Close button (IsCancel already closes it
+    /// on Escape, a second close would throw), and while anything holds the mouse (an open popup or a drag:
+    /// Escape there is for that, not for the window). An open dropdown handles Escape itself first.
+    /// </summary>
+    private static void CloseOnEscape(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Handled || e.Key != System.Windows.Input.Key.Escape) return;
+        if (sender is not Window window || window == Current.MainWindow || window is Views.BusyWindow) return;
+        if (System.Windows.Input.Mouse.Captured is not null || HasCancelButton(window)) return;
+        e.Handled = true;
+        window.Close();
+    }
+
+    /// <summary>In: a node of a window's logical tree. True if it or anything below it is a Button with IsCancel set.</summary>
+    private static bool HasCancelButton(DependencyObject node)
+    {
+        if (node is System.Windows.Controls.Button { IsCancel: true }) return true;
+        foreach (var child in LogicalTreeHelper.GetChildren(node))
+        {
+            if (child is DependencyObject d && HasCancelButton(d)) return true;
+        }
+        return false;
     }
 
     /// <summary>Set when a context menu lets go of the mouse, cleared once the input that closed it has been processed.</summary>

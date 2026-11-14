@@ -154,6 +154,9 @@
                         <TextBlock Style="{StaticResource TermStyle}" Text="Click / drag to paint" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Pick a palette colour first (click a swatch below): painting is disabled with a reminder message until you do. The pixel editor renders at a fixed 16x zoom. A whole click-drag-release stroke is one undo step." />
 
+                        <TextBlock Style="{StaticResource TermStyle}" Text="Mouse wheel / middle-drag on the preview (top)" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Zooms the preview in and out (1x to 32x) around the point under the cursor, and pans it. Works for a selected asset and for a source image preview alike. Showing another picture resets it to fit; painting in the pixel editor keeps the zoom." />
+
                         <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+click/drag (bottom) or plain click/drag (top): eyedropper" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="In the editable pixel editor (bottom), Ctrl is required since a plain click there paints. In the read-only preview (top), nothing else happens on click, so no modifier is needed: click or drag across it to sweep the eyedropper. Either way it picks the colour under the cursor and selects/highlights that palette swatch." />
 

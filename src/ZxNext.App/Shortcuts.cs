@@ -62,6 +62,7 @@ public static class ShortcutReference
     [
         new("Main Window", "Ctrl+S", "Save project", "Saves in place. If the project has no location yet, use Save Project As... first."),
         new("Main Window", "Ctrl+Z", "Undo", "One shared undo stack for pixel painting and palette colour edits (a whole paint stroke is one undo step). Cleared after any non-undoable operation (re-quantize category/folder, Optimize bank, a compacting delete)."),
+        new("Main Window", "Wheel / middle-drag on the preview", "Zoom / pan preview", "Zooms the big preview 1x-32x around the cursor and pans it, for an asset or a source image. Resets when another picture is shown."),
         new("Main Window", "F1", "Help", "Opens the Shortcuts & Controls window (or brings it forward if already open)."),
         new("All Windows", "Escape", "Close window", "Closes any window other than the main one, like its Cancel/Close button. Not while a dropdown, popup or drag is in progress; the progress window of a running job ignores it."),
 

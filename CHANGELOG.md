@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added: the big preview in the main window zooms with the mouse wheel (1x to 32x, around the point under the cursor) and pans with the middle button, for a selected asset and for a source image preview alike. Showing another picture resets it; painting in the pixel editor keeps the zoom, and the eyedropper still picks the pixel you click.
+
 - Added: the line under the Map Editor canvas now names what is under the cursor on the active layer, after the coordinates: "Metatile: name" ("Tile: name" on a 1x1 map) on a grid layer, "Object: name" or "Sprite: name" on the Sprite layer.
 
 - Added: keys for the Map Editor tools: B Brush, G Fill, M Select, also written on their buttons. They do nothing while you type in a text box; G does nothing on the Sprite layer, where Fill does not apply.

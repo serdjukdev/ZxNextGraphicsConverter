@@ -30,6 +30,12 @@ public partial class MapEditorWindow : Window
     private SelectDragMode _selectDragMode;
     private Point _dragStartPixel;
 
+    /// <summary>Brush drag on a grid layer: the cell it started on, the last cell painted, and the axis Shift locked it to.</summary>
+    private (int Col, int Row)? _strokeStartCell;
+    private (int Col, int Row) _strokeLastCell;
+    private StrokeAxis _strokeAxis;
+    private enum StrokeAxis { None, Horizontal, Vertical }
+
     /// <summary>Fill tool: where the left button went down, until it is released (null otherwise).</summary>
     private Point? _fillPressPixel;
     private Point _dragCurrentPixel;
@@ -387,6 +393,13 @@ public partial class MapEditorWindow : Window
         var forceErase = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
         var snapToGrid = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         vm.PaintOrEraseAt(pixelX, pixelY, snapToGrid: snapToGrid, forceErase: forceErase);
+        if (vm.IsGridLayerActive)
+        {
+            var cellSize = GetCellPixelSize(vm);
+            _strokeStartCell = (FloorDivCell(pixelX, cellSize), FloorDivCell(pixelY, cellSize));
+            _strokeLastCell = _strokeStartCell.Value;
+            _strokeAxis = StrokeAxis.None;
+        }
         UpdateHoverHighlight(vm, pixelX, pixelY);
     }
 
@@ -464,6 +477,29 @@ public partial class MapEditorWindow : Window
         // Sprite placement is click-only by design (no drag-stamping) — unless Ctrl is held, which
         // switches the drag into erase mode (Ctrl+LMB delete).
         if (vm.ActiveLayer == MapLayerKind.Sprites && !forceErase) return;
+
+        if (vm.IsGridLayerActive && _strokeStartCell is { } start)
+        {
+            var cellSize = GetCellPixelSize(vm);
+            var col = FloorDivCell(pixelX, cellSize);
+            var row = FloorDivCell(pixelY, cellSize);
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                // Shift: the first move away from the start cell picks the axis, then the brush stays on that row or column.
+                if (_strokeAxis == StrokeAxis.None && (col, row) != start)
+                    _strokeAxis = Math.Abs(col - start.Col) >= Math.Abs(row - start.Row) ? StrokeAxis.Horizontal : StrokeAxis.Vertical;
+                if (_strokeAxis == StrokeAxis.Horizontal) row = start.Row;
+                else if (_strokeAxis == StrokeAxis.Vertical) col = start.Col;
+            }
+            else
+            {
+                _strokeAxis = StrokeAxis.None;
+            }
+            if ((col, row) == _strokeLastCell) return;
+            vm.PaintCellLine(_strokeLastCell.Col, _strokeLastCell.Row, col, row, forceErase);
+            _strokeLastCell = (col, row);
+            return;
+        }
 
         vm.PaintOrEraseAt(pixelX, pixelY, snapToGrid: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift), forceErase: forceErase);
     }
@@ -1182,6 +1218,7 @@ public partial class MapEditorWindow : Window
         }
 
         _isDrawing = false;
+        _strokeStartCell = null;
         MapCanvasHost.ReleaseMouseCapture();
         if (DataContext is MapEditorViewModel vm) vm.EndStroke();
     }

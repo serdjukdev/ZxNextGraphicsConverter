@@ -1180,6 +1180,38 @@ public partial class MapEditorViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Brush drag on a grid layer. In: the previous and the current cell of the drag, erase (Ctrl). Paints
+    /// (or erases) every cell on the straight line between them, so a fast drag leaves no gaps. Cells off
+    /// the map are skipped. Runs inside the caller's stroke: one undo step for the whole drag.
+    /// </summary>
+    public void PaintCellLine(int fromCol, int fromRow, int toCol, int toRow, bool erase)
+    {
+        if (SelectedMap is null || !IsGridLayerActive) return;
+        var cellPixelSize = SelectedMap.Map.MetatileGridSize * 8;
+        foreach (var (col, row) in LineCells(fromCol, fromRow, toCol, toRow))
+        {
+            if (col < 0 || row < 0) continue;
+            PaintOrEraseAt(col * cellPixelSize, row * cellPixelSize, forceErase: erase);
+        }
+    }
+
+    /// <summary>In: two cells. Out: every cell on the straight line between them, both ends included (Bresenham).</summary>
+    public static IEnumerable<(int Col, int Row)> LineCells(int col0, int row0, int col1, int row1)
+    {
+        int dx = Math.Abs(col1 - col0), dy = -Math.Abs(row1 - row0);
+        int stepX = col0 < col1 ? 1 : -1, stepY = row0 < row1 ? 1 : -1;
+        var error = dx + dy;
+        while (true)
+        {
+            yield return (col0, row0);
+            if (col0 == col1 && row0 == row1) yield break;
+            var doubled = 2 * error;
+            if (doubled >= dy) { error += dy; col0 += stepX; }
+            if (doubled <= dx) { error += dx; row0 += stepY; }
+        }
+    }
+
+    /// <summary>
     /// In: map pixel. Out: the name of what the active layer has there, for the status line under the canvas:
     /// the cell's metatile on a grid layer, the topmost object or sprite on the Sprite layer; null if nothing.
     /// </summary>

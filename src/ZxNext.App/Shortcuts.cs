@@ -91,6 +91,7 @@ public static class ShortcutReference
         new("Map Editor", "Ctrl+click/drag", "Force-erase", "With the Brush, erases on the active layer, including mid-drag. With Fill, fills with blank."),
         new("Map Editor", "B / G / M", "Brush / Fill / Select tool", "Switches the canvas tool, same as its button under the palette. G does nothing on the Sprite layer (Fill is for grid layers). Ignored while typing in a text box."),
         new("Map Editor", "Alt+click", "Eyedropper", "Picks the metatile (or object/sprite on the Sprite layer) under the cursor into the palette, with any tool; on a 1x1 Tilemap also its mirror/rotate/palette."),
+        new("Map Editor", "Shift+drag (Brush, grid layer)", "Straight line", "Keeps the brush stroke on one row or column: the first move away from the start cell picks the axis. Ctrl+Shift erases along it."),
         new("Map Editor", "Shift (placing a sprite)", "Snap to grid", "Snaps the new sprite's position to the faint 8x8 tile grid."),
         new("Map Editor", "Select tool: drag", "Select / move", "Drag on empty space to draw a new selection; drag from inside the current selection to move it."),
         new("Map Editor", "Select tool: Shift at release", "Copy selection", "Dragging from inside a selection copies instead of moving when Shift is held as you let go."),

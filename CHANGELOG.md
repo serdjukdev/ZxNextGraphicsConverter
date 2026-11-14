@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added: Shift while dragging the Brush on a grid layer keeps the stroke on one straight line. The first move away from the start cell picks horizontal or vertical, and from then on only that row or column is painted, however far the cursor drifts sideways; releasing Shift frees it again, Ctrl+Shift erases along the line.
+- Fixed: a fast Brush drag on a grid layer could skip cells; every cell between two mouse positions is painted now.
+
 - Added: "Filter by name" boxes above the Project Tree, the Map Editor's palettes, the Metatile Editor's tile palette and metatile list, and the Object Editor's object list and sprite palette. Only items whose name contains the text stay visible (case ignored); in the tree folders stay and open up, only tiles and sprites hide. The selected item is never hidden. Escape clears the box; shortcut keys typed into it (B/G/M, Delete, Ctrl+V) act on the text, not the map.
 
 - Added: the big preview in the main window zooms with the mouse wheel (1x to 32x, around the point under the cursor) and pans with the middle button, for a selected asset and for a source image preview alike. Showing another picture resets it; painting in the pixel editor keeps the zoom, and the eyedropper still picks the pixel you click.

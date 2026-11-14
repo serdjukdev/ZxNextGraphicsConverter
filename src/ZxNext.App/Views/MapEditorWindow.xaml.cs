@@ -90,6 +90,7 @@ public partial class MapEditorWindow : Window
         }
 
         if (e.Key != Shortcuts.PasteKey || Keyboard.Modifiers != Shortcuts.PasteModifiers) return;
+        if (Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase) return; // Ctrl+V in a text box pastes text
 
         vm.PasteClipboardAt((int)_lastCursorPixel.X, (int)_lastCursorPixel.Y);
         e.Handled = true;

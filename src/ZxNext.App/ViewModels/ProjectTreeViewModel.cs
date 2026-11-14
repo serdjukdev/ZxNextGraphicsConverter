@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ZxNext.App.Rendering;
@@ -72,6 +72,15 @@ public partial class ProjectTreeViewModel : ObservableObject
 
     [RelayCommand]
     private void CollapseAll() => SetAllExpanded(false);
+
+    /// <summary>Name filter from the box above the tree: leaves whose name doesn't contain it are hidden (see TreeFilterVisibilityConverter). Typing one opens every folder so the matches show.</summary>
+    [ObservableProperty]
+    private string filterText = "";
+
+    partial void OnFilterTextChanged(string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value)) SetAllExpanded(true);
+    }
 
     private void SetAllExpanded(bool expanded)
     {

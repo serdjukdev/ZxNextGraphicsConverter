@@ -59,8 +59,11 @@
                         <TextBlock Style="{StaticResource TermStyle}" Text="File → Recent Projects" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="The last projects you opened or saved, most recent first." />
 
+                        <TextBlock Style="{StaticResource TermStyle}" Text="'Filter by name' boxes" />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Above the Project Tree, the Map Editor's palettes (one box for Metatiles/Templates, one for objects/root sprites), the Metatile Editor's tile palette and metatile list, and the Object Editor's object list and sprite palette. Type part of a name and only items whose name contains it stay visible, ignoring case. In the tree, folders always stay and open up so the matches show; only tiles and sprites are hidden. The selected item never disappears, so filtering cannot drop what you are editing. Escape in the box clears it (pressed again in an empty box, it closes the window as usual). Keys typed into the box never trigger a shortcut." />
+
                         <TextBlock Style="{StaticResource TermStyle}" Text="Escape: close a window" />
-                        <TextBlock Style="{StaticResource DescStyle}" Text="Closes any window other than the main one, the same as its Cancel or Close button (a dialog's Cancel discards its changes). Not while a dropdown, a popup or a drag is in progress: Escape closes that instead. The progress window of a running job ignores it." />
+                        <TextBlock Style="{StaticResource DescStyle}" Text="Closes any window other than the main one (in a non-empty filter box it clears the box first), the same as its Cancel or Close button (a dialog's Cancel discards its changes). Not while a dropdown, a popup or a drag is in progress: Escape closes that instead. The progress window of a running job ignores it." />
 
                         <TextBlock Style="{StaticResource TermStyle}" Text="Ctrl+S: File → Save Project" />
                         <TextBlock Style="{StaticResource DescStyle}" Text="Saves in place. If the project has no location yet (shouldn't normally happen), use Save Project As... first." />

@@ -1,5 +1,7 @@
 ﻿<Window x:Class="ZxNext.App.Views.ObjectEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:local="clr-namespace:ZxNext.App"
+        xmlns:views="clr-namespace:ZxNext.App.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
         d:DataContext="{d:DesignInstance Type=vm:ObjectEditorViewModel}"
@@ -146,40 +148,43 @@
                     Visibility="{Binding IsObjectsTabActive, Converter={StaticResource BoolToVis}}"
                     ToolTip="Create a new object: asks for a name. Rename and Delete live on the object's own right-click menu." />
             <Border BorderBrush="#999" BorderThickness="1" Visibility="{Binding IsObjectsTabActive, Converter={StaticResource BoolToVis}}">
-                <ListBox x:Name="DefinitionList" ItemsSource="{Binding Definitions}" SelectedItem="{Binding SelectedDefinition}"
-                         BorderThickness="0"
-                         PreviewMouseLeftButtonDown="DefinitionList_OnPreviewMouseLeftButtonDown"
-                         PreviewMouseMove="DefinitionList_OnPreviewMouseMove"
-                         AllowDrop="True" Drop="DefinitionList_OnDrop"
-                         DragOver="DefinitionList_OnDragOver" DragLeave="DefinitionList_OnDragLeave">
-                    <ListBox.ItemContainerStyle>
-                        <!-- Without this the row's content is only as wide as its text, so a right-click
-                             next to a short name lands on the ListBox instead of the item and its menu
-                             never opens. -->
-                        <Style TargetType="ListBoxItem">
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                            <Setter Property="Padding" Value="4,3" />
-                            <!-- The drop indicator during a reorder drag is this border, switched on for one
-                                 row at a time by the code-behind (see DefinitionList_OnDragOver). -->
-                            <Setter Property="BorderBrush" Value="#2ECC40" />
-                            <Setter Property="BorderThickness" Value="0" />
-                        </Style>
-                    </ListBox.ItemContainerStyle>
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <!-- The menu sits on a full-width element so a right-click anywhere on the row opens it. -->
-                            <Grid Background="Transparent">
-                                <Grid.ContextMenu>
-                                    <ContextMenu>
-                                        <MenuItem Header="Rename..." Click="RenameMenuItem_OnClick" />
-                                        <MenuItem Header="Delete" Click="DeleteMenuItem_OnClick" />
-                                    </ContextMenu>
-                                </Grid.ContextMenu>
-                                <TextBlock Text="{Binding Name}" ToolTip="Drag to reorder. Right-click for Rename and Delete." />
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                <DockPanel>
+                    <views:FilterBox x:Name="DefinitionFilter" DockPanel.Dock="Top" Margin="2,2,2,2" />
+                    <ListBox local:ListFilter.Text="{Binding Text, ElementName=DefinitionFilter}" x:Name="DefinitionList" ItemsSource="{Binding Definitions}" SelectedItem="{Binding SelectedDefinition}"
+                             BorderThickness="0"
+                             PreviewMouseLeftButtonDown="DefinitionList_OnPreviewMouseLeftButtonDown"
+                             PreviewMouseMove="DefinitionList_OnPreviewMouseMove"
+                             AllowDrop="True" Drop="DefinitionList_OnDrop"
+                             DragOver="DefinitionList_OnDragOver" DragLeave="DefinitionList_OnDragLeave">
+                        <ListBox.ItemContainerStyle>
+                            <!-- Without this the row's content is only as wide as its text, so a right-click
+                                 next to a short name lands on the ListBox instead of the item and its menu
+                                 never opens. -->
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="4,3" />
+                                <!-- The drop indicator during a reorder drag is this border, switched on for one
+                                     row at a time by the code-behind (see DefinitionList_OnDragOver). -->
+                                <Setter Property="BorderBrush" Value="#2ECC40" />
+                                <Setter Property="BorderThickness" Value="0" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <!-- The menu sits on a full-width element so a right-click anywhere on the row opens it. -->
+                                <Grid Background="Transparent">
+                                    <Grid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Rename..." Click="RenameMenuItem_OnClick" />
+                                            <MenuItem Header="Delete" Click="DeleteMenuItem_OnClick" />
+                                        </ContextMenu>
+                                    </Grid.ContextMenu>
+                                    <TextBlock Text="{Binding Name}" ToolTip="Drag to reorder. Right-click for Rename and Delete." />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
             </Border>
         </DockPanel>
 
@@ -368,23 +373,26 @@
                     </ItemsControl>
                 </ScrollViewer>
                 <Border BorderBrush="#999" BorderThickness="1">
-                    <ListBox ItemsSource="{Binding SpritePalette}" SelectedItem="{Binding SelectedPaletteSprite}"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" BorderThickness="0">
-                        <ListBox.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel Orientation="Horizontal" />
-                            </ItemsPanelTemplate>
-                        </ListBox.ItemsPanel>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Width="64" Margin="2" ToolTip="{Binding Name}">
-                                    <Image Source="{Binding Preview}" Width="44" Height="44" Stretch="Uniform"
-                                           RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                                    <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                    <DockPanel>
+                        <views:FilterBox x:Name="ObjectSpriteFilter" DockPanel.Dock="Top" Margin="2,2,2,2" />
+                        <ListBox local:ListFilter.Text="{Binding Text, ElementName=ObjectSpriteFilter}" ItemsSource="{Binding SpritePalette}" SelectedItem="{Binding SelectedPaletteSprite}"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" BorderThickness="0">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Width="64" Margin="2" ToolTip="{Binding Name}">
+                                        <Image Source="{Binding Preview}" Width="44" Height="44" Stretch="Uniform"
+                                               RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                        <TextBlock Text="{Binding Name}" FontSize="9" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
                 </Border>
             </DockPanel>
 

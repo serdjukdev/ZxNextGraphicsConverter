@@ -1,0 +1,24 @@
+<UserControl x:Class="ZxNext.App.Views.FilterBox"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root">
+    <!-- Name filter box: type to narrow a list, Escape clears it. The grey hint shows while it is empty. -->
+    <Grid>
+        <TextBox x:Name="Box" Padding="2,1" FontSize="11"
+                 Text="{Binding Text, ElementName=Root, UpdateSourceTrigger=PropertyChanged}"
+                 PreviewKeyDown="Box_OnPreviewKeyDown"
+                 ToolTip="Shows only the items whose name contains this text. Escape clears it." />
+        <TextBlock Text="Filter by name" FontSize="11" Foreground="Gray" Margin="5,2,0,0" IsHitTestVisible="False">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Text, ElementName=Box}" Value="">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+    </Grid>
+</UserControl>

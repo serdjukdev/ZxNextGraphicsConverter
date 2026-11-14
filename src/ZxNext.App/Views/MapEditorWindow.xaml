@@ -1,5 +1,6 @@
 ﻿<Window x:Class="ZxNext.App.Views.MapEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:views="clr-namespace:ZxNext.App.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:ZxNext.App.ViewModels"
         xmlns:local="clr-namespace:ZxNext.App"
@@ -190,7 +191,9 @@
                                Visibility="{Binding ShowTemplatePalette, Converter={StaticResource BoolToVis}}"
                                Text="New template: select an area on the map with the Select tool, then press 'Save as Template...' below. Right-click a template to rename or delete it." />
 
-                    <ListBox ItemsSource="{Binding MetatilePalette}" SelectedItem="{Binding SelectedPaletteMetatile}"
+                    <views:FilterBox x:Name="GridPaletteFilter" DockPanel.Dock="Top" Margin="0,0,0,4" />
+
+                    <ListBox local:ListFilter.Text="{Binding Text, ElementName=GridPaletteFilter}" ItemsSource="{Binding MetatilePalette}" SelectedItem="{Binding SelectedPaletteMetatile}"
                              Visibility="{Binding ShowMetatilePalette, Converter={StaticResource BoolToVis}}"
                              BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}">
@@ -216,7 +219,7 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
 
-                    <ListBox ItemsSource="{Binding TemplatePalette}" SelectedItem="{Binding SelectedPaletteTemplate}"
+                    <ListBox local:ListFilter.Text="{Binding Text, ElementName=GridPaletteFilter}" ItemsSource="{Binding TemplatePalette}" SelectedItem="{Binding SelectedPaletteTemplate}"
                              Visibility="{Binding ShowTemplatePalette, Converter={StaticResource BoolToVis}}"
                              BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}">
@@ -275,7 +278,9 @@
                                       Command="{Binding ShowSpritePaletteCommand}" />
                     </StackPanel>
 
-                    <ListBox ItemsSource="{Binding ObjectPalette}" SelectedItem="{Binding SelectedPaletteObject}"
+                    <views:FilterBox x:Name="SpritePaletteFilter" DockPanel.Dock="Top" Margin="2,0,2,4" />
+
+                    <ListBox local:ListFilter.Text="{Binding Text, ElementName=SpritePaletteFilter}" ItemsSource="{Binding ObjectPalette}" SelectedItem="{Binding SelectedPaletteObject}"
                              BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}"
                              Visibility="{Binding IsObjectPaletteActive, Converter={StaticResource BoolToVis}}">
@@ -294,7 +299,7 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
 
-                    <ListBox ItemsSource="{Binding SpritePalette}" SelectedItem="{Binding SelectedPaletteSprite}"
+                    <ListBox local:ListFilter.Text="{Binding Text, ElementName=SpritePaletteFilter}" ItemsSource="{Binding SpritePalette}" SelectedItem="{Binding SelectedPaletteSprite}"
                              BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ItemContainerStyle="{StaticResource ThumbnailListBoxItemStyle}"
                              Visibility="{Binding IsSpritePaletteActive, Converter={StaticResource BoolToVis}}">

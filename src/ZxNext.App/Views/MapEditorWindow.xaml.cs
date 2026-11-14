@@ -826,6 +826,7 @@ public partial class MapEditorWindow : Window
             text += $"    Metatile: ({metaCol}, {metaRow})";
         }
         text += $"    Tile: ({tileCol}, {tileRow})";
+        if (vm.DescribeAt(pixelX, pixelY) is { } under) text += $"    {under}";
 
         CursorPositionText.Text = text;
     }

@@ -1179,6 +1179,35 @@ public partial class MapEditorViewModel : ObservableObject
         RenderPreviewRegion(new Int32Rect(col * cellPixelSize, row * cellPixelSize, cellPixelSize, cellPixelSize));
     }
 
+    /// <summary>
+    /// In: map pixel. Out: the name of what the active layer has there, for the status line under the canvas:
+    /// the cell's metatile on a grid layer, the topmost object or sprite on the Sprite layer; null if nothing.
+    /// </summary>
+    public string? DescribeAt(int pixelX, int pixelY)
+    {
+        if (SelectedMap is null || pixelX < 0 || pixelY < 0) return null;
+        var map = SelectedMap.Map;
+
+        if (ActiveLayer == MapLayerKind.Sprites)
+        {
+            if (FindSpriteAt(pixelX, pixelY) is not { } hit) return null;
+            if (hit.ObjectDefinitionId is { } definitionId && _project.ObjectDefinitions.FirstOrDefault(d => d.Id == definitionId) is { } definition)
+                return $"Object: {definition.Name}";
+            return _project.Assets.FirstOrDefault(a => a.Id == hit.SpriteAssetId) is { } sprite ? $"Sprite: {sprite.Name}" : null;
+        }
+
+        var cellPixelSize = map.MetatileGridSize * 8;
+        var col = pixelX / cellPixelSize;
+        var row = pixelY / cellPixelSize;
+        if (col >= map.Width || row >= map.Height) return null;
+
+        var layer = ActiveLayer == MapLayerKind.Tilemap ? map.TilemapLayer : map.TileLayer8Bpp;
+        var kind = ActiveLayer == MapLayerKind.Tilemap ? MetatileKind.FourBpp : MetatileKind.EightBpp;
+        var value = layer.MetatileIndices[row * map.Width + col];
+        var metatile = _project.Metatiles.FirstOrDefault(m => m.Kind == kind && m.GridSize == map.MetatileGridSize && m.SortIndex == value);
+        return metatile is null ? null : $"{(map.MetatileGridSize == 1 ? "Tile" : "Metatile")}: {metatile.Name}";
+    }
+
     /// <summary>True while <see cref="PickAt"/> sets the palette selection, so that pick never triggers the Fill tool's refill.</summary>
     private bool _isEyedropping;
 

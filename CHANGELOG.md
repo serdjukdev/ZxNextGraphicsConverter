@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added: the line under the Map Editor canvas now names what is under the cursor on the active layer, after the coordinates: "Metatile: name" ("Tile: name" on a 1x1 map) on a grid layer, "Object: name" or "Sprite: name" on the Sprite layer.
+
 - Added: keys for the Map Editor tools: B Brush, G Fill, M Select, also written on their buttons. They do nothing while you type in a text box; G does nothing on the Sprite layer, where Fill does not apply.
 
 - Added: an eyedropper in the Map Editor. Alt+click, with any tool, picks what is under the cursor into the palette and changes nothing on the map: a cell's metatile on a grid layer (with its mirror/rotate/palette into "Paint with" on a 1x1 Tilemap), or the object or plain sprite a placement was made from on the Sprite layer. With Fill and a selected area, picking does not refill it.

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.8.0 (2026-11-14)
+
+- Fixed: a click outside an open right-click menu went on into whatever lay under the cursor, and if that was another list, the whole window stopped responding to the mouse (clicks, wheel, checkboxes, buttons) except that one list, until the window title bar was clicked. In the Metatile Editor: right-click a metatile, then click a tile in the palette. The click that closes a right-click menu now only closes it, as in other Windows programs, in every window of the app.
+
 - Added: Shift while dragging the Brush on a grid layer keeps the stroke on one straight line. The first move away from the start cell picks horizontal or vertical, and from then on only that row or column is painted, however far the cursor drifts sideways; releasing Shift frees it again, Ctrl+Shift erases along the line.
 - Fixed: a fast Brush drag on a grid layer could skip cells; every cell between two mouse positions is painted now.
 
@@ -21,8 +25,6 @@
 - Changed: the Map Editor has TOOLS now, Brush, Fill and Select, as three buttons under the palette. Exactly one is on at a time and picking one switches the previous one off (Link, Set Type and Set User Byte belong to the same group). Brush paints cell by cell as before and has no selection any more: Alt+drag no longer selects, use the Select tool, where a plain drag selects or moves and Shift at release copies. Ctrl+V switches to Select by itself, so a pasted block can be dragged into place straight away.
 - Added: Fill works like a paint bucket. Click a cell and every connected cell holding the same metatile gets the picked one; drag and the rectangle you drag out is selected and filled when you let go. While an area is selected, picking another metatile refills it at once, so you can try several. With a selection, a click fills only inside it; a click outside drops the selection. Ctrl fills with blank. One undo step per fill. The old "Fill Selection" button is still there.
 - Changed: Templates are renamed and deleted from their own right-click menu (Rename..., Delete); the "Delete Template" button is gone. The Templates tab says how to make one: select an area with the Select tool, then "Save as Template...".
-
-- Fixed: a click outside an open right-click menu went on into whatever lay under the cursor, and if that was another list, the whole window stopped responding to the mouse (clicks, wheel, checkboxes, buttons) except that one list, until the window title bar was clicked. In the Metatile Editor: right-click a metatile, then click a tile in the palette. The click that closes a right-click menu now only closes it, as in other Windows programs, in every window of the app.
 
 ## v0.7.0 (2026-11-12)
 
